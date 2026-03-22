@@ -12,16 +12,18 @@ interface ElectronPtyAPI {
 interface ElectronAPI {
   pty: ElectronPtyAPI;
   onToggleSidebar: (callback: () => void) => () => void;
+  onToggleKanban: (callback: () => void) => () => void;
   onCreateTerminal: (callback: () => void) => () => void;
   onCloseActiveTerminal: (callback: () => void) => () => void;
   onToggleScrollLock: (callback: () => void) => () => void;
   onSocketTerminalCreated: (
-    callback: (data: { id: string; name: string; parentId?: string | null; cwd?: string }) => void,
+    callback: (data: { id: string; name: string; parentId?: string | null; cwd?: string; role?: string; napkinSlug?: string }) => void,
   ) => () => void;
   onSocketPeek: (callback: (data: { id: string }) => void) => () => void;
   onSocketTerminalClose: (callback: (data: { id: string }) => void) => () => void;
   onSocketStatusChanged: (callback: (data: { id: string; status: string }) => void) => () => void;
   onNapkinUpdate: (callback: (data: unknown) => void) => () => void;
+  onNapkinStatusChanged: (callback: (data: { slug: string; status: string }) => void) => () => void;
   onLogRequest: (
     callback: (data: { id: string; requestId: number }) => void,
   ) => () => void;

@@ -18,6 +18,8 @@ beforeEach(() => {
     activeNepicId: 'spaces',
     browserFilterText: '',
     browserFilterVisible: false,
+    napkins: [],
+    kanbanVisible: false,
   });
 });
 

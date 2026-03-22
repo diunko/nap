@@ -29,7 +29,7 @@ import {
   setSessionDone,
   removeSession,
 } from './session-store';
-import { initNapkinStore, closeNapkinStore, changeNapkinStatus } from './napkin-store';
+import { initNapkinStore, closeNapkinStore, changeNapkinStatus, getAllNapkinStatuses } from './napkin-store';
 import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir } from './napkin-watcher';
 import { resolveByName } from './name-resolver';
 import { setWriter, enqueue, clearQueue } from './message-queue';
@@ -214,6 +214,15 @@ function buildMenu(): void {
             }
           },
         },
+        {
+          label: 'Toggle Kanban',
+          accelerator: 'CmdOrCtrl+`',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('kanban:toggle');
+            }
+          },
+        },
         { type: 'separator' },
         { role: 'reload' },
         { role: 'toggleDevTools' },
@@ -373,6 +382,8 @@ async function handleSocketRequest(msg: unknown): Promise<Record<string, unknown
           name: session.name,
           parentId: session.parentId,
           cwd: session.cwd,
+          role: session.role,
+          napkinSlug: session.napkinSlug,
         });
       }
 
@@ -551,6 +562,7 @@ app.whenReady().then(async () => {
       setSessionDone,
       removeSession,
       changeNapkinStatus,
+      getAllNapkinStatuses,
       readNapkinDir,
       startNapkinWatcher,
       stopNapkinWatcher,
@@ -599,6 +611,16 @@ app.whenReady().then(async () => {
     if (nepicDirs.length > 0 && mainWindow) {
       const nepicDir = path.join(nepicsBase, nepicDirs[0]);
       startNapkinWatcher(nepicDir, mainWindow);
+
+      // Send initial napkin statuses from SQLite
+      try {
+        const statuses = getAllNapkinStatuses();
+        for (const { slug, status } of statuses) {
+          mainWindow.webContents.send('napkin:status-changed', { slug, status });
+        }
+      } catch {
+        // no napkin rows yet — fine
+      }
     }
   } catch {
     // .nap/nepics/ doesn't exist yet — no watcher needed

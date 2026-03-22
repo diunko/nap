@@ -1,37 +1,46 @@
 import { useEffect, useRef } from 'react';
-import { useTerminalStore } from '../store';
+import { useTerminalStore, terminalStatusToAgent, type TerminalMeta } from '../store';
 import { getTerminal, openTerminal } from '../terminal-registry';
 import type { ScrollLockMode } from '../scroll-lock';
-import { MOCK_ARCHITECTS, MOCK_NAPKINS } from '../mock-data';
 
-// Derive breadcrumb segments from active terminal ID + mock data
-function deriveBreadcrumb(activeTerminalId: string | null): {
+// Derive breadcrumb segments from active terminal + real store data
+function deriveBreadcrumb(
+  activeTerminalId: string | null,
+  terminals: TerminalMeta[],
+  napkins: { slug: string }[],
+): {
   nepicLabel: string;
   napkinName?: string;
   agentName?: string;
   agentStatus?: string;
+  architectTerminalId?: string;
+  napkinSlug?: string;
 } | null {
   if (!activeTerminalId) return null;
 
-  // Check architects
-  for (const arch of MOCK_ARCHITECTS) {
-    if (arch.terminalId === activeTerminalId) {
-      return { nepicLabel: 'S', napkinName: `(${arch.label})` };
-    }
+  const terminal = terminals.find((t) => t.id === activeTerminalId);
+  if (!terminal) return { nepicLabel: 'S' };
+
+  // Architect terminal
+  if (terminal.role === 'architect') {
+    const label = terminal.status === 'running' ? 'acting' : terminal.status;
+    return { nepicLabel: 'S', napkinName: `(${label})` };
   }
 
-  // Check napkin agents
-  for (const napkin of MOCK_NAPKINS) {
-    for (const agent of napkin.agents) {
-      if (agent.terminalId === activeTerminalId) {
-        return {
-          nepicLabel: 'S',
-          napkinName: napkin.name,
-          agentName: agent.name,
-          agentStatus: agent.status,
-        };
-      }
-    }
+  // Agent terminal with napkin association
+  if (terminal.napkinSlug) {
+    // Find the architect terminal for S click
+    const architect = terminals.find((t) => t.role === 'architect' && t.status === 'running')
+      || terminals.find((t) => t.role === 'architect');
+
+    return {
+      nepicLabel: 'S',
+      napkinName: terminal.napkinSlug,
+      agentName: terminal.name,
+      agentStatus: terminalStatusToAgent(terminal.status),
+      architectTerminalId: architect?.id,
+      napkinSlug: terminal.napkinSlug,
+    };
   }
 
   // Default: just show S
@@ -41,6 +50,10 @@ function deriveBreadcrumb(activeTerminalId: string | null): {
 export function Terminal() {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeTerminalId = useTerminalStore((s) => s.activeTerminalId);
+  const terminals = useTerminalStore((s) => s.terminals);
+  const napkins = useTerminalStore((s) => s.napkins);
+  const setActive = useTerminalStore((s) => s.setActive);
+  const expandCard = useTerminalStore((s) => s.expandCard);
   const scrollLockMode = useTerminalStore((s) =>
     s.activeTerminalId ? s.scrollLockModes[s.activeTerminalId] ?? 'off' : 'off',
   ) as ScrollLockMode;
@@ -128,7 +141,7 @@ export function Terminal() {
     display: 'flex',
   };
 
-  const breadcrumb = deriveBreadcrumb(activeTerminalId);
+  const breadcrumb = deriveBreadcrumb(activeTerminalId, terminals, napkins);
 
   return (
     <div
@@ -159,12 +172,22 @@ export function Terminal() {
         {breadcrumb ? (
           <>
             <span
+              data-testid="breadcrumb-s"
+              onClick={() => {
+                if (breadcrumb.architectTerminalId) {
+                  setActive(breadcrumb.architectTerminalId);
+                }
+              }}
               style={{
                 color: '#6b7280',
-                cursor: 'pointer',
+                cursor: breadcrumb.architectTerminalId ? 'pointer' : 'default',
                 padding: '2px 0',
                 transition: 'color 0.1s',
               }}
+              onMouseEnter={(e) => {
+                if (breadcrumb.architectTerminalId) e.currentTarget.style.color = '#e5e5e5';
+              }}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
             >
               {breadcrumb.nepicLabel}
             </span>
@@ -174,11 +197,23 @@ export function Terminal() {
                   &gt;
                 </span>
                 <span
+                  data-testid="breadcrumb-napkin"
+                  onClick={() => {
+                    if (breadcrumb.napkinSlug) {
+                      expandCard(breadcrumb.napkinSlug);
+                    }
+                  }}
                   style={{
                     color: breadcrumb.agentName ? '#6b7280' : '#e5e5e5',
-                    cursor: 'pointer',
+                    cursor: breadcrumb.napkinSlug ? 'pointer' : 'default',
                     padding: '2px 0',
                     fontWeight: breadcrumb.agentName ? 'normal' : 600,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (breadcrumb.napkinSlug) e.currentTarget.style.color = '#e5e5e5';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = breadcrumb.agentName ? '#6b7280' : '#e5e5e5';
                   }}
                 >
                   {breadcrumb.napkinName}

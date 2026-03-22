@@ -3,6 +3,43 @@ import { createTerminalInstance, disposeTerminal } from './terminal-registry';
 import { createFileLinkProvider } from './file-link-provider';
 import type { ScrollLockMode } from './scroll-lock';
 
+// ── Shared types ──
+
+export type NapkinPhase = 'backlog' | 'todo' | 'doing' | 'review' | 'done';
+export type AgentStatus = 'run' | 'done' | 'nap' | 'exit';
+
+export interface NapkinEntry {
+  slug: string;
+  artifacts: string[];
+  agents: string[];
+  napkinBullets: string[];
+  status: NapkinPhase;
+}
+
+// ── Dot / phase helpers ──
+
+const DOT_COLORS: Record<AgentStatus, string> = {
+  run: '#22c55e', done: '#3b82f6', nap: '#f59e0b', exit: '#6b7280',
+};
+export function dotColor(status: AgentStatus): string { return DOT_COLORS[status]; }
+export function isDotHollow(status: AgentStatus): boolean { return status === 'nap' || status === 'exit'; }
+export function isDotPulsing(status: AgentStatus): boolean { return status === 'run'; }
+
+const PHASE_COLORS: Record<NapkinPhase, string> = {
+  done: '#6b7280', review: '#3b82f6', doing: '#22c55e', todo: '#6b7280', backlog: '#6b7280',
+};
+export function phaseColor(phase: NapkinPhase): string { return PHASE_COLORS[phase]; }
+
+export function terminalStatusToAgent(status: TerminalMeta['status']): AgentStatus {
+  switch (status) {
+    case 'running': return 'run';
+    case 'done': return 'done';
+    case 'exited': return 'exit';
+  }
+}
+
+// ── Terminal meta ──
+
 export interface TerminalMeta {
   id: string;
   name: string;
@@ -10,6 +47,8 @@ export interface TerminalMeta {
   parentId?: string;
   cwd?: string;
   createdAt: number;
+  role?: string;
+  napkinSlug?: string;
 }
 
 export type CardViewMode = 'collapsed' | 'focused' | 'extended';
@@ -27,8 +66,12 @@ interface TerminalStore {
   browserFilterText: string;
   browserFilterVisible: boolean;
 
+  // Napkin data (live-wired)
+  napkins: NapkinEntry[];
+  kanbanVisible: boolean;
+
   createTerminal: (name: string, parentId?: string, command?: string) => string;
-  addSocketTerminal: (id: string, name: string, parentId?: string | null, cwd?: string) => void;
+  addSocketTerminal: (id: string, name: string, parentId?: string | null, cwd?: string, role?: string, napkinSlug?: string) => void;
   removeTerminal: (id: string) => void;
   disposeTerminalOnly: (id: string) => void;
   closeActiveTerminal: () => void;
@@ -44,6 +87,11 @@ interface TerminalStore {
   setActiveNepic: (id: string) => void;
   setBrowserFilter: (text: string) => void;
   setBrowserFilterVisible: (visible: boolean) => void;
+
+  // Napkin actions
+  setNapkinData: (data: { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] } | { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] }[]) => void;
+  mergeNapkinStatus: (slug: string, status: string) => void;
+  toggleKanban: () => void;
 }
 
 export const useTerminalStore = create<TerminalStore>((set, get) => ({
@@ -58,6 +106,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   activeNepicId: 'spaces',
   browserFilterText: '',
   browserFilterVisible: false,
+
+  // Napkin data
+  napkins: [],
+  kanbanVisible: false,
 
   createTerminal: (name: string, parentId?: string, command?: string) => {
     const id = crypto.randomUUID();
@@ -97,7 +149,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     return id;
   },
 
-  addSocketTerminal: (id: string, name: string, parentId?: string | null, cwd?: string) => {
+  addSocketTerminal: (id: string, name: string, parentId?: string | null, cwd?: string, role?: string, napkinSlug?: string) => {
     // Create xterm instance in registry (outside React)
     const entry = createTerminalInstance(id);
 
@@ -129,6 +181,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           parentId: parentId ?? undefined,
           cwd,
           createdAt: Date.now(),
+          role,
+          napkinSlug,
         },
       ],
     }));
@@ -232,5 +286,58 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   setBrowserFilterVisible: (visible: boolean) => {
     set({ browserFilterVisible: visible });
     if (!visible) set({ browserFilterText: '' });
+  },
+
+  // Napkin actions
+  setNapkinData: (data) => {
+    const items = Array.isArray(data) ? data : [data];
+    set((state) => {
+      const napkins = [...state.napkins];
+      for (const item of items) {
+        const idx = napkins.findIndex((n) => n.slug === item.slug);
+        if (idx >= 0) {
+          // Merge: update filesystem fields, preserve status
+          napkins[idx] = {
+            ...napkins[idx],
+            artifacts: item.artifacts,
+            agents: item.agents,
+            napkinBullets: item.napkinBullets,
+          };
+        } else {
+          napkins.push({
+            slug: item.slug,
+            artifacts: item.artifacts,
+            agents: item.agents,
+            napkinBullets: item.napkinBullets,
+            status: 'backlog' as NapkinPhase,
+          });
+        }
+      }
+      return { napkins };
+    });
+  },
+
+  mergeNapkinStatus: (slug: string, status: string) => {
+    set((state) => {
+      const napkins = [...state.napkins];
+      const idx = napkins.findIndex((n) => n.slug === slug);
+      if (idx >= 0) {
+        napkins[idx] = { ...napkins[idx], status: status as NapkinPhase };
+      } else {
+        // Status arrived before filesystem data — create placeholder
+        napkins.push({
+          slug,
+          artifacts: [],
+          agents: [],
+          napkinBullets: [],
+          status: status as NapkinPhase,
+        });
+      }
+      return { napkins };
+    });
+  },
+
+  toggleKanban: () => {
+    set((state) => ({ kanbanVisible: !state.kanbanVisible }));
   },
 }));

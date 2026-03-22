@@ -143,6 +143,18 @@ test('T-0400-03: Cmd+B toggles browser column, gutter stays visible', async ({ a
 // T-0400-05: Cmd+K filter works in napkin browser
 // ---------------------------------------------------------------------------
 test('T-0400-05: Cmd+K filter shows matching napkins', async ({ page }) => {
+  // NapkinBrowser reads from store.napkins (live-wired), so populate store first
+  await page.evaluate(() => {
+    const store = (window as any).useTerminalStore;
+    store.getState().setNapkinData([
+      { slug: '0100-design-sprint', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+      { slug: '0200-sqlite-persistence', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+      { slug: '0300-socket-server', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+      { slug: '0400-layout-mock', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+    ]);
+  });
+  await page.waitForTimeout(200);
+
   // Dispatch Cmd+K to open filter
   await page.evaluate(() => {
     window.dispatchEvent(
@@ -167,15 +179,8 @@ test('T-0400-05: Cmd+K filter shows matching napkins', async ({ page }) => {
   const visibleCards = await page.evaluate(
     () => document.querySelectorAll('[data-testid="napkin-card"]').length,
   );
-  const totalNapkins = await page.evaluate(() => {
-    const { MOCK_NAPKINS } = require('../src/renderer/mock-data');
-    return MOCK_NAPKINS.length;
-  }).catch(() =>
-    // Fallback: read from store awareness — MOCK_NAPKINS isn't available in page context
-    page.evaluate(() => 8),
-  );
   expect(visibleCards).toBeGreaterThanOrEqual(1);
-  expect(visibleCards).toBeLessThan(8); // total mock napkins is 8
+  expect(visibleCards).toBeLessThan(4); // fewer than total injected napkins
 
   // Clear filter via Escape
   await page.evaluate(() => {
@@ -189,7 +194,7 @@ test('T-0400-05: Cmd+K filter shows matching napkins', async ({ page }) => {
   const allCards = await page.evaluate(
     () => document.querySelectorAll('[data-testid="napkin-card"]').length,
   );
-  expect(allCards).toBe(8); // all 8 mock napkins
+  expect(allCards).toBe(4); // all 4 injected napkins
 });
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import type {
   setSessionDone,
   removeSession,
 } from '../main/session-store';
-import type { changeNapkinStatus } from '../main/napkin-store';
+import type { changeNapkinStatus, getAllNapkinStatuses } from '../main/napkin-store';
 import type { readNapkinDir, startNapkinWatcher, stopNapkinWatcher } from '../main/napkin-watcher';
 import type Database from 'better-sqlite3';
 import type * as path from 'path';
@@ -21,6 +21,7 @@ interface NapTestHelpers {
   setSessionDone: typeof setSessionDone;
   removeSession: typeof removeSession;
   changeNapkinStatus: typeof changeNapkinStatus;
+  getAllNapkinStatuses: typeof getAllNapkinStatuses;
   readNapkinDir: typeof readNapkinDir;
   startNapkinWatcher: typeof startNapkinWatcher;
   stopNapkinWatcher: typeof stopNapkinWatcher;

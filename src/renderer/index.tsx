@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Terminal } from './components/Terminal';
 import { Gutter } from './components/Gutter';
 import { NapkinBrowser } from './components/NapkinBrowser';
+import { KanbanOverlay } from './components/KanbanOverlay';
 import { useTerminalStore } from './store';
 import { getTerminal } from './terminal-registry';
 import '@xterm/xterm/css/xterm.css';
@@ -110,7 +111,7 @@ function App() {
 
     // Socket: new terminal created via CLI
     const removeSocketCreate = window.electronAPI.onSocketTerminalCreated((data) => {
-      useTerminalStore.getState().addSocketTerminal(data.id, data.name, data.parentId, data.cwd);
+      useTerminalStore.getState().addSocketTerminal(data.id, data.name, data.parentId, data.cwd, data.role, data.napkinSlug);
     });
 
     // Socket: peek at terminal via CLI
@@ -129,6 +130,24 @@ function App() {
     // Socket: status changed (e.g. done)
     const removeSocketStatus = window.electronAPI.onSocketStatusChanged((data) => {
       useTerminalStore.getState().setStatus(data.id, data.status as 'done');
+    });
+
+    // Napkin: filesystem data update
+    const removeNapkinUpdate = window.electronAPI.onNapkinUpdate((data) => {
+      useTerminalStore.getState().setNapkinData(
+        data as { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] }
+          | { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] }[],
+      );
+    });
+
+    // Napkin: status changed (from SQLite)
+    const removeNapkinStatus = window.electronAPI.onNapkinStatusChanged((data) => {
+      useTerminalStore.getState().mergeNapkinStatus(data.slug, data.status);
+    });
+
+    // Menu: toggle kanban (Cmd+`)
+    const removeKanbanListener = window.electronAPI.onToggleKanban(() => {
+      useTerminalStore.getState().toggleKanban();
     });
 
     // Socket: log buffer request
@@ -166,6 +185,9 @@ function App() {
       removeSocketPeek();
       removeSocketClose();
       removeSocketStatus();
+      removeNapkinUpdate();
+      removeNapkinStatus();
+      removeKanbanListener();
       removeLogRequest();
       clearInterval(scrollDebugInterval);
     };
@@ -173,6 +195,7 @@ function App() {
 
   return (
     <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+      <KanbanOverlay />
       <Gutter />
       {sidebarVisible && <NapkinBrowser />}
       <div style={{ flex: 1, minWidth: 0 }}>

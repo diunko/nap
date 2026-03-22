@@ -1,21 +1,99 @@
 import { useEffect, useRef } from 'react';
-import { useTerminalStore } from '../store';
-import type { CardViewMode } from '../store';
 import {
-  MOCK_ARCHITECTS,
-  MOCK_NAPKINS,
+  useTerminalStore,
   dotColor,
   isDotHollow,
   isDotPulsing,
-  type MockAgent,
-  type MockArchitect,
-  type MockNapkin,
+  phaseColor,
+  terminalStatusToAgent,
+  type CardViewMode,
   type AgentStatus,
-} from '../mock-data';
+  type NapkinPhase,
+  type NapkinEntry,
+  type TerminalMeta,
+} from '../store';
+
+// ── Derived types for card rendering ──
+
+interface ArchitectData {
+  slug: string;
+  name: string;
+  status: AgentStatus;
+  label: string;
+  terminalId: string;
+}
+
+interface NapkinAgent {
+  name: string;
+  terminalId?: string;
+  status: AgentStatus;
+}
+
+interface NapkinCardData {
+  slug: string;
+  name: string;
+  phase: NapkinPhase;
+  artifacts: string[];       // extensions like '.nap.md'
+  agents: NapkinAgent[];
+  napkinBullets: string[];
+}
+
+// ── Derive architects from terminal data ──
+
+function deriveArchitects(terminals: TerminalMeta[]): ArchitectData[] {
+  return terminals
+    .filter((t) => t.role === 'architect')
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .map((t) => ({
+      slug: t.id,
+      name: t.name,
+      status: terminalStatusToAgent(t.status),
+      label: t.status === 'running' ? 'acting' : t.status === 'done' ? 'done' : 'exited',
+      terminalId: t.id,
+    }));
+}
+
+// ── Derive napkin cards from store data ──
+
+function deriveNapkinCards(napkins: NapkinEntry[], terminals: TerminalMeta[]): NapkinCardData[] {
+  return napkins.map((n) => {
+    // Find terminals associated with this napkin (non-architect)
+    const napkinTerminals = terminals
+      .filter((t) => t.napkinSlug === n.slug && t.role !== 'architect')
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    // Map filesystem agents to terminal data
+    const agents: NapkinAgent[] = n.agents.map((agentDirName, i) => ({
+      name: agentDirName,
+      terminalId: napkinTerminals[i]?.id,
+      status: napkinTerminals[i]
+        ? terminalStatusToAgent(napkinTerminals[i].status)
+        : ('exit' as AgentStatus),
+    }));
+
+    // Add extra terminals not matched to filesystem agents
+    for (let i = n.agents.length; i < napkinTerminals.length; i++) {
+      agents.push({
+        name: napkinTerminals[i].name,
+        terminalId: napkinTerminals[i].id,
+        status: terminalStatusToAgent(napkinTerminals[i].status),
+      });
+    }
+
+    return {
+      slug: n.slug,
+      name: n.slug,
+      phase: n.status,
+      artifacts: n.artifacts,
+      agents,
+      napkinBullets: n.napkinBullets,
+    };
+  });
+}
 
 // ── Dot component ──
 
-function StatusDot({ status, size = 7 }: { status: AgentStatus; size?: number }) {
+export function StatusDot({ status, size = 7 }: { status: AgentStatus; size?: number }) {
   const hollow = isDotHollow(status);
   const pulsing = isDotPulsing(status);
   const color = dotColor(status);
@@ -44,13 +122,11 @@ function ArchitectCard({
   isFocused,
   viewMode,
   onToggle,
-  onClickAgent,
 }: {
-  architect: MockArchitect;
+  architect: ArchitectData;
   isFocused: boolean;
   viewMode: CardViewMode;
   onToggle: () => void;
-  onClickAgent?: (terminalId: string) => void;
 }) {
   const labelColor =
     architect.status === 'run'
@@ -58,10 +134,6 @@ function ArchitectCard({
       : architect.status === 'done'
         ? '#3b82f6'
         : '#6b7280';
-
-  const showExtended = isFocused && viewMode === 'extended';
-  const files: { name: string; path: string; indent?: number }[] | undefined =
-    showExtended ? architect.extendedFiles : architect.artifacts;
 
   return (
     <div
@@ -109,85 +181,6 @@ function ArchitectCard({
           {architect.label}
         </span>
       </div>
-
-      {/* Body */}
-      {isFocused && files && (
-        <div style={{ padding: '0 0 4px 0' }}>
-          {files.map((file, i) => (
-            <div
-              key={i}
-              onClick={(e) => {
-                e.stopPropagation();
-                window.electronAPI.openFilePath(file.path);
-              }}
-              style={{
-                padding: `1px 0 1px ${(file.indent ?? 0) === 2 ? 32 : 16}px`,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                cursor: 'pointer',
-                borderRadius: 3,
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
-              }
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-            >
-              <span
-                style={{
-                  color: '#6b7280',
-                  flexShrink: 0,
-                  width: 10,
-                  textAlign: 'center',
-                  fontSize: 12,
-                }}
-              >
-                *
-              </span>
-              <span
-                style={{
-                  flex: 1,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  color: '#9cdcfe',
-                }}
-              >
-                {file.name}
-              </span>
-              {showExtended && (
-                <span
-                  className="file-actions"
-                  style={{ display: 'flex', gap: 8, flexShrink: 0 }}
-                >
-                  <span
-                    style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigator.clipboard.writeText(file.path);
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-                  >
-                    &#x2398;
-                  </span>
-                  <span
-                    style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.electronAPI.openFilePath(file.path);
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-                  >
-                    &#x2197;
-                  </span>
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -201,19 +194,13 @@ function NapkinCard({
   onToggle,
   onClickAgent,
 }: {
-  napkin: MockNapkin;
+  napkin: NapkinCardData;
   isFocused: boolean;
   viewMode: CardViewMode;
   onToggle: () => void;
-  onClickAgent: (agent: MockAgent) => void;
+  onClickAgent: (agent: NapkinAgent) => void;
 }) {
-  const phaseColor =
-    napkin.phase === 'doing'
-      ? '#22c55e'
-      : napkin.phase === 'review'
-        ? '#3b82f6'
-        : '#6b7280';
-
+  const pColor = phaseColor(napkin.phase);
   const showExtended = isFocused && viewMode === 'extended';
 
   return (
@@ -261,7 +248,7 @@ function NapkinCard({
             <StatusDot key={i} status={a.status} />
           ))}
         </span>
-        <span style={{ color: phaseColor, fontSize: 12, flexShrink: 0 }}>
+        <span style={{ color: pColor, fontSize: 12, flexShrink: 0 }}>
           {napkin.phase}
         </span>
       </div>
@@ -270,76 +257,76 @@ function NapkinCard({
       {isFocused && (
         <div style={{ padding: '0 0 4px 0' }}>
           {/* Artifacts */}
-          {napkin.artifacts.map((artifact, i) => (
-            <div
-              key={`a-${i}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                window.electronAPI.openFilePath(artifact.path);
-              }}
-              style={{
-                padding: '1px 0 1px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                cursor: 'pointer',
-                borderRadius: 3,
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
-              }
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-            >
-              <span
+          {napkin.artifacts.map((ext, i) => {
+            const displayName = ext.replace(/^\./, '');
+            const fullName = `${napkin.slug}${ext}`;
+            return (
+              <div
+                key={`a-${i}`}
                 style={{
-                  color: '#6b7280',
-                  flexShrink: 0,
-                  width: 10,
-                  textAlign: 'center',
-                  fontSize: 12,
+                  padding: '1px 0 1px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  cursor: 'pointer',
+                  borderRadius: 3,
                 }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
+                }
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
-                *
-              </span>
-              <span
-                style={{
-                  flex: 1,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  color: '#9cdcfe',
-                }}
-              >
-                {showExtended ? `${napkin.slug}.${artifact.name.replace('.md', '')}.md` : artifact.name}
-              </span>
-              {showExtended && (
-                <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                  <span
-                    style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigator.clipboard.writeText(artifact.path);
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-                  >
-                    &#x2398;
-                  </span>
-                  <span
-                    style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.electronAPI.openFilePath(artifact.path);
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-                  >
-                    &#x2197;
-                  </span>
+                <span
+                  style={{
+                    color: '#6b7280',
+                    flexShrink: 0,
+                    width: 10,
+                    textAlign: 'center',
+                    fontSize: 12,
+                  }}
+                >
+                  *
                 </span>
-              )}
-            </div>
-          ))}
+                <span
+                  style={{
+                    flex: 1,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    color: '#9cdcfe',
+                  }}
+                >
+                  {showExtended ? fullName : displayName}
+                </span>
+                {showExtended && (
+                  <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <span
+                      style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(fullName);
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+                    >
+                      &#x2398;
+                    </span>
+                    <span
+                      style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.electronAPI.openFilePath(fullName);
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+                    >
+                      &#x2197;
+                    </span>
+                  </span>
+                )}
+              </div>
+            );
+          })}
 
           {/* Agents */}
           {napkin.agents.map((agent, i) => (
@@ -503,6 +490,8 @@ export function NapkinBrowser() {
   const browserFilterVisible = useTerminalStore((s) => s.browserFilterVisible);
   const setBrowserFilter = useTerminalStore((s) => s.setBrowserFilter);
   const setBrowserFilterVisible = useTerminalStore((s) => s.setBrowserFilterVisible);
+  const napkins = useTerminalStore((s) => s.napkins);
+  const terminals = useTerminalStore((s) => s.terminals);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   // Cmd+K handler
@@ -534,13 +523,17 @@ export function NapkinBrowser() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [extendCard]);
 
+  // Derive view data from store
+  const architects = deriveArchitects(terminals);
+  const napkinCards = deriveNapkinCards(napkins, terminals);
+
   const filteredNapkins = browserFilterText
-    ? MOCK_NAPKINS.filter((n) =>
+    ? napkinCards.filter((n) =>
         n.name.toLowerCase().includes(browserFilterText.toLowerCase()),
       )
-    : MOCK_NAPKINS;
+    : napkinCards;
 
-  function handleClickAgent(agent: MockAgent) {
+  function handleClickAgent(agent: NapkinAgent) {
     if (agent.terminalId) {
       setActive(agent.terminalId);
     }
@@ -603,7 +596,7 @@ export function NapkinBrowser() {
         }}
       >
         {/* Architects pinned at top */}
-        {MOCK_ARCHITECTS.map((arch) => (
+        {architects.map((arch) => (
           <ArchitectCard
             key={arch.slug}
             architect={arch}
@@ -613,10 +606,12 @@ export function NapkinBrowser() {
           />
         ))}
 
-        {/* Separator */}
-        <div
-          style={{ height: 1, background: '#3c3c3c', margin: '6px 12px' }}
-        />
+        {/* Separator (only if architects exist) */}
+        {architects.length > 0 && (
+          <div
+            style={{ height: 1, background: '#3c3c3c', margin: '6px 12px' }}
+          />
+        )}
 
         {/* Napkins */}
         {filteredNapkins.map((napkin) => (

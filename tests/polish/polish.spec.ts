@@ -594,11 +594,27 @@ base.describe.serial('T-0600 shared app: log, ps, links, filter', () => {
   // --- T-0600-20: Cmd+K opens filter input, typing filters napkin cards ---
 
   base('T-0600-20: Cmd+K opens filter, typing "sqlite" shows only matching napkin cards', async () => {
+    // NapkinBrowser reads from store.napkins (live-wired), so populate store first
+    await page.evaluate(() => {
+      const store = (window as any).useTerminalStore;
+      store.getState().setNapkinData([
+        { slug: '0100-design-sprint', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+        { slug: '0200-sqlite-persistence', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+        { slug: '0300-socket-server', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+        { slug: '0400-layout-mock', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+        { slug: '0500-fs-service', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+        { slug: '0600-live-wiring', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+        { slug: '0700-cmd-w-close', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+        { slug: '0800-scroll-lock', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+      ]);
+    });
+    await page.waitForTimeout(200);
+
     // Press Cmd+K to open filter
     await page.keyboard.press('Meta+k');
     await page.waitForSelector('[data-testid="browser-filter"]', { timeout: 5_000 });
 
-    // Type "sqlite" in the filter — filters napkin names (mock data)
+    // Type "sqlite" in the filter
     await page.evaluate(() => {
       (window as any).useTerminalStore.getState().setBrowserFilter('sqlite');
     });
@@ -608,7 +624,7 @@ base.describe.serial('T-0600 shared app: log, ps, links, filter', () => {
     const cards = page.locator('[data-testid="napkin-card"]');
     const count = await cards.count();
     expect(count).toBeGreaterThanOrEqual(1);
-    expect(count).toBeLessThan(8); // fewer than total mock napkins
+    expect(count).toBeLessThan(8); // fewer than total napkins
 
     // Verify the matching card contains "sqlite"
     const names: string[] = [];
@@ -626,7 +642,7 @@ base.describe.serial('T-0600 shared app: log, ps, links, filter', () => {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
 
-    // All napkin cards should be visible now (8 mock napkins)
+    // All napkin cards should be visible now (8 injected napkins)
     const cardCount = await page.locator('[data-testid="napkin-card"]').count();
     expect(cardCount).toBe(8);
   });

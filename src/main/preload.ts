@@ -42,12 +42,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('scroll-lock:toggle', handler);
     return () => ipcRenderer.removeListener('scroll-lock:toggle', handler);
   },
+  onToggleKanban: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('kanban:toggle', handler);
+    return () => ipcRenderer.removeListener('kanban:toggle', handler);
+  },
   onSocketTerminalCreated: (
-    callback: (data: { id: string; name: string; parentId?: string | null; cwd?: string }) => void,
+    callback: (data: { id: string; name: string; parentId?: string | null; cwd?: string; role?: string; napkinSlug?: string }) => void,
   ) => {
     const handler = (
       _event: IpcRendererEvent,
-      data: { id: string; name: string; parentId?: string | null; cwd?: string },
+      data: { id: string; name: string; parentId?: string | null; cwd?: string; role?: string; napkinSlug?: string },
     ) => callback(data);
     ipcRenderer.on('socket:terminal-created', handler);
     return () => ipcRenderer.removeListener('socket:terminal-created', handler);
