@@ -60,20 +60,21 @@ test.describe.serial('Electron Terminal — IPC Bridge', () => {
     await waitForText(page, id, 'roundtrip');
 
     // Ctrl+C: start long command, interrupt, verify shell is responsive
-    await page.evaluate((id: string) => {
-      (window as any).getTerminal(id).terminal.paste('sleep 999\n');
-    }, id);
+    await page.evaluate(
+      (id: string) => window.electronAPI.pty.write(id, 'sleep 999\n'),
+      id,
+    );
     await page.waitForTimeout(1000); // let sleep start
-    await page.evaluate((id: string) => {
-      (window as any).getTerminal(id).terminal.paste('\x03');
-    }, id);
+    await page.evaluate(
+      (id: string) => window.electronAPI.pty.write(id, '\x03'),
+      id,
+    );
     await page.waitForTimeout(500); // let shell process the signal
 
     const marker = `ctrlc_ok_${Date.now()}`;
     await page.evaluate(
-      ([id, marker]: [string, string]) => {
-        (window as any).getTerminal(id).terminal.paste(`echo ${marker}\n`);
-      },
+      ([id, marker]: [string, string]) =>
+        window.electronAPI.pty.write(id, `echo ${marker}\n`),
       [id, marker] as [string, string],
     );
     await waitForText(page, id, marker);
