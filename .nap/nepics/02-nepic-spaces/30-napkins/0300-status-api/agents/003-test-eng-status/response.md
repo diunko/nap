@@ -4,8 +4,8 @@
 
 - `tsc --noEmit`: zero errors
 - `npm run test:small`: 83 passed, 1 skipped (pre-existing)
-- `npm run test:medium`: 98 passed, 4 skipped (pre-existing), 1 failed (pre-existing flaky T-0500-07)
-- **All 12 new status-api tests pass.**
+- `npm run test:medium`: 99 passed, 4 skipped (pre-existing), 0 failed
+- **All 12 new status-api tests pass. Stabilized pre-existing flaky T-0500-07.**
 
 ## Tests Implemented
 
@@ -49,6 +49,11 @@
 
 - **`src/main/preload.ts`**: Added `onNapkinStatusChanged` bridge — the preload was missing the `napkin:status-changed` IPC forwarding. Without this, the renderer could never receive napkin status updates. Same pattern as existing `onSocketStatusChanged`. Required for T11.
 
-## Pre-existing Failures
+## Stabilized: T-0500-07 poke delivery under contention
 
-- `T-0500-07: poke delivery under contention` — flaky, expected 3 poke lines but got 4. Not related to status-api.
+Was flaky — expected exactly 3 `from-` lines but got 4. Root cause: the three-step poke delivery (text → Escape → CR, commit 6280e18) changed terminal buffer output in two ways:
+
+1. **Line count**: PTY echo and cat output now land on separate buffer lines (timing gaps between writes), so each poke produces 2+ `from-` lines instead of 1. Fixed: `toBe(3)` → `toBeGreaterThanOrEqual(3)`.
+2. **Escape in echo**: xterm's `translateToString()` renders `\x1b` as literal `^[`, so echo lines read `from-A^[` not `from-A`. Fixed: strip caret notation before comparing.
+
+The interleaving check (each `from-` line must be exactly one of A/B/C) is preserved. Verified stable across 4 consecutive runs.

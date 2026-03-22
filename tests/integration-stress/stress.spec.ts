@@ -580,12 +580,17 @@ base.describe.serial('T-0500-07: poke delivery under contention', () => {
       }),
     ]);
 
-    // Wait for all three to be delivered
-    await waitForBufferText(page, targetId, 'from-A', 5_000);
-    await waitForBufferText(page, targetId, 'from-B', 5_000);
-    await waitForBufferText(page, targetId, 'from-C', 5_000);
+    // Wait for all three to be delivered.
+    // Three-step delivery (text → Escape → CR) takes ~400ms per message
+    // plus 500ms inter-message delay, so total ~2.7s for 3 messages.
+    await waitForBufferText(page, targetId, 'from-A', 10_000);
+    await waitForBufferText(page, targetId, 'from-B', 10_000);
+    await waitForBufferText(page, targetId, 'from-C', 10_000);
 
-    // Verify no interleaving: each message is a complete line
+    // Verify no interleaving: each from- line must be exactly one of the
+    // expected values, never a mangled mix like "from-Afrom-B".
+    // Line count is NOT fixed — three-step delivery with PTY echo means
+    // each message can produce multiple buffer lines (input echo + cat output).
     const fromLines: string[] = await page.evaluate(
       (tid: string) => {
         const entry = (window as any).getTerminal(tid);
@@ -593,7 +598,10 @@ base.describe.serial('T-0500-07: poke delivery under contention', () => {
         const buf = entry.terminal.buffer.active;
         const lines: string[] = [];
         for (let i = 0; i < buf.length; i++) {
-          const line = buf.getLine(i)?.translateToString().trim() ?? '';
+          // Strip control chars — three-step delivery leaves Escape in the
+          // echo line (text → Escape → CR), shown as "from-A^[" by xterm.
+          const raw = buf.getLine(i)?.translateToString().trim() ?? '';
+          const line = raw.replace(/[\x00-\x1f]|\^[\[ABCDEFGHIJKLMNOPQRSTUVWXYZ@\[\\\]\^_?]/g, '');
           if (line.startsWith('from-')) lines.push(line);
         }
         return lines;
@@ -601,7 +609,11 @@ base.describe.serial('T-0500-07: poke delivery under contention', () => {
       targetId,
     );
 
-    expect(fromLines.length).toBe(3);
+    const valid = new Set(['from-A', 'from-B', 'from-C']);
+    expect(fromLines.length).toBeGreaterThanOrEqual(3);
+    for (const line of fromLines) {
+      expect(valid).toContain(line); // no interleaving — every line is a clean message
+    }
     expect(fromLines).toContain('from-A');
     expect(fromLines).toContain('from-B');
     expect(fromLines).toContain('from-C');
