@@ -96,4 +96,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send('socket:log-response', requestId, lines),
   openFilePath: (filePath: string) => ipcRenderer.send('open-file-path', filePath),
   getInitialTerminalOpts: () => ipcRenderer.invoke('get-initial-terminal-opts') as Promise<{ name: string; command?: string }>,
+  sendUiState: (state: { activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean }) =>
+    ipcRenderer.send('ui-state:update', state),
+  getUiState: () => ipcRenderer.invoke('get-ui-state') as Promise<{ activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean } | null>,
 });

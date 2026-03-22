@@ -168,10 +168,44 @@ function App() {
       window.electronAPI.sendLogResponse(data.requestId, lines);
     });
 
-    // Create first terminal with options from --name/--command flags
-    window.electronAPI.getInitialTerminalOpts().then((opts) => {
-      useTerminalStore.getState().createTerminal(opts.name, undefined, opts.command);
+    // Hydrate UI state from SQLite, then create first terminal
+    window.electronAPI.getUiState().then((savedState) => {
+      if (savedState) {
+        // Apply sidebar and nepic state immediately
+        const store = useTerminalStore.getState();
+        if (!savedState.sidebarVisible && store.sidebarVisible) {
+          store.toggleSidebar();
+        }
+        if (savedState.activeNepicId) {
+          store.setActiveNepic(savedState.activeNepicId);
+        }
+      }
+
+      // Create first terminal with options from --name/--command flags
+      window.electronAPI.getInitialTerminalOpts().then((opts) => {
+        useTerminalStore.getState().createTerminal(opts.name, undefined, opts.command);
+
+        // After first terminal is created, restore active terminal if valid
+        if (savedState?.activeTerminalId) {
+          const store = useTerminalStore.getState();
+          const exists = store.terminals.some((t) => t.id === savedState.activeTerminalId);
+          if (exists) {
+            store.setActive(savedState.activeTerminalId!);
+          }
+        }
+      });
     });
+
+    // Push UI state changes to main process for persistence
+    const unsubUiState = useTerminalStore.subscribe(
+      (state) => {
+        window.electronAPI.sendUiState({
+          activeNepicId: state.activeNepicId,
+          activeTerminalId: state.activeTerminalId,
+          sidebarVisible: state.sidebarVisible,
+        });
+      },
+    );
 
     return () => {
       removeDataListener();
@@ -190,6 +224,7 @@ function App() {
       removeKanbanListener();
       removeLogRequest();
       clearInterval(scrollDebugInterval);
+      unsubUiState();
     };
   }, []);
 

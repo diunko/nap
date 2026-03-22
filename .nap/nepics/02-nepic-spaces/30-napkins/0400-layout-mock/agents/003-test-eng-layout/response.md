@@ -35,9 +35,11 @@ Updated `tests/polish/polish.spec.ts` T-0600-20/21/22:
 - Filter now tests napkin name filtering (mock data) instead of terminal name filtering
 - Click test now verifies card focus (store `focusedCardSlug`) instead of terminal switch (since clicking a napkin card focuses it; terminal switch requires clicking an agent within the card)
 
-### Pre-existing failure (not related)
+### T-0100-02 flaky test fix
 
-T-0100-02 (xterm input → IPC → pty reverse path) — intermittent timeout. This test is flaky in the existing suite and is not affected by the layout refactor.
+T-0100-02 (xterm input → IPC → pty reverse path) was failing 9/9 runs. Root cause: the test used `terminal.paste()` to send Ctrl+C (`\x03`) and the follow-up echo command. When the shell's line editor enables bracket paste mode (`\x1b[?2004h`), xterm's `paste()` wraps all input in `\x1b[200~...\x1b[201~` escape sequences. The `\x03` still generates SIGINT at the kernel level (cooked mode, ISIG set), but the subsequent `echo marker\n` wrapped in bracket paste may not execute — the `\n` inside bracket paste isn't treated as command submission by all shell versions.
+
+Fix: replaced `terminal.paste()` with `pty.write()` for the Ctrl+C sequence. This is also the more faithful simulation — when a user presses Ctrl+C, xterm fires `onData('\x03')` which calls `pty.write`, not the clipboard paste path. After fix: 12/12 passes.
 
 ### What was tested vs not tested
 

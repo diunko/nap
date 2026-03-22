@@ -146,3 +146,40 @@ export function removeSession(id: string): void {
   const d = ensureDb();
   d.prepare('DELETE FROM sessions WHERE id = ?').run(id);
 }
+
+// ── UI State persistence ──
+
+export interface UiState {
+  activeNepicId: string | null;
+  activeTerminalId: string | null;
+  sidebarVisible: boolean;
+}
+
+export function saveUiState(state: UiState): void {
+  const d = ensureDb();
+  d.prepare(`
+    INSERT OR REPLACE INTO ui_state (id, active_nepic_id, active_terminal_id, sidebar_visible)
+    VALUES (1, ?, ?, ?)
+  `).run(state.activeNepicId, state.activeTerminalId, state.sidebarVisible ? 1 : 0);
+}
+
+export function loadUiState(): UiState | null {
+  const d = ensureDb();
+  const row = d.prepare('SELECT * FROM ui_state WHERE id = 1').get() as
+    | { active_nepic_id: string | null; active_terminal_id: string | null; sidebar_visible: number }
+    | undefined;
+  if (!row) return null;
+
+  // Validate active_terminal_id — fall back if session no longer exists
+  let activeTerminalId = row.active_terminal_id;
+  if (activeTerminalId) {
+    const session = d.prepare('SELECT id FROM sessions WHERE id = ?').get(activeTerminalId);
+    if (!session) activeTerminalId = null;
+  }
+
+  return {
+    activeNepicId: row.active_nepic_id,
+    activeTerminalId,
+    sidebarVisible: !!row.sidebar_visible,
+  };
+}

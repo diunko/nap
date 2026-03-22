@@ -28,7 +28,10 @@ import {
   setSessionStatus,
   setSessionDone,
   removeSession,
+  saveUiState,
+  loadUiState,
 } from './session-store';
+import type { UiState } from './session-store';
 import { initNapkinStore, closeNapkinStore, changeNapkinStatus, getAllNapkinStatuses } from './napkin-store';
 import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir } from './napkin-watcher';
 import { resolveByName } from './name-resolver';
@@ -337,6 +340,23 @@ ipcMain.handle('get-initial-terminal-opts', () => ({
   command: initialTerminalCommand,
 }));
 
+// ── UI State tracking ──
+// Renderer pushes state changes here; main saves on before-quit
+let trackedUiState: UiState = { activeNepicId: null, activeTerminalId: null, sidebarVisible: true };
+
+ipcMain.on('ui-state:update', (_event: IpcMainEvent, state: UiState) => {
+  trackedUiState = state;
+});
+
+// Renderer requests saved UI state on launch
+ipcMain.handle('get-ui-state', () => {
+  try {
+    return loadUiState();
+  } catch {
+    return null;
+  }
+});
+
 // IPC: renderer asks to open a file path
 ipcMain.on('open-file-path', (_event: IpcMainEvent, filePath: string) => {
   shell.openPath(filePath);
@@ -561,6 +581,8 @@ app.whenReady().then(async () => {
       setSessionStatus,
       setSessionDone,
       removeSession,
+      saveUiState,
+      loadUiState,
       changeNapkinStatus,
       getAllNapkinStatuses,
       readNapkinDir,
@@ -640,6 +662,14 @@ process.on('SIGINT', () => {
 
 process.on('beforeExit', () => {
   stopSocketServer();
+});
+
+app.on('before-quit', () => {
+  try {
+    saveUiState(trackedUiState);
+  } catch {
+    // DB may already be closed in edge cases — don't block quit
+  }
 });
 
 app.on('will-quit', () => {

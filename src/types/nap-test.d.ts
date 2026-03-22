@@ -5,6 +5,8 @@ import type {
   setSessionStatus,
   setSessionDone,
   removeSession,
+  saveUiState,
+  loadUiState,
 } from '../main/session-store';
 import type { changeNapkinStatus, getAllNapkinStatuses } from '../main/napkin-store';
 import type { readNapkinDir, startNapkinWatcher, stopNapkinWatcher } from '../main/napkin-watcher';
@@ -20,6 +22,8 @@ interface NapTestHelpers {
   setSessionStatus: typeof setSessionStatus;
   setSessionDone: typeof setSessionDone;
   removeSession: typeof removeSession;
+  saveUiState: typeof saveUiState;
+  loadUiState: typeof loadUiState;
   changeNapkinStatus: typeof changeNapkinStatus;
   getAllNapkinStatuses: typeof getAllNapkinStatuses;
   readNapkinDir: typeof readNapkinDir;
