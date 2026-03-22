@@ -75,3 +75,12 @@ Each bullet is a "what if." Not a todo. Not a spec. An idea with energy — some
     * file = structured handoff, async, like an email
     * new agent = new task, fresh context
   * for now: don't use poke in agent workflows, only done + response.md
+
+* What if claude flags were configurable in one place?
+  * right now `--verbose` is hardcoded in multiple spots (nap start prompts, architect resume, orphan resume)
+  * easy to forget one — then that agent runs without verbose and you can't see its thinking
+  * one config: `.nap/00-org/claude-flags` or a field in nap.db
+    * `--verbose --session-id <auto>` as the baseline
+    * per-role overrides? architect gets `--verbose`, test-eng gets `--verbose --allowedTools ...`?
+  * nap start, nap spawn, architect resume — all read from the same config
+  * change once, applies everywhere
