@@ -68,6 +68,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('socket:status-changed', handler);
     return () => ipcRenderer.removeListener('socket:status-changed', handler);
   },
+  onNapkinStatusChanged: (callback: (data: { slug: string; status: string }) => void) => {
+    const handler = (_event: IpcRendererEvent, data: { slug: string; status: string }) =>
+      callback(data);
+    ipcRenderer.on('napkin:status-changed', handler);
+    return () => ipcRenderer.removeListener('napkin:status-changed', handler);
+  },
   onLogRequest: (callback: (data: { id: string; requestId: number }) => void) => {
     const handler = (
       _event: IpcRendererEvent,

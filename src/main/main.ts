@@ -29,6 +29,7 @@ import {
   setSessionDone,
   removeSession,
 } from './session-store';
+import { initNapkinStore, closeNapkinStore, changeNapkinStatus } from './napkin-store';
 import { resolveByName } from './name-resolver';
 import { setWriter, enqueue, clearQueue } from './message-queue';
 import { getServerSocketPath } from '../shared/constants';
@@ -495,6 +496,30 @@ async function handleSocketRequest(msg: unknown): Promise<Record<string, unknown
       return { id: req.id, ok: true, lines };
     }
 
+    case 'napkin-status': {
+      try {
+        changeNapkinStatus(req.napkinSlug, req.status);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes('not found')) {
+          return { id: req.id, error: 'not_found', message };
+        }
+        if (message.includes('Invalid status')) {
+          return { id: req.id, error: 'invalid_status', message };
+        }
+        return { id: req.id, error: 'error', message };
+      }
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('napkin:status-changed', {
+          slug: req.napkinSlug,
+          status: req.status,
+        });
+      }
+
+      return { id: req.id, ok: true };
+    }
+
     default:
       return { id: (req as { id?: number }).id, error: 'unknown', message: 'unknown command' };
   }
@@ -512,6 +537,7 @@ app.whenReady().then(async () => {
   const dbPath = getDbPath(projectCwd);
   const database = initDatabase(dbPath);
   initSessionStore(database);
+  initNapkinStore(database, projectCwd);
 
   // Expose internals for Playwright tests (session-store uses native modules
   // compiled for Electron's ABI — vitest can't load them)
@@ -523,6 +549,7 @@ app.whenReady().then(async () => {
       setSessionStatus,
       setSessionDone,
       removeSession,
+      changeNapkinStatus,
       SCHEMA,
       Database,
       getDb: () => database,
@@ -572,6 +599,7 @@ process.on('beforeExit', () => {
 
 app.on('will-quit', () => {
   stopSocketServer();
+  closeNapkinStore();
   closeSessionStore();
   closeDatabase();
 });

@@ -18,6 +18,7 @@ Commands:
   open [path]       Launch Nap.app for a project directory
   start <command>   Start a new agent session
   ps                List all sessions
+  status <slug> <s> Set napkin status (backlog/todo/doing/review/done)
   log <name>        Dump terminal scrollback to stdout
   peek <name>       Focus a terminal in the UI
   kill <name>       Kill a session's process
@@ -108,6 +109,14 @@ Wait for a session to complete.
 Mark the current session as done (must be running inside nap).
 
   message           Optional done message
+  --help            Show this help
+`,
+  status: `Usage: nap status <napkin-slug> <status>
+
+Set napkin status (updates SQLite and board symlinks).
+
+  napkin-slug       Napkin slug (e.g. 0200-sqlite-setup)
+  status            One of: backlog, todo, doing, review, done
   --help            Show this help
 `,
 };
@@ -484,6 +493,26 @@ async function main(): Promise<void> {
         process.stderr.write(String(res['message']) + '\n');
         process.exit(1);
       }
+      break;
+    }
+
+    case 'status': {
+      if (!args[0] || !args[1]) {
+        process.stderr.write('Usage: nap status <napkin-slug> <status>\n');
+        process.exit(1);
+      }
+      const sock = resolveSocketOrDie();
+      const res = await send(sock, {
+        type: 'napkin-status',
+        id: requestId++,
+        napkinSlug: args[0],
+        status: args[1],
+      });
+      if (res['error']) {
+        process.stderr.write(String(res['message']) + '\n');
+        process.exit(1);
+      }
+      process.stdout.write(`${args[0]} → ${args[1]}\n`);
       break;
     }
 

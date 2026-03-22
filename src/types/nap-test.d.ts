@@ -6,6 +6,7 @@ import type {
   setSessionDone,
   removeSession,
 } from '../main/session-store';
+import type { changeNapkinStatus } from '../main/napkin-store';
 import type Database from 'better-sqlite3';
 import type * as path from 'path';
 import type * as fs from 'fs';
@@ -18,6 +19,7 @@ interface NapTestHelpers {
   setSessionStatus: typeof setSessionStatus;
   setSessionDone: typeof setSessionDone;
   removeSession: typeof removeSession;
+  changeNapkinStatus: typeof changeNapkinStatus;
   SCHEMA: string;
   Database: typeof Database;
   getDb: () => Database.Database;

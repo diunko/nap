@@ -56,6 +56,13 @@ export interface LogRequest {
   name: string;
 }
 
+export interface NapkinStatusRequest {
+  type: 'napkin-status';
+  id: number;
+  napkinSlug: string;
+  status: string;
+}
+
 export type SocketRequest =
   | StartRequest
   | PsRequest
@@ -65,4 +72,5 @@ export type SocketRequest =
   | PokeRequest
   | StatusRequest
   | DoneRequest
-  | LogRequest;
+  | LogRequest
+  | NapkinStatusRequest;
