@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Terminal } from './components/Terminal';
-import { Sidebar } from './components/Sidebar';
+import { Gutter } from './components/Gutter';
+import { NapkinBrowser } from './components/NapkinBrowser';
 import { useTerminalStore } from './store';
 import { getTerminal } from './terminal-registry';
 import '@xterm/xterm/css/xterm.css';
@@ -172,10 +173,18 @@ function App() {
 
   return (
     <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-      {sidebarVisible && <Sidebar />}
+      <Gutter />
+      {sidebarVisible && <NapkinBrowser />}
       <div style={{ flex: 1, minWidth: 0 }}>
         <Terminal />
       </div>
+      {/* Inject pulse keyframe animation */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
     </div>
   );
 }

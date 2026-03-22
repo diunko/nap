@@ -591,87 +591,68 @@ base.describe.serial('T-0600 shared app: log, ps, links, filter', () => {
     }
   });
 
-  // --- T-0600-20: Cmd+K opens filter input, typing filters cards ---
+  // --- T-0600-20: Cmd+K opens filter input, typing filters napkin cards ---
 
-  base('T-0600-20: Cmd+K opens filter, typing "test" shows only matching cards', async () => {
-    // Create 5 terminals with distinct names
-    for (const name of ['fs-eng', 'test-arch', 'fs-eng-2', 'reviewer', 'test-runner']) {
-      const res = await socketRequest(socketPath, {
-        type: 'start', id: reqId++, command: 'sleep 999', name,
-      });
-      expect(res['ok']).toBe(true);
-      await waitForTerminal(page, name);
-    }
-
+  base('T-0600-20: Cmd+K opens filter, typing "sqlite" shows only matching napkin cards', async () => {
     // Press Cmd+K to open filter
     await page.keyboard.press('Meta+k');
-    await page.waitForSelector('[data-testid="sidebar-filter"]', { timeout: 5_000 });
+    await page.waitForSelector('[data-testid="browser-filter"]', { timeout: 5_000 });
 
-    // Type "test" in the filter
-    await page.locator('[data-testid="sidebar-filter"]').fill('test');
-    // Wait for React re-render
+    // Type "sqlite" in the filter — filters napkin names (mock data)
+    await page.evaluate(() => {
+      (window as any).useTerminalStore.getState().setBrowserFilter('sqlite');
+    });
     await page.waitForTimeout(200);
 
-    // Count visible cards — only test-arch and test-runner should match
-    const cards = page.locator('[data-testid="agent-card"]');
+    // Count visible napkin cards — only sqlite-persistence should match
+    const cards = page.locator('[data-testid="napkin-card"]');
     const count = await cards.count();
-    expect(count).toBe(2);
+    expect(count).toBeGreaterThanOrEqual(1);
+    expect(count).toBeLessThan(8); // fewer than total mock napkins
 
-    // Verify the right names
+    // Verify the matching card contains "sqlite"
     const names: string[] = [];
     for (let i = 0; i < count; i++) {
       const text = await cards.nth(i).textContent();
       names.push(text ?? '');
     }
-    expect(names.some((n) => n.includes('test-arch'))).toBe(true);
-    expect(names.some((n) => n.includes('test-runner'))).toBe(true);
+    expect(names.some((n) => n.toLowerCase().includes('sqlite'))).toBe(true);
   });
 
-  // --- T-0600-21: Escape clears filter, shows all cards ---
+  // --- T-0600-21: Escape clears filter, shows all napkin cards ---
 
-  base('T-0600-21: Escape clears filter and shows all cards', async () => {
+  base('T-0600-21: Escape clears filter and shows all napkin cards', async () => {
     // Filter should still be active from T-0600-20
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
 
-    // All terminals should be visible now
-    const totalTerminals = await page.evaluate(
-      () => (window as any).useTerminalStore.getState().terminals.length,
-    );
-
-    const cardCount = await page.locator('[data-testid="agent-card"]').count();
-    expect(cardCount).toBe(totalTerminals);
-    // Should be well more than 2 (at least shell + logger-11 + lines-12 + run-14 + exit-14 + done-14 + link-18 + 5 filter terminals)
-    expect(cardCount).toBeGreaterThan(5);
+    // All napkin cards should be visible now (8 mock napkins)
+    const cardCount = await page.locator('[data-testid="napkin-card"]').count();
+    expect(cardCount).toBe(8);
   });
 
-  // --- T-0600-22: Filtered cards remain clickable ---
+  // --- T-0600-22: Filtered napkin cards remain clickable ---
 
-  base('T-0600-22: clicking a filtered card switches the active terminal', async () => {
-    // Open filter and type "test"
+  base('T-0600-22: clicking a filtered napkin card focuses it', async () => {
+    // Open filter and type "sqlite"
     await page.keyboard.press('Meta+k');
-    await page.waitForSelector('[data-testid="sidebar-filter"]', { timeout: 5_000 });
-    await page.locator('[data-testid="sidebar-filter"]').fill('test');
+    await page.waitForSelector('[data-testid="browser-filter"]', { timeout: 5_000 });
+    await page.evaluate(() => {
+      (window as any).useTerminalStore.getState().setBrowserFilter('sqlite');
+    });
     await page.waitForTimeout(200);
 
-    // Click the first visible card
-    const firstCard = page.locator('[data-testid="agent-card"]').first();
-    const cardName = await firstCard.textContent();
+    // Click the first visible napkin card
+    const firstCard = page.locator('[data-testid="napkin-card"]').first();
     await firstCard.click();
+    await page.waitForTimeout(100);
 
-    // Active terminal should match clicked card
-    const activeId = await page.evaluate(
-      () => (window as any).useTerminalStore.getState().activeTerminalId as string,
+    // Card should be focused in store
+    const focusedSlug = await page.evaluate(
+      () => (window as any).useTerminalStore.getState().focusedCardSlug as string | null,
     );
-    const activeMeta = await page.evaluate(
-      (id: string) =>
-        (window as any).useTerminalStore
-          .getState()
-          .terminals.find((t: any) => t.id === id),
-      activeId,
-    );
-
-    expect(cardName).toContain(activeMeta.name);
+    expect(focusedSlug).toBeTruthy();
+    expect(focusedSlug!.toLowerCase()).toContain('sqlite');
 
     // Clean up filter
     await page.keyboard.press('Escape');

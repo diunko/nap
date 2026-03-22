@@ -12,11 +12,20 @@ export interface TerminalMeta {
   createdAt: number;
 }
 
+export type CardViewMode = 'collapsed' | 'focused' | 'extended';
+
 interface TerminalStore {
   terminals: TerminalMeta[];
   activeTerminalId: string | null;
   sidebarVisible: boolean;
   scrollLockModes: Record<string, ScrollLockMode>;
+
+  // Browser state
+  focusedCardSlug: string | null;
+  cardViewMode: CardViewMode;
+  activeNepicId: string;
+  browserFilterText: string;
+  browserFilterVisible: boolean;
 
   createTerminal: (name: string, parentId?: string, command?: string) => string;
   addSocketTerminal: (id: string, name: string, parentId?: string | null, cwd?: string) => void;
@@ -27,6 +36,14 @@ interface TerminalStore {
   setStatus: (id: string, status: TerminalMeta['status']) => void;
   toggleSidebar: () => void;
   setScrollLockMode: (id: string, mode: ScrollLockMode) => void;
+
+  // Browser actions
+  expandCard: (slug: string) => void;
+  collapseCard: () => void;
+  extendCard: () => void;
+  setActiveNepic: (id: string) => void;
+  setBrowserFilter: (text: string) => void;
+  setBrowserFilterVisible: (visible: boolean) => void;
 }
 
 export const useTerminalStore = create<TerminalStore>((set, get) => ({
@@ -34,6 +51,13 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   activeTerminalId: null,
   sidebarVisible: true,
   scrollLockModes: {},
+
+  // Browser state
+  focusedCardSlug: null,
+  cardViewMode: 'collapsed' as CardViewMode,
+  activeNepicId: 'spaces',
+  browserFilterText: '',
+  browserFilterVisible: false,
 
   createTerminal: (name: string, parentId?: string, command?: string) => {
     const id = crypto.randomUUID();
@@ -172,5 +196,41 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((state) => ({
       scrollLockModes: { ...state.scrollLockModes, [id]: mode },
     }));
+  },
+
+  // Browser actions
+  expandCard: (slug: string) => {
+    const current = get().focusedCardSlug;
+    if (current === slug) {
+      // Clicking already-focused card collapses it
+      set({ focusedCardSlug: null, cardViewMode: 'collapsed' });
+    } else {
+      set({ focusedCardSlug: slug, cardViewMode: 'focused' });
+    }
+  },
+
+  collapseCard: () => {
+    set({ focusedCardSlug: null, cardViewMode: 'collapsed' });
+  },
+
+  extendCard: () => {
+    const { focusedCardSlug, cardViewMode } = get();
+    if (!focusedCardSlug) return;
+    set({
+      cardViewMode: cardViewMode === 'extended' ? 'focused' : 'extended',
+    });
+  },
+
+  setActiveNepic: (id: string) => {
+    set({ activeNepicId: id });
+  },
+
+  setBrowserFilter: (text: string) => {
+    set({ browserFilterText: text });
+  },
+
+  setBrowserFilterVisible: (visible: boolean) => {
+    set({ browserFilterVisible: visible });
+    if (!visible) set({ browserFilterText: '' });
   },
 }));

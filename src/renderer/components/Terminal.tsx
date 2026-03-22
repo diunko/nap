@@ -2,6 +2,41 @@ import { useEffect, useRef } from 'react';
 import { useTerminalStore } from '../store';
 import { getTerminal, openTerminal } from '../terminal-registry';
 import type { ScrollLockMode } from '../scroll-lock';
+import { MOCK_ARCHITECTS, MOCK_NAPKINS } from '../mock-data';
+
+// Derive breadcrumb segments from active terminal ID + mock data
+function deriveBreadcrumb(activeTerminalId: string | null): {
+  nepicLabel: string;
+  napkinName?: string;
+  agentName?: string;
+  agentStatus?: string;
+} | null {
+  if (!activeTerminalId) return null;
+
+  // Check architects
+  for (const arch of MOCK_ARCHITECTS) {
+    if (arch.terminalId === activeTerminalId) {
+      return { nepicLabel: 'S', napkinName: `(${arch.label})` };
+    }
+  }
+
+  // Check napkin agents
+  for (const napkin of MOCK_NAPKINS) {
+    for (const agent of napkin.agents) {
+      if (agent.terminalId === activeTerminalId) {
+        return {
+          nepicLabel: 'S',
+          napkinName: napkin.name,
+          agentName: agent.name,
+          agentStatus: agent.status,
+        };
+      }
+    }
+  }
+
+  // Default: just show S
+  return { nepicLabel: 'S' };
+}
 
 export function Terminal() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -93,9 +128,94 @@ export function Terminal() {
     display: 'flex',
   };
 
+  const breadcrumb = deriveBreadcrumb(activeTerminalId);
+
   return (
-    <div style={borderStyle}>
-      <div ref={containerRef} style={{ flex: 1, minWidth: 0, minHeight: 0 }} />
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#1e1e1e',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Breadcrumb header */}
+      <div
+        data-testid="terminal-breadcrumb"
+        style={{
+          padding: '8px 16px',
+          borderBottom: '1px solid #3c3c3c',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0,
+          background: '#252526',
+          flexShrink: 0,
+          fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+          fontSize: 13,
+        }}
+      >
+        {breadcrumb ? (
+          <>
+            <span
+              style={{
+                color: '#6b7280',
+                cursor: 'pointer',
+                padding: '2px 0',
+                transition: 'color 0.1s',
+              }}
+            >
+              {breadcrumb.nepicLabel}
+            </span>
+            {breadcrumb.napkinName && (
+              <>
+                <span style={{ color: '#3c3c3c', margin: '0 8px', cursor: 'default' }}>
+                  &gt;
+                </span>
+                <span
+                  style={{
+                    color: breadcrumb.agentName ? '#6b7280' : '#e5e5e5',
+                    cursor: 'pointer',
+                    padding: '2px 0',
+                    fontWeight: breadcrumb.agentName ? 'normal' : 600,
+                  }}
+                >
+                  {breadcrumb.napkinName}
+                </span>
+              </>
+            )}
+            {breadcrumb.agentName && (
+              <>
+                <span style={{ color: '#3c3c3c', margin: '0 8px', cursor: 'default' }}>
+                  &gt;
+                </span>
+                <span
+                  style={{
+                    color: '#e5e5e5',
+                    fontWeight: 600,
+                    cursor: 'default',
+                  }}
+                >
+                  {breadcrumb.agentName}
+                </span>
+                {breadcrumb.agentStatus && (
+                  <span style={{ color: '#6b7280', fontSize: 12, marginLeft: 12 }}>
+                    {breadcrumb.agentStatus}
+                  </span>
+                )}
+              </>
+            )}
+          </>
+        ) : (
+          <span style={{ color: '#6b7280' }}>S</span>
+        )}
+      </div>
+
+      {/* Terminal with scroll-lock border */}
+      <div style={{ ...borderStyle, flex: 1, height: 'auto' }}>
+        <div ref={containerRef} style={{ flex: 1, minWidth: 0, minHeight: 0 }} />
+      </div>
     </div>
   );
 }
