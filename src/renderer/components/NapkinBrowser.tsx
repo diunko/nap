@@ -21,12 +21,14 @@ interface ArchitectData {
   status: AgentStatus;
   label: string;
   terminalId: string;
+  isOrphaned?: boolean;
 }
 
 interface NapkinAgent {
   name: string;
   terminalId?: string;
   status: AgentStatus;
+  isOrphaned?: boolean;
 }
 
 interface NapkinCardData {
@@ -47,9 +49,10 @@ function deriveArchitects(terminals: TerminalMeta[]): ArchitectData[] {
     .map((t) => ({
       slug: t.id,
       name: t.name,
-      status: terminalStatusToAgent(t.status),
-      label: t.status === 'running' ? 'acting' : t.status === 'done' ? 'done' : 'exited',
+      status: terminalStatusToAgent(t.status, t.isOrphaned),
+      label: t.isOrphaned ? 'orphaned' : t.status === 'running' ? 'acting' : t.status === 'done' ? 'done' : 'exited',
       terminalId: t.id,
+      isOrphaned: t.isOrphaned,
     }));
 }
 
@@ -67,8 +70,9 @@ function deriveNapkinCards(napkins: NapkinEntry[], terminals: TerminalMeta[]): N
       name: agentDirName,
       terminalId: napkinTerminals[i]?.id,
       status: napkinTerminals[i]
-        ? terminalStatusToAgent(napkinTerminals[i].status)
+        ? terminalStatusToAgent(napkinTerminals[i].status, napkinTerminals[i].isOrphaned)
         : ('exit' as AgentStatus),
+      isOrphaned: napkinTerminals[i]?.isOrphaned,
     }));
 
     // Add extra terminals not matched to filesystem agents
@@ -76,7 +80,8 @@ function deriveNapkinCards(napkins: NapkinEntry[], terminals: TerminalMeta[]): N
       agents.push({
         name: napkinTerminals[i].name,
         terminalId: napkinTerminals[i].id,
-        status: terminalStatusToAgent(napkinTerminals[i].status),
+        status: terminalStatusToAgent(napkinTerminals[i].status, napkinTerminals[i].isOrphaned),
+        isOrphaned: napkinTerminals[i].isOrphaned,
       });
     }
 
@@ -94,21 +99,28 @@ function deriveNapkinCards(napkins: NapkinEntry[], terminals: TerminalMeta[]): N
 // ── Dot component ──
 
 export function StatusDot({ status, size = 7 }: { status: AgentStatus; size?: number }) {
+  const isOrphaned = status === 'orphaned';
   const hollow = isDotHollow(status);
   const pulsing = isDotPulsing(status);
   const color = dotColor(status);
-  const actualSize = hollow ? size - 1 : size;
+  const actualSize = (hollow || isOrphaned) ? size - 1 : size;
 
   return (
     <span
+      data-status={status}
       style={{
         width: actualSize,
         height: actualSize,
         borderRadius: '50%',
         display: 'inline-block',
         flexShrink: 0,
-        background: hollow ? 'transparent' : color,
-        border: hollow ? `1.5px solid ${color}` : 'none',
+        background: isOrphaned ? 'transparent' : hollow ? 'transparent' : color,
+        border: isOrphaned
+          ? `1.5px dashed ${color}`
+          : hollow
+            ? `1.5px solid ${color}`
+            : 'none',
+        opacity: isOrphaned ? 0.5 : 1,
         animation: pulsing ? 'pulse 2s ease-in-out infinite' : 'none',
       }}
     />
@@ -490,6 +502,7 @@ export function NapkinBrowser() {
   const browserFilterVisible = useTerminalStore((s) => s.browserFilterVisible);
   const setBrowserFilter = useTerminalStore((s) => s.setBrowserFilter);
   const setBrowserFilterVisible = useTerminalStore((s) => s.setBrowserFilterVisible);
+  const resumeOrphanedTerminal = useTerminalStore((s) => s.resumeOrphanedTerminal);
   const napkins = useTerminalStore((s) => s.napkins);
   const terminals = useTerminalStore((s) => s.terminals);
   const filterInputRef = useRef<HTMLInputElement>(null);
@@ -534,7 +547,10 @@ export function NapkinBrowser() {
     : napkinCards;
 
   function handleClickAgent(agent: NapkinAgent) {
-    if (agent.terminalId) {
+    if (agent.isOrphaned && agent.terminalId) {
+      resumeOrphanedTerminal(agent.terminalId);
+      setActive(agent.terminalId);
+    } else if (agent.terminalId) {
       setActive(agent.terminalId);
     }
   }
@@ -602,7 +618,14 @@ export function NapkinBrowser() {
             architect={arch}
             isFocused={focusedCardSlug === arch.slug}
             viewMode={cardViewMode}
-            onToggle={() => expandCard(arch.slug)}
+            onToggle={() => {
+              if (arch.isOrphaned) {
+                resumeOrphanedTerminal(arch.terminalId);
+                setActive(arch.terminalId);
+              } else {
+                expandCard(arch.slug);
+              }
+            }}
           />
         ))}
 

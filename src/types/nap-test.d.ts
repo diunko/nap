@@ -7,6 +7,7 @@ import type {
   removeSession,
   saveUiState,
   loadUiState,
+  getArchitectForNepic,
 } from '../main/session-store';
 import type { changeNapkinStatus, getAllNapkinStatuses } from '../main/napkin-store';
 import type { readNapkinDir, startNapkinWatcher, stopNapkinWatcher } from '../main/napkin-watcher';
@@ -24,6 +25,7 @@ interface NapTestHelpers {
   removeSession: typeof removeSession;
   saveUiState: typeof saveUiState;
   loadUiState: typeof loadUiState;
+  getArchitectForNepic: typeof getArchitectForNepic;
   changeNapkinStatus: typeof changeNapkinStatus;
   getAllNapkinStatuses: typeof getAllNapkinStatuses;
   readNapkinDir: typeof readNapkinDir;
@@ -32,6 +34,7 @@ interface NapTestHelpers {
   SCHEMA: string;
   Database: typeof Database;
   getDb: () => Database.Database;
+  getLivePtyIds: () => string[];
   path: typeof path;
   fs: typeof fs;
   os: typeof os;

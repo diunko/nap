@@ -168,7 +168,7 @@ function App() {
       window.electronAPI.sendLogResponse(data.requestId, lines);
     });
 
-    // Hydrate UI state from SQLite, then create first terminal
+    // Hydrate UI state from SQLite, then resume architect, then create first terminal
     window.electronAPI.getUiState().then((savedState) => {
       if (savedState) {
         // Apply sidebar and nepic state immediately
@@ -181,18 +181,47 @@ function App() {
         }
       }
 
-      // Create first terminal with options from --name/--command flags
-      window.electronAPI.getInitialTerminalOpts().then((opts) => {
-        useTerminalStore.getState().createTerminal(opts.name, undefined, opts.command);
+      // Resume architect and load orphaned sessions before creating first terminal
+      window.electronAPI.getResumeData().then((resumeData) => {
+        const store = useTerminalStore.getState();
 
-        // After first terminal is created, restore active terminal if valid
-        if (savedState?.activeTerminalId) {
-          const store = useTerminalStore.getState();
-          const exists = store.terminals.some((t) => t.id === savedState.activeTerminalId);
-          if (exists) {
-            store.setActive(savedState.activeTerminalId!);
-          }
+        // Add resumed architect terminal (pty already spawned by main)
+        if (resumeData.architectSession) {
+          const a = resumeData.architectSession;
+          store.addSocketTerminal(a.id, a.name, a.parentId, a.cwd, a.role, a.napkinSlug);
         }
+
+        // Add orphaned sessions (no pty, no xterm — just store entries)
+        for (const s of resumeData.orphanedSessions) {
+          store.addOrphanedTerminal(s.id, s.name, {
+            role: s.role,
+            napkinSlug: s.napkinSlug,
+            ccSessionUuid: s.ccSessionUuid,
+            parentId: s.parentId ?? undefined,
+            cwd: s.cwd,
+          });
+        }
+
+        // Create first terminal with options from --name/--command flags
+        window.electronAPI.getInitialTerminalOpts().then((opts) => {
+          const shellId = useTerminalStore.getState().createTerminal(opts.name, undefined, opts.command);
+
+          // After first terminal is created, restore active terminal if valid.
+          // Skip orphaned terminals — they have no xterm instance.
+          if (savedState?.activeTerminalId) {
+            const s2 = useTerminalStore.getState();
+            const terminal = s2.terminals.find((t) => t.id === savedState.activeTerminalId);
+            if (terminal && !terminal.isOrphaned) {
+              s2.setActive(savedState.activeTerminalId!);
+            }
+          }
+
+          // Fallback: if no terminal is active (e.g. orphaned terminals were
+          // added before the shell, making isFirst=false), activate the shell
+          if (!useTerminalStore.getState().activeTerminalId) {
+            useTerminalStore.getState().setActive(shellId);
+          }
+        });
       });
     });
 

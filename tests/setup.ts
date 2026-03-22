@@ -25,6 +25,7 @@ const mockElectronAPI = {
     ready: vi.fn(),
     write: vi.fn(),
     resize: vi.fn(),
+    resume: vi.fn(),
     onData: vi.fn(() => vi.fn()),
     onExit: vi.fn(() => vi.fn()),
   },

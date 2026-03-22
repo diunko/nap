@@ -147,6 +147,14 @@ export function removeSession(id: string): void {
   d.prepare('DELETE FROM sessions WHERE id = ?').run(id);
 }
 
+export function getArchitectForNepic(nepicId: string): Session | undefined {
+  const d = ensureDb();
+  const row = d.prepare(
+    "SELECT * FROM sessions WHERE role = 'architect' AND nepic_id = ? AND status = 'running' ORDER BY created_at DESC LIMIT 1",
+  ).get(nepicId) as SessionRow | undefined;
+  return row ? rowToSession(row) : undefined;
+}
+
 // ── UI State persistence ──
 
 export interface UiState {

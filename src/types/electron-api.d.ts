@@ -1,3 +1,18 @@
+interface ResumeSessionData {
+  id: string;
+  name: string;
+  role?: string;
+  napkinSlug?: string;
+  ccSessionUuid?: string;
+  parentId?: string | null;
+  cwd?: string;
+}
+
+interface ResumeData {
+  architectSession: ResumeSessionData | null;
+  orphanedSessions: ResumeSessionData[];
+}
+
 interface ElectronPtyAPI {
   create: (id: string, opts?: { name?: string; parentId?: string; cwd?: string; command?: string }) => void;
   kill: (id: string) => void;
@@ -7,6 +22,7 @@ interface ElectronPtyAPI {
   onExit: (callback: (id: string, exitCode: number) => void) => () => void;
   write: (id: string, data: string) => void;
   resize: (id: string, cols: number, rows: number) => void;
+  resume: (id: string, ccSessionUuid: string) => void;
 }
 
 interface ElectronAPI {
@@ -32,6 +48,7 @@ interface ElectronAPI {
   getInitialTerminalOpts: () => Promise<{ name: string; command?: string }>;
   sendUiState: (state: { activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean }) => void;
   getUiState: () => Promise<{ activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean } | null>;
+  getResumeData: () => Promise<ResumeData>;
 }
 
 declare global {

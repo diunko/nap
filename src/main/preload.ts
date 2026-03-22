@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     write: (id: string, data: string) => ipcRenderer.send('pty:write', id, data),
     resize: (id: string, cols: number, rows: number) =>
       ipcRenderer.send('pty:resize', id, cols, rows),
+    resume: (id: string, ccSessionUuid: string) =>
+      ipcRenderer.send('pty:resume', id, ccSessionUuid),
   },
   onToggleSidebar: (callback: () => void) => {
     const handler = () => callback();
@@ -99,4 +101,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendUiState: (state: { activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean }) =>
     ipcRenderer.send('ui-state:update', state),
   getUiState: () => ipcRenderer.invoke('get-ui-state') as Promise<{ activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean } | null>,
+  getResumeData: () => ipcRenderer.invoke('get-resume-data') as Promise<{
+    architectSession: { id: string; name: string; role?: string; napkinSlug?: string; ccSessionUuid?: string; parentId?: string | null; cwd?: string } | null;
+    orphanedSessions: { id: string; name: string; role?: string; napkinSlug?: string; ccSessionUuid?: string; parentId?: string | null; cwd?: string }[];
+  }>,
 });

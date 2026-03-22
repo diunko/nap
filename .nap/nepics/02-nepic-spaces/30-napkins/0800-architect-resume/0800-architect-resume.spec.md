@@ -10,8 +10,9 @@ Auto-resume architect on app launch. Show orphaned state for agents that were ru
 
 * On startup, after 0700 restores UI state:
   * Query sessions: find architect for active nepic (role='architect', status='running' or 'done')
-  * If cc_session_uuid exists: spawn `claude --resume <uuid>` in architect terminal
-  * If no UUID (legacy session): spawn fresh `claude` session
+  * If cc_session_uuid exists: spawn `claude --verbose --resume <uuid>` in architect terminal
+  * If no UUID (legacy session): spawn fresh `claude --verbose` session
+  * **All claude invocations must include `--verbose`** — the human needs to see tool calls and reasoning in the terminal scrollback. This applies everywhere NAP spawns a claude process.
 * Orphaned agents:
   * Sessions with status='running' in SQLite but no live pty
   * Render with orphaned dot style in sidebar

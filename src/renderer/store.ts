@@ -6,7 +6,7 @@ import type { ScrollLockMode } from './scroll-lock';
 // ── Shared types ──
 
 export type NapkinPhase = 'backlog' | 'todo' | 'doing' | 'review' | 'done';
-export type AgentStatus = 'run' | 'done' | 'nap' | 'exit';
+export type AgentStatus = 'run' | 'done' | 'nap' | 'exit' | 'orphaned';
 
 export interface NapkinEntry {
   slug: string;
@@ -19,7 +19,7 @@ export interface NapkinEntry {
 // ── Dot / phase helpers ──
 
 const DOT_COLORS: Record<AgentStatus, string> = {
-  run: '#22c55e', done: '#3b82f6', nap: '#f59e0b', exit: '#6b7280',
+  run: '#22c55e', done: '#3b82f6', nap: '#f59e0b', exit: '#6b7280', orphaned: '#6b7280',
 };
 export function dotColor(status: AgentStatus): string { return DOT_COLORS[status]; }
 export function isDotHollow(status: AgentStatus): boolean { return status === 'nap' || status === 'exit'; }
@@ -30,7 +30,8 @@ const PHASE_COLORS: Record<NapkinPhase, string> = {
 };
 export function phaseColor(phase: NapkinPhase): string { return PHASE_COLORS[phase]; }
 
-export function terminalStatusToAgent(status: TerminalMeta['status']): AgentStatus {
+export function terminalStatusToAgent(status: TerminalMeta['status'], isOrphaned?: boolean): AgentStatus {
+  if (isOrphaned) return 'orphaned';
   switch (status) {
     case 'running': return 'run';
     case 'done': return 'done';
@@ -49,6 +50,8 @@ export interface TerminalMeta {
   createdAt: number;
   role?: string;
   napkinSlug?: string;
+  isOrphaned?: boolean;
+  ccSessionUuid?: string;
 }
 
 export type CardViewMode = 'collapsed' | 'focused' | 'extended';
@@ -79,6 +82,9 @@ interface TerminalStore {
   setStatus: (id: string, status: TerminalMeta['status']) => void;
   toggleSidebar: () => void;
   setScrollLockMode: (id: string, mode: ScrollLockMode) => void;
+
+  addOrphanedTerminal: (id: string, name: string, opts: { role?: string; napkinSlug?: string; ccSessionUuid?: string; parentId?: string; cwd?: string }) => void;
+  resumeOrphanedTerminal: (id: string) => void;
 
   // Browser actions
   expandCard: (slug: string) => void;
@@ -249,6 +255,56 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   setScrollLockMode: (id: string, mode: ScrollLockMode) => {
     set((state) => ({
       scrollLockModes: { ...state.scrollLockModes, [id]: mode },
+    }));
+  },
+
+  addOrphanedTerminal: (id: string, name: string, opts) => {
+    set((state) => ({
+      terminals: [
+        ...state.terminals,
+        {
+          id,
+          name,
+          status: 'running' as const,
+          isOrphaned: true,
+          ccSessionUuid: opts.ccSessionUuid,
+          role: opts.role,
+          napkinSlug: opts.napkinSlug,
+          parentId: opts.parentId,
+          cwd: opts.cwd,
+          createdAt: Date.now(),
+        },
+      ],
+    }));
+  },
+
+  resumeOrphanedTerminal: (id: string) => {
+    const terminal = get().terminals.find((t) => t.id === id);
+    if (!terminal?.isOrphaned || !terminal.ccSessionUuid) return;
+
+    // Create xterm instance
+    const entry = createTerminalInstance(id);
+    entry.terminal.onData((data: string) => {
+      window.electronAPI.pty.write(id, data);
+    });
+    entry.terminal.registerLinkProvider(
+      createFileLinkProvider(
+        entry.terminal,
+        () => get().terminals.find((t) => t.id === id)?.cwd || '/',
+        (filePath) => window.electronAPI.openFilePath(filePath),
+      ),
+    );
+
+    // Tell main to resume this agent's pty
+    window.electronAPI.pty.resume(id, terminal.ccSessionUuid);
+    window.electronAPI.pty.resize(id, entry.terminal.cols, entry.terminal.rows);
+    window.electronAPI.pty.ready(id);
+
+    // Update store — no longer orphaned
+    set((state) => ({
+      terminals: state.terminals.map((t) =>
+        t.id === id ? { ...t, isOrphaned: false } : t,
+      ),
     }));
   },
 

@@ -30,6 +30,7 @@ import {
   removeSession,
   saveUiState,
   loadUiState,
+  getArchitectForNepic,
 } from './session-store';
 import type { UiState } from './session-store';
 import { initNapkinStore, closeNapkinStore, changeNapkinStatus, getAllNapkinStatuses } from './napkin-store';
@@ -68,6 +69,14 @@ const readyTerminals = new Set<string>();
 // Track live ptys so we can wait for them all to exit before quitting
 let pendingExits = 0;
 let quitAfterExits = false;
+
+// Architect resume state (for expired-session fallback)
+let architectResumeId: string | null = null;
+let architectResumeTime = 0;
+let architectResumeCwd: string = projectCwd;
+
+// Resumed architect session (used by get-resume-data IPC)
+let resumedArchitectSession: import('./session-store').Session | null = null;
 
 function checkQuit(): void {
   if (quitAfterExits && pendingExits === 0) {
@@ -132,6 +141,17 @@ function createPtyProcess(
   });
 
   const exitDisposable = ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
+    // Architect resume fallback: if resumed session exited quickly, spawn fresh
+    if (architectResumeId === id && (Date.now() - architectResumeTime) < 5000) {
+      architectResumeId = null;
+      ptys.delete(id);
+      outputBuffers.delete(id);
+      // Keep readyTerminals — renderer is still listening
+      pendingExits--;
+      createPtyProcess(id, { command: 'claude', cwd: architectResumeCwd });
+      return;
+    }
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('pty:exit', id, exitCode);
     }
@@ -357,6 +377,53 @@ ipcMain.handle('get-ui-state', () => {
   }
 });
 
+// IPC: get resume data (architect session + orphaned sessions)
+ipcMain.handle('get-resume-data', () => {
+  try {
+    const livePtyIds = [...ptys.keys()];
+    const allSessions = getAllSessions();
+    const orphaned = allSessions
+      .filter((s) =>
+        s.status === 'running' &&
+        !livePtyIds.includes(s.id) &&
+        s.id !== resumedArchitectSession?.id,
+      )
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        role: s.role,
+        napkinSlug: s.napkinSlug,
+        ccSessionUuid: s.ccSessionUuid,
+        parentId: s.parentId,
+        cwd: s.cwd,
+      }));
+
+    return {
+      architectSession: resumedArchitectSession
+        ? {
+            id: resumedArchitectSession.id,
+            name: resumedArchitectSession.name,
+            role: resumedArchitectSession.role,
+            napkinSlug: resumedArchitectSession.napkinSlug,
+            ccSessionUuid: resumedArchitectSession.ccSessionUuid,
+            parentId: resumedArchitectSession.parentId,
+            cwd: resumedArchitectSession.cwd,
+          }
+        : null,
+      orphanedSessions: orphaned,
+    };
+  } catch {
+    return { architectSession: null, orphanedSessions: [] };
+  }
+});
+
+// IPC: resume an orphaned agent's pty
+ipcMain.on('pty:resume', (_event: IpcMainEvent, id: string, ccSessionUuid: string) => {
+  const session = getSession(id);
+  const command = `claude --verbose --resume ${ccSessionUuid}`;
+  createPtyProcess(id, { command, cwd: session?.cwd || projectCwd });
+});
+
 // IPC: renderer asks to open a file path
 ipcMain.on('open-file-path', (_event: IpcMainEvent, filePath: string) => {
   shell.openPath(filePath);
@@ -571,6 +638,25 @@ app.whenReady().then(async () => {
   initSessionStore(database);
   initNapkinStore(database, projectCwd);
 
+  // ── Architect auto-resume ──
+  try {
+    const savedState = loadUiState();
+    if (savedState?.activeNepicId) {
+      const architect = getArchitectForNepic(savedState.activeNepicId);
+      if (architect) {
+        resumedArchitectSession = architect;
+        const uuid = architect.ccSessionUuid;
+        const command = uuid ? `claude --verbose --resume ${uuid}` : 'claude --verbose';
+        architectResumeId = uuid ? architect.id : null;
+        architectResumeTime = Date.now();
+        architectResumeCwd = architect.cwd;
+        createPtyProcess(architect.id, { command, cwd: architect.cwd });
+      }
+    }
+  } catch {
+    // Resume is best-effort — proceed without it
+  }
+
   // Expose internals for Playwright tests (session-store uses native modules
   // compiled for Electron's ABI — vitest can't load them)
   if (process.env.NAP_TEST) {
@@ -583,6 +669,7 @@ app.whenReady().then(async () => {
       removeSession,
       saveUiState,
       loadUiState,
+      getArchitectForNepic,
       changeNapkinStatus,
       getAllNapkinStatuses,
       readNapkinDir,
@@ -591,6 +678,7 @@ app.whenReady().then(async () => {
       SCHEMA,
       Database,
       getDb: () => database,
+      getLivePtyIds: () => [...ptys.keys()],
       path,
       fs,
       os,
