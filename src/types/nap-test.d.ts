@@ -7,6 +7,7 @@ import type {
   removeSession,
 } from '../main/session-store';
 import type { changeNapkinStatus } from '../main/napkin-store';
+import type { readNapkinDir, startNapkinWatcher, stopNapkinWatcher } from '../main/napkin-watcher';
 import type Database from 'better-sqlite3';
 import type * as path from 'path';
 import type * as fs from 'fs';
@@ -20,6 +21,9 @@ interface NapTestHelpers {
   setSessionDone: typeof setSessionDone;
   removeSession: typeof removeSession;
   changeNapkinStatus: typeof changeNapkinStatus;
+  readNapkinDir: typeof readNapkinDir;
+  startNapkinWatcher: typeof startNapkinWatcher;
+  stopNapkinWatcher: typeof stopNapkinWatcher;
   SCHEMA: string;
   Database: typeof Database;
   getDb: () => Database.Database;

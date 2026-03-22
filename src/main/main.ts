@@ -30,6 +30,7 @@ import {
   removeSession,
 } from './session-store';
 import { initNapkinStore, closeNapkinStore, changeNapkinStatus } from './napkin-store';
+import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir } from './napkin-watcher';
 import { resolveByName } from './name-resolver';
 import { setWriter, enqueue, clearQueue } from './message-queue';
 import { getServerSocketPath } from '../shared/constants';
@@ -550,6 +551,9 @@ app.whenReady().then(async () => {
       setSessionDone,
       removeSession,
       changeNapkinStatus,
+      readNapkinDir,
+      startNapkinWatcher,
+      stopNapkinWatcher,
       SCHEMA,
       Database,
       getDb: () => database,
@@ -580,6 +584,25 @@ app.whenReady().then(async () => {
 
   buildMenu();
   createWindow();
+
+  // Start napkin filesystem watcher after window is created
+  // nepicDir: default to the first nepic found in .nap/nepics/
+  const nepicsBase = path.join(projectCwd, '.nap', 'nepics');
+  try {
+    const nepicDirs = fs.readdirSync(nepicsBase).filter((d) => {
+      try {
+        return fs.statSync(path.join(nepicsBase, d)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+    if (nepicDirs.length > 0 && mainWindow) {
+      const nepicDir = path.join(nepicsBase, nepicDirs[0]);
+      startNapkinWatcher(nepicDir, mainWindow);
+    }
+  } catch {
+    // .nap/nepics/ doesn't exist yet — no watcher needed
+  }
 });
 
 // Signal handlers for socket cleanup
@@ -598,6 +621,7 @@ process.on('beforeExit', () => {
 });
 
 app.on('will-quit', () => {
+  stopNapkinWatcher();
   stopSocketServer();
   closeNapkinStore();
   closeSessionStore();

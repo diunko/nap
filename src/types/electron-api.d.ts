@@ -21,6 +21,7 @@ interface ElectronAPI {
   onSocketPeek: (callback: (data: { id: string }) => void) => () => void;
   onSocketTerminalClose: (callback: (data: { id: string }) => void) => () => void;
   onSocketStatusChanged: (callback: (data: { id: string; status: string }) => void) => () => void;
+  onNapkinUpdate: (callback: (data: unknown) => void) => () => void;
   onLogRequest: (
     callback: (data: { id: string; requestId: number }) => void,
   ) => () => void;
