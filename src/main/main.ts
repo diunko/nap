@@ -36,6 +36,7 @@ import type { UiState } from './session-store';
 import { initNapkinStore, closeNapkinStore, changeNapkinStatus, getAllNapkinStatuses } from './napkin-store';
 import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir } from './napkin-watcher';
 import { resolveByName } from './name-resolver';
+import { reconcile } from './reconcile';
 import { setWriter, enqueue, clearQueue } from './message-queue';
 import { getServerSocketPath } from '../shared/constants';
 import type { SocketRequest } from '../shared/protocol';
@@ -638,6 +639,23 @@ app.whenReady().then(async () => {
   initSessionStore(database);
   initNapkinStore(database, projectCwd);
 
+  // ── Reconciliation: filesystem walk vs SQLite ──
+  const nepicsBase0 = path.join(projectCwd, '.nap', 'nepics');
+  try {
+    const nepicDirs0 = fs.readdirSync(nepicsBase0).filter((d) => {
+      try {
+        return fs.statSync(path.join(nepicsBase0, d)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+    for (const d of nepicDirs0) {
+      reconcile(path.join(nepicsBase0, d), database);
+    }
+  } catch {
+    // .nap/nepics/ doesn't exist yet — no reconciliation needed
+  }
+
   // ── Architect auto-resume ──
   try {
     const savedState = loadUiState();
@@ -673,6 +691,7 @@ app.whenReady().then(async () => {
       changeNapkinStatus,
       getAllNapkinStatuses,
       readNapkinDir,
+      reconcile,
       startNapkinWatcher,
       stopNapkinWatcher,
       SCHEMA,

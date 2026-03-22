@@ -29,6 +29,7 @@ Agent. Implements and runs the tests designed by the test architect.
 - Test the behavior described, not the implementation details.
 - When reporting failures, be specific: the flow, the step that broke, the actual output, why it matters.
 - When a test hinges on subtle differences (e.g., transposed characters in a string), make the difference visually obvious in the test name or description. Otherwise reviewers stare at two identical-looking strings.
+- When a test fails, run only that test until it passes — don't re-run the full suite on every iteration. Use `npm run test:medium -- --grep "T-XXXX"` or `npx vitest run --testPathPattern pattern`. Run the full suite once at the end to check regressions.
 
 ## Produces
 

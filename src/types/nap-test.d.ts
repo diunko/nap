@@ -11,6 +11,7 @@ import type {
 } from '../main/session-store';
 import type { changeNapkinStatus, getAllNapkinStatuses } from '../main/napkin-store';
 import type { readNapkinDir, startNapkinWatcher, stopNapkinWatcher } from '../main/napkin-watcher';
+import type { reconcile } from '../main/reconcile';
 import type Database from 'better-sqlite3';
 import type * as path from 'path';
 import type * as fs from 'fs';
@@ -31,6 +32,7 @@ interface NapTestHelpers {
   readNapkinDir: typeof readNapkinDir;
   startNapkinWatcher: typeof startNapkinWatcher;
   stopNapkinWatcher: typeof stopNapkinWatcher;
+  reconcile: typeof reconcile;
   SCHEMA: string;
   Database: typeof Database;
   getDb: () => Database.Database;

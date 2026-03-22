@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS napkins (
   nepic_id TEXT NOT NULL REFERENCES nepics(id),
   slug TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'backlog',
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  hidden INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -34,7 +35,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   cwd TEXT,
   done_message TEXT,
   created_at INTEGER NOT NULL,
-  exited_at INTEGER
+  exited_at INTEGER,
+  hidden INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS ui_state (
