@@ -13,6 +13,9 @@
   * what makes a session resumable?
     * it has a cc_session_uuid (Claude Code session is persistent on disk)
     * it was NOT explicitly exited by the agent itself
+      * // if it _was_ exited by the agent, still resumable, but maybe more intentional action needed
+      * // like, we resume all sessions at once when the app is open
+      * // but for exited sessions we don't until the user clicks on them
     * that's it — two conditions
 
   * what does resume mean?
@@ -26,11 +29,17 @@
       * agent was active when app closed
       * CC session exists, conversation intact
       * auto-resume for architect, manual for others
+        * // this is my point: it all auto-resumes, unless explicitly exited
+        * // so that's the feel: you close the app, and that's ok
+        * // cursor does this: you aren't afraid of just closing Cursor
+        * // as when you open it next time, everything, files, panels, etc stays exactly the same
     * `done` → RESUME
       * agent called `nap done` — finished its task
       * but the CC session is still there, still resumable
       * why resume a done agent? follow-up bugs, questions, iterations
       * the agent has full context from the work it did
+      * // same point: make it appear as though nothing happened: you just blinked
+        * // close and open are invisible
     * `new` → RESUME
       * session created (e.g., by nap init) but never started
       * CC session UUID pre-assigned but no conversation yet
@@ -74,14 +83,31 @@
         * spawn `claude --verbose --resume <uuid>` immediately
         * becomes the first terminal
       * others: show as resumable in UI
+        * // resume everything!
         * orphaned dot style — "was running when you left" or "finished, still resumable"
         * human clicks → resume manually
     * for sessions without cc_session_uuid:
       * bare terminals — just metadata in SQLite, nothing to resume
       * show in session history but not as active/resumable
+      * // maybe easy action to launch command; don't launch by default though
     * PID liveness check (defensive):
       * if a session claims 'running' but PID is dead → it's resumable (app crashed last time)
+        * // how do we know the pid is dead?
+        * // i assume we receive event about it, don't we?
+          * // if yes, then no defensive checks needed:
+            * // change something on event from subprocess
       * if PID is somehow alive → reconnect (edge case, shouldn't happen)
+        * // just don't care about this
+        * // though, currently, problem:
+          * // a lot of stale records in sqlite shown as "running"
+            * // this shouldn't be a frequent case
+            * // but i suspect there can be a lot of just errors or smth
+            * // when the row in 'sessions' becomes just orphaned
+            * // and by nap ps reported as something running or smth
+            * // let's discuss this
+            * // thought: each row should have it's nap_id or smth
+              * // so that it's easy to distinguish 2 equally named agents
+                * // often results from double invokations or smth else
 
 
 * three tiers — additive metadata
@@ -93,6 +119,8 @@
     * no cc_session_uuid, no resume, no home dir
     * dies when app closes, gone — just a terminal tab
     * use for: shells, quick commands, scripts
+    * // if it makes it easier, we can skip this one
+    * // so that cmd-t creates tier 3 with no home dir basically
 
   * tier 2 — napkin agent
     * `nap start claude "read prompt.md" --napkin 0100 --name 001-test-arch`
@@ -105,6 +133,8 @@
 
   * tier 3 — free-floating claude
     * `nap start claude "do something" --name Nova --dir 20-architects/001-architect`
+      * // treating architect as just another standalone agent is brittle?
+      * // should be able to display it prominently in nap ps and in Nap.app
     * or: `nap start claude "research X" --name research-auth` (no dir)
     * SQLite: + cc_session_uuid, role (optional), home_dir (optional)
     * resumable
@@ -131,6 +161,9 @@
     * `--napkin <slug>` — napkin containment, sets home dir conventionally (tier 2)
     * `--dir <path>` — explicit home directory (tier 3, or override for tier 2)
     * `--role <role>` — architect, test-arch, fs-eng, test-eng (tier 2/3)
+    * // architect should have distinct flag
+    * // btw, it's ok to have multiple (esp for the transitioning state)
+    * // one acting per nepic; switch is intentional action (vs automatic implicit)
 
 
 * the home directory
@@ -144,6 +177,10 @@
     * set automatically by `--napkin` + agent name
   * for architects: home = `20-architects/<name>/`
     * set by `--dir` or by `--role architect` convention
+    * // matching by role is brittle; role should be typed prompt pointer
+    * // and project hierarchy should be based on separate `--architect`
+      * // also without dir gets number allocated, postfixed with name (auto or manual)
+        * // is displayed as "[Architect] <name>"
   * for free-floating: home = `--dir <path>` or none
 
 
@@ -176,6 +213,8 @@
 
 * architect is just an agent
   * role = 'architect'
+  * // see note above about role matching being brittle
+  * // prob. need separate --architect flag
   * home = `20-architects/<name>/`
   * auto-resumed on app launch (most recent where role='architect' + status != 'exited')
   * pinned at top of sidebar (renderer checks role)
@@ -185,6 +224,9 @@
 
 
 * `nap ps` — reads from SQLite, enriched with PID liveness
+  * // do you mean it checks pids when ps invoked?
+    * // i think sqlite is source of truth for nap ps and alike
+      * // is informed by process events (and other sources) near-real-time
 
   ```
   NAME               PID    STATUS   NAPKIN       ROLE        CC-SESSION    RESUMABLE
@@ -199,8 +241,16 @@
 * filesystem watcher integration
   * watches: `30-napkins/` (napkin agent homes) + `20-architects/` (architect homes)
   * free-floating agent dirs: don't watch unless --dir points somewhere watched
+    * // so, if no dir, not much to show on card, just the status?
+      * // maybe start command? does it get to sqlite? guess it should?
+      * // i think it would help to show ideal model representation in json (or yaml) of one agent / command
+        * // getting confused by sql tables, kinda hard to follow if we have everything or not
   * snapshot model (1200) applies to all home dirs equally
   * card rendering identical regardless of home dir location
+    * // is it same component? 
+      * // for napkin agents, extended card data is provided by napkin watcher, 
+        * // and kinda is enriched by agent decorations
+      * // for home-dir agents, it's similar for architect and some other
 
 
 * what this subsumes
