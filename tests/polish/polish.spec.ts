@@ -255,6 +255,7 @@ base.describe('T-0600-04: two projects simultaneously', () => {
 base.describe('nap open', () => {
   base('T-0600-08: nap open spawns Electron detached, socket becomes live', async () => {
     const testDir = tmpProjectDir('nap-open-');
+    fs.mkdirSync(path.join(testDir, '.nap'), { recursive: true });
     const socketPath = path.join(testDir, '.nap', 'sock');
     const env: Record<string, string | undefined> = {
       ...process.env,
@@ -307,7 +308,7 @@ base.describe('nap open', () => {
     const parent = tmpProjectDir('nap-rel-');
     const projName = `subproj-${Date.now()}`;
     const projDir = path.join(parent, projName);
-    fs.mkdirSync(projDir, { recursive: true });
+    fs.mkdirSync(path.join(projDir, '.nap'), { recursive: true });
     const socketPath = path.join(projDir, '.nap', 'sock');
     const env: Record<string, string | undefined> = {
       ...process.env,
