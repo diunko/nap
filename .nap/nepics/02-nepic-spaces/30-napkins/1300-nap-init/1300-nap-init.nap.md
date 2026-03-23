@@ -56,8 +56,12 @@
   * `cd ~/my-project`
   * `nap init`
     * scaffolds everything, creates db, inserts nepic + architect session
+    * // NOTE to wishlist: this should be slightly more agentic in the future?
   * `nap open .`
     * app reads db, finds 01-v1 nepic, finds architect session
+      * // i think "no special code path that bootstraps in open" also means
+      * // that open fails if there's no .nap directory, or no sqlite db
+      * // with an error: run nap init first
     * boots architect pty: `claude --verbose --session-id <uuid> "read prompt.md..."`
     * architect reads role → explores codebase → ready to brainstorm
   * user and architect jam using /napkin
