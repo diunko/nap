@@ -126,6 +126,14 @@
     * no ccSessionUuid, no resume, no home dir
     * or: skip this tier entirely
       * Cmd+T creates tier 3 with no home dir
+      * // bare term is super-useful for testing
+      * // and tier 3 can build on top of tier 1
+      * // maybe it's tier 1: this; tier 2: claude; tier 3: napkin-based
+      * // from more simple to more complex
+      * // cmd-t is claude; cmd-shift-t is bare
+      * // and napkin is invoked by architect
+      * // btw, what happens when napkin has multiple TAs? that's ok? 
+        * // should be ok by design: indicators; open card; expanded card
       * everything is a claude session
       * simpler model, one fewer concept
 
