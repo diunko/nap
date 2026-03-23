@@ -4,7 +4,8 @@ import * as net from 'net';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
+import * as crypto from 'crypto';
 import { NdjsonParser, serialize } from '../shared/ndjson';
 import { findSocketPath, isSocketAlive } from '../shared/constants';
 
@@ -15,6 +16,7 @@ const HELP_TEXT = `nap — Napkin Agent Protocol
 Usage: nap <command> [options]
 
 Commands:
+  init              Bootstrap a project for agent collaboration
   open [path]       Launch Nap.app for a project directory
   start <command>   Start a new agent session
   ps                List all sessions
@@ -32,6 +34,15 @@ Flags:
 `;
 
 const COMMAND_HELP: Record<string, string> = {
+  init: `Usage: nap init [--name <name>] [--add-skills [--user]]
+
+Bootstrap a project for agent collaboration.
+
+  --name <name>     Project name (default: cwd basename)
+  --add-skills      Copy napkin skills to .claude/skills/
+  --user            With --add-skills: install to ~/.claude/skills/ instead
+  --help            Show this help
+`,
   open: `Usage: nap open [path] [--name <name>] [--command <cmd>]
 
 Launch Nap.app for a project directory.
@@ -241,6 +252,74 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// --- Template helpers ---
+
+function findTemplatesDir(): string {
+  // Built CLI: out/cli/cli/nap.js → ../../../src/templates
+  const fromBuilt = path.resolve(__dirname, '..', '..', '..', 'src', 'templates');
+  if (fs.existsSync(fromBuilt)) return fromBuilt;
+  // Running from source: src/cli/nap.ts → ../templates
+  const fromSource = path.resolve(__dirname, '..', 'templates');
+  if (fs.existsSync(fromSource)) return fromSource;
+  throw new Error('templates directory not found');
+}
+
+function copyDirRecursive(src: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS nepics (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS napkins (
+  id TEXT PRIMARY KEY,
+  nepic_id TEXT NOT NULL REFERENCES nepics(id),
+  slug TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'backlog',
+  created_at INTEGER NOT NULL,
+  hidden INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  nepic_id TEXT REFERENCES nepics(id),
+  napkin_slug TEXT,
+  name TEXT NOT NULL,
+  role TEXT,
+  status TEXT NOT NULL DEFAULT 'running',
+  cc_session_uuid TEXT,
+  parent_id TEXT REFERENCES sessions(id),
+  command TEXT,
+  cwd TEXT,
+  done_message TEXT,
+  created_at INTEGER NOT NULL,
+  exited_at INTEGER,
+  hidden INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS ui_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  active_nepic_id TEXT,
+  active_terminal_id TEXT,
+  sidebar_visible INTEGER NOT NULL DEFAULT 1
+);
+`;
+
 // --- Main ---
 
 async function main(): Promise<void> {
@@ -266,9 +345,101 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'init': {
+      const cwd = process.cwd();
+      const napDir = path.join(cwd, '.nap');
+
+      if (fs.existsSync(napDir)) {
+        process.stderr.write('Project already initialized. Run `nap open` to launch.\n');
+        process.exit(1);
+      }
+
+      const templatesDir = findTemplatesDir();
+
+      // Create .nap/ directory
+      fs.mkdirSync(napDir, { recursive: true });
+
+      // Copy 00-org/ from templates
+      copyDirRecursive(
+        path.join(templatesDir, '00-org'),
+        path.join(napDir, '00-org'),
+      );
+
+      // Create nepics/01-v1/ structure
+      const nepicDir = path.join(napDir, 'nepics', '01-v1');
+
+      // Copy nepic template dirs (15-feedback, 20-architects)
+      copyDirRecursive(
+        path.join(templatesDir, 'nepic'),
+        nepicDir,
+      );
+
+      // Create empty dirs
+      fs.mkdirSync(path.join(nepicDir, '10-docs'), { recursive: true });
+      fs.mkdirSync(path.join(nepicDir, '30-napkins'), { recursive: true });
+      fs.mkdirSync(path.join(nepicDir, '40-board', '20-backlog'), { recursive: true });
+      fs.mkdirSync(path.join(nepicDir, '40-board', '30-todo'), { recursive: true });
+      fs.mkdirSync(path.join(nepicDir, '40-board', '40-doing'), { recursive: true });
+      fs.mkdirSync(path.join(nepicDir, '40-board', '50-review'), { recursive: true });
+      fs.mkdirSync(path.join(nepicDir, '40-board', '60-done'), { recursive: true });
+
+      // Create .gitignore
+      fs.writeFileSync(
+        path.join(napDir, '.gitignore'),
+        'nap.db\nnap.db-shm\nnap.db-wal\nsock\n',
+      );
+
+      // Create nap.db via sqlite3 CLI
+      const nepicId = crypto.randomUUID();
+      const sessionId = crypto.randomUUID();
+      const ccSessionUuid = crypto.randomUUID();
+      const now = Date.now();
+
+      const sql = SCHEMA_SQL + `
+INSERT INTO nepics (id, name, slug, created_at, is_active)
+  VALUES ('${nepicId}', 'v1', '01-v1', ${now}, 1);
+
+INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created_at)
+  VALUES ('${sessionId}', '${nepicId}', '001-architect', 'architect', 'new', '${ccSessionUuid}', ${now});
+`;
+
+      const dbPath = path.join(napDir, 'nap.db');
+      execFileSync('sqlite3', [dbPath], { input: sql });
+
+      // Handle --add-skills
+      if (flags['add-skills']) {
+        const skillsSrc = path.join(templatesDir, 'skills');
+        let skillsDest: string;
+        if (flags['user']) {
+          skillsDest = path.join(os.homedir(), '.claude', 'skills');
+        } else {
+          skillsDest = path.join(cwd, '.claude', 'skills');
+        }
+
+        copyDirRecursive(
+          path.join(skillsSrc, 'napkin'),
+          path.join(skillsDest, 'napkin'),
+        );
+        copyDirRecursive(
+          path.join(skillsSrc, 'napkin-format'),
+          path.join(skillsDest, 'napkin-format'),
+        );
+      }
+
+      process.stdout.write('Initialized NAP project in .nap/\n');
+      break;
+    }
+
     case 'open': {
       const rawPath = args[0] || '.';
       const resolvedPath = path.resolve(process.cwd(), rawPath);
+
+      // Guard: fail if no .nap/ directory
+      const napCheck = path.join(resolvedPath, '.nap');
+      if (!fs.existsSync(napCheck)) {
+        process.stderr.write('No .nap/ directory found. Run `nap init` first.\n');
+        process.exit(1);
+      }
 
       // Check if already running
       const candidateSocket = path.join(resolvedPath, '.nap', 'sock');
