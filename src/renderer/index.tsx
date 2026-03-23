@@ -150,6 +150,15 @@ function App() {
       useTerminalStore.getState().toggleKanban();
     });
 
+    // Fallback: Cmd+` may not fire as menu accelerator on macOS (system shortcut conflict)
+    function handleKanbanKeydown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === '`') {
+        e.preventDefault();
+        useTerminalStore.getState().toggleKanban();
+      }
+    }
+    window.addEventListener('keydown', handleKanbanKeydown);
+
     // Socket: log buffer request
     const removeLogRequest = window.electronAPI.onLogRequest((data) => {
       const entry = getTerminal(data.id);
@@ -268,6 +277,7 @@ function App() {
       removeNapkinUpdate();
       removeNapkinStatus();
       removeKanbanListener();
+      window.removeEventListener('keydown', handleKanbanKeydown);
       removeLogRequest();
       clearInterval(scrollDebugInterval);
       unsubUiState();
