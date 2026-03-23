@@ -24,6 +24,21 @@ Added pull-based IPC so the renderer requests initial data after its listener is
 
 The renderer's `useEffect` first registers IPC listeners (synchronous), then calls `getInitialNapkins()` (async IPC invoke). By the time the response arrives, the listener is guaranteed to be active. Future incremental updates from the watcher flow through the existing push-based `napkin:update` channel as before.
 
+## Additional fixes
+
+- **Kanban toggle** — Cmd+` wasn't firing on macOS (system shortcut conflict). Added renderer-side keydown fallback.
+- **Extended view** — Agent dirs now show actual files from filesystem, not hardcoded entries. `agents` type changed from `string[]` to `{ name: string; files: string[] }[]`.
+- **Napkin styling** — Agent lines use status dot as bullet (not `*`), agent files have `*` bullets, artifact controls hover-only, stable indentation between focused/unfocused states.
+- **Startup nepic** — Watcher now starts for saved active nepic (not always first). Statuses scoped to active nepic only.
+- **Typecheck coverage** — `npm run typecheck` now also checks test files (`tests/tsconfig.json`).
+
+## Proposal: napkin store redesign
+
+See **[proposal-napkin-store-redesign.md](proposal-napkin-store-redesign.md)** — the current architecture only tracks known artifact extensions and reconstructs paths in the renderer. The proposal replaces this with a full filesystem snapshot model where the watcher produces complete entries with absolute paths, the store is the single source of truth, and the renderer does zero path logic.
+
+Key insight: the napkin directory can contain arbitrary files (research notes, feedback, scratch) and non-agent subdirectories. The renderer should show everything the filesystem has, not just a hardcoded list of known extensions.
+
 ## Verification
 
-- `tsc --noEmit`: zero errors
+- `tsc --noEmit`: zero errors (src + tests)
+- `vitest run`: 123 passed, 1 skipped
