@@ -8,10 +8,15 @@ import type { ScrollLockMode } from './scroll-lock';
 export type NapkinPhase = 'backlog' | 'todo' | 'doing' | 'review' | 'done';
 export type AgentStatus = 'run' | 'done' | 'nap' | 'exit' | 'orphaned';
 
+export interface AgentEntry {
+  name: string;
+  files: string[];
+}
+
 export interface NapkinEntry {
   slug: string;
   artifacts: string[];
-  agents: string[];
+  agents: AgentEntry[];
   napkinBullets: string[];
   status: NapkinPhase;
 }
@@ -109,7 +114,7 @@ interface TerminalStore {
   setBrowserFilterVisible: (visible: boolean) => void;
 
   // Napkin actions
-  setNapkinData: (data: { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] } | { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] }[]) => void;
+  setNapkinData: (data: { slug: string; artifacts: string[]; agents: AgentEntry[]; napkinBullets: string[] } | { slug: string; artifacts: string[]; agents: AgentEntry[]; napkinBullets: string[] }[]) => void;
   mergeNapkinStatus: (slug: string, status: string) => void;
   toggleKanban: () => void;
 }

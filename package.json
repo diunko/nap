@@ -10,7 +10,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "npm run build && electron .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "build:cli": "tsc -p tsconfig.cli.json",
     "test:small": "vitest run",
     "test:medium": "npm run build && npm run build:cli && NAP_TEST=1 npx playwright test",

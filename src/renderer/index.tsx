@@ -135,8 +135,8 @@ function App() {
     // Napkin: filesystem data update
     const removeNapkinUpdate = window.electronAPI.onNapkinUpdate((data) => {
       useTerminalStore.getState().setNapkinData(
-        data as { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] }
-          | { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] }[],
+        data as { slug: string; artifacts: string[]; agents: { name: string; files: string[] }[]; napkinBullets: string[] }
+          | { slug: string; artifacts: string[]; agents: { name: string; files: string[] }[]; napkinBullets: string[] }[],
       );
     });
 

@@ -233,7 +233,7 @@ describe('T-0600-10: kanban cards show agent dots', () => {
         {
           slug: '0100-dots',
           artifacts: [],
-          agents: ['001-arch', '002-eng', '003-test'],
+          agents: [{ name: '001-arch', files: [] }, { name: '002-eng', files: [] }, { name: '003-test', files: [] }],
           napkinBullets: [],
           status: 'doing',
         },

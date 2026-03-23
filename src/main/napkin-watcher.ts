@@ -2,10 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { BrowserWindow } from 'electron';
 
+export interface AgentData {
+  name: string;
+  files: string[];
+}
+
 export interface NapkinData {
   slug: string;
   artifacts: string[];
-  agents: string[];
+  agents: AgentData[];
   napkinBullets: string[];
 }
 
@@ -42,13 +47,22 @@ export async function readNapkinDir(napkinsDir: string, slug: string): Promise<N
     return data;
   }
 
-  // Read agents/ subdirectory
+  // Read agents/ subdirectory and their files
   const agentsDir = path.join(dirPath, 'agents');
   try {
     const agentEntries = await fs.promises.readdir(agentsDir, { withFileTypes: true });
     for (const entry of agentEntries) {
       if (entry.isDirectory()) {
-        data.agents.push(entry.name);
+        const agentFiles: string[] = [];
+        try {
+          const files = await fs.promises.readdir(path.join(agentsDir, entry.name));
+          for (const f of files) {
+            agentFiles.push(f);
+          }
+        } catch {
+          // unreadable agent dir — include with empty files
+        }
+        data.agents.push({ name: entry.name, files: agentFiles });
       }
     }
   } catch {

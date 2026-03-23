@@ -111,7 +111,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }>,
   getInitialNapkins: () =>
     ipcRenderer.invoke('get-napkin-data') as Promise<{
-      napkins: { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] }[];
+      napkins: { slug: string; artifacts: string[]; agents: { name: string; files: string[] }[]; napkinBullets: string[] }[];
       statuses: { slug: string; status: string }[];
     }>,
   getInitialTerminalOpts: () => ipcRenderer.invoke('get-initial-terminal-opts') as Promise<{ name: string; command?: string }>,

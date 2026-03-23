@@ -64,7 +64,7 @@ interface ElectronAPI {
   sendLogResponse: (requestId: number, lines: string[]) => void;
   openFilePath: (filePath: string) => void;
   getInitialNapkins: () => Promise<{
-    napkins: { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] }[];
+    napkins: { slug: string; artifacts: string[]; agents: { name: string; files: string[] }[]; napkinBullets: string[] }[];
     statuses: { slug: string; status: string }[];
   }>;
   getInitialTerminalOpts: () => Promise<{ name: string; command?: string }>;

@@ -44,7 +44,7 @@ describe('T-0600-18: store handles out-of-order IPC — status before filesystem
     store.setNapkinData({
       slug: '0100-alpha',
       artifacts: ['.nap.md', '.spec.md'],
-      agents: ['001-fs-eng'],
+      agents: [{ name: '001-fs-eng', files: [] }],
       napkinBullets: ['connect real data'],
     });
 
@@ -53,7 +53,7 @@ describe('T-0600-18: store handles out-of-order IPC — status before filesystem
     expect(merged).toBeDefined();
     expect(merged!.status).toBe('doing'); // preserved from status IPC
     expect(merged!.artifacts).toEqual(['.nap.md', '.spec.md']); // from filesystem
-    expect(merged!.agents).toEqual(['001-fs-eng']); // from filesystem
+    expect(merged!.agents).toEqual([{ name: '001-fs-eng', files: [] }]); // from filesystem
     expect(merged!.napkinBullets).toEqual(['connect real data']); // from filesystem
   });
 
@@ -64,7 +64,7 @@ describe('T-0600-18: store handles out-of-order IPC — status before filesystem
     store.setNapkinData({
       slug: '0200-beta',
       artifacts: ['.nap.md'],
-      agents: ['001-test-arch'],
+      agents: [{ name: '001-test-arch', files: [] }],
       napkinBullets: ['bootstrap sqlite'],
     });
 
@@ -82,7 +82,7 @@ describe('T-0600-18: store handles out-of-order IPC — status before filesystem
     expect(merged).toBeDefined();
     expect(merged!.status).toBe('review'); // updated
     expect(merged!.artifacts).toEqual(['.nap.md']); // preserved
-    expect(merged!.agents).toEqual(['001-test-arch']); // preserved
+    expect(merged!.agents).toEqual([{ name: '001-test-arch', files: [] }]); // preserved
     expect(merged!.napkinBullets).toEqual(['bootstrap sqlite']); // preserved
   });
 
@@ -102,28 +102,28 @@ describe('T-0600-18: store handles out-of-order IPC — status before filesystem
     store.setNapkinData({
       slug: '0300-gamma',
       artifacts: ['.nap.md', '.spec.md'],
-      agents: ['001-fs-eng'],
+      agents: [{ name: '001-fs-eng', files: [] }],
       napkinBullets: ['initial', 'added'],
     });
 
     const final = useTerminalStore.getState().napkins.find((n) => n.slug === '0300-gamma');
     expect(final!.status).toBe('doing'); // status preserved across filesystem update
     expect(final!.artifacts).toEqual(['.nap.md', '.spec.md']); // updated
-    expect(final!.agents).toEqual(['001-fs-eng']); // updated
+    expect(final!.agents).toEqual([{ name: '001-fs-eng', files: [] }]); // updated
   });
 
   test('setNapkinData with array creates multiple napkins', () => {
     const store = useTerminalStore.getState();
     store.setNapkinData([
       { slug: '0100-a', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-      { slug: '0200-b', artifacts: ['.spec.md'], agents: ['001-eng'], napkinBullets: ['bullet'] },
+      { slug: '0200-b', artifacts: ['.spec.md'], agents: [{ name: '001-eng', files: [] }], napkinBullets: ['bullet'] },
     ]);
 
     const napkins = useTerminalStore.getState().napkins;
     expect(napkins).toHaveLength(2);
     expect(napkins[0].slug).toBe('0100-a');
     expect(napkins[1].slug).toBe('0200-b');
-    expect(napkins[1].agents).toEqual(['001-eng']);
+    expect(napkins[1].agents).toEqual([{ name: '001-eng', files: [] }]);
   });
 
   test('toggleKanban flips kanbanVisible', () => {

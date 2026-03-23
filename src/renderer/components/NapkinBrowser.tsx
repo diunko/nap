@@ -10,6 +10,7 @@ import {
   type AgentStatus,
   type NapkinPhase,
   type NapkinEntry,
+  type AgentEntry,
   type TerminalMeta,
 } from '../store';
 
@@ -26,6 +27,7 @@ interface ArchitectData {
 
 interface NapkinAgent {
   name: string;
+  files: string[];
   terminalId?: string;
   status: AgentStatus;
   isOrphaned?: boolean;
@@ -66,8 +68,9 @@ function deriveNapkinCards(napkins: NapkinEntry[], terminals: TerminalMeta[]): N
       .sort((a, b) => a.createdAt - b.createdAt);
 
     // Map filesystem agents to terminal data
-    const agents: NapkinAgent[] = n.agents.map((agentDirName, i) => ({
-      name: agentDirName,
+    const agents: NapkinAgent[] = n.agents.map((agent, i) => ({
+      name: agent.name,
+      files: agent.files,
       terminalId: napkinTerminals[i]?.id,
       status: napkinTerminals[i]
         ? terminalStatusToAgent(napkinTerminals[i].status, napkinTerminals[i].isOrphaned)
@@ -79,6 +82,7 @@ function deriveNapkinCards(napkins: NapkinEntry[], terminals: TerminalMeta[]): N
     for (let i = n.agents.length; i < napkinTerminals.length; i++) {
       agents.push({
         name: napkinTerminals[i].name,
+        files: [],
         terminalId: napkinTerminals[i].id,
         status: terminalStatusToAgent(napkinTerminals[i].status, napkinTerminals[i].isOrphaned),
         isOrphaned: napkinTerminals[i].isOrphaned,
@@ -390,7 +394,7 @@ function NapkinCard({
                 </span>
               </div>
 
-              {/* Extended view: virtual entries under each agent */}
+              {/* Extended view: virtual entries + real files under each agent */}
               {showExtended && (
                 <>
                   <div
@@ -434,23 +438,9 @@ function NapkinCard({
                       [diff]
                     </span>
                   </div>
-                  <div
-                    style={{
-                      padding: '1px 0 1px 32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      borderRadius: 3,
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
-                    }
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <span style={{ color: '#9cdcfe', fontSize: 12 }}>prompt.md</span>
-                  </div>
-                  {agent.status === 'done' && (
+                  {agent.files.map((file, fi) => (
                     <div
+                      key={`f-${fi}`}
                       style={{
                         padding: '1px 0 1px 32px',
                         display: 'flex',
@@ -463,9 +453,9 @@ function NapkinCard({
                       }
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
-                      <span style={{ color: '#9cdcfe', fontSize: 12 }}>response.md</span>
+                      <span style={{ color: '#9cdcfe', fontSize: 12 }}>{file}</span>
                     </div>
-                  )}
+                  ))}
                 </>
               )}
             </div>

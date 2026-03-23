@@ -167,7 +167,7 @@ function KanbanCard({
                 alignItems: 'center',
               }}
             >
-              {napkin.agents.map((agentName, i) => (
+              {napkin.agents.map((agent, i) => (
                 <span
                   key={`ac-${i}`}
                   style={{
@@ -179,7 +179,7 @@ function KanbanCard({
                   }}
                 >
                   <StatusDot status={agentStatuses[i] || 'exit'} size={6} />
-                  {agentName}
+                  {agent.name}
                 </span>
               ))}
             </div>
