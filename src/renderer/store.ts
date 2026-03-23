@@ -8,15 +8,30 @@ import type { ScrollLockMode } from './scroll-lock';
 export type NapkinPhase = 'backlog' | 'todo' | 'doing' | 'review' | 'done';
 export type AgentStatus = 'run' | 'done' | 'nap' | 'exit' | 'orphaned';
 
-export interface AgentEntry {
+export interface NapkinFileEntry {
   name: string;
-  files: string[];
+  absPath: string;
+  type: 'file';
+}
+
+export interface NapkinAgentEntry {
+  name: string;
+  absPath: string;
+  type: 'agent';
+  files: NapkinFileEntry[];
+}
+
+export interface NapkinDirEntry {
+  name: string;
+  absPath: string;
+  type: 'dir';
+  files: NapkinFileEntry[];
 }
 
 export interface NapkinEntry {
   slug: string;
-  artifacts: string[];
-  agents: AgentEntry[];
+  absPath: string;
+  entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[];
   napkinBullets: string[];
   status: NapkinPhase;
 }
@@ -85,7 +100,6 @@ interface TerminalStore {
 
   // Napkin data (live-wired)
   napkins: NapkinEntry[];
-  napkinsBasePath: string | null;
   kanbanVisible: boolean;
 
   createTerminal: (name: string, parentId?: string, command?: string) => string;
@@ -115,8 +129,7 @@ interface TerminalStore {
   setBrowserFilterVisible: (visible: boolean) => void;
 
   // Napkin actions
-  setNapkinData: (data: { slug: string; artifacts: string[]; agents: AgentEntry[]; napkinBullets: string[] } | { slug: string; artifacts: string[]; agents: AgentEntry[]; napkinBullets: string[] }[]) => void;
-  setNapkinsBasePath: (path: string | null) => void;
+  setNapkinData: (data: { slug: string; absPath: string; entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[]; napkinBullets: string[] } | { slug: string; absPath: string; entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[]; napkinBullets: string[] }[]) => void;
   mergeNapkinStatus: (slug: string, status: string) => void;
   toggleKanban: () => void;
 }
@@ -139,7 +152,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   // Napkin data
   napkins: [],
-  napkinsBasePath: null,
   kanbanVisible: false,
 
   createTerminal: (name: string, parentId?: string, command?: string) => {
@@ -372,7 +384,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const result = await window.electronAPI.switchNepic(id);
     // Guard: if another switch superseded this one, bail
     if (get().activeNepicId !== id) return;
-    set({ napkinsBasePath: result.napkinsBasePath });
     for (const { slug, status } of result.napkinStatuses) {
       get().mergeNapkinStatus(slug, status);
     }
@@ -399,8 +410,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           const existing = state.napkins.find((n) => n.slug === item.slug);
           return {
             slug: item.slug,
-            artifacts: item.artifacts,
-            agents: item.agents,
+            absPath: item.absPath,
+            entries: item.entries,
             napkinBullets: item.napkinBullets,
             status: existing?.status ?? ('backlog' as NapkinPhase),
           };
@@ -415,15 +426,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         if (idx >= 0) {
           napkins[idx] = {
             ...napkins[idx],
-            artifacts: data.artifacts,
-            agents: data.agents,
+            absPath: data.absPath,
+            entries: data.entries,
             napkinBullets: data.napkinBullets,
           };
         } else {
           napkins.push({
             slug: data.slug,
-            artifacts: data.artifacts,
-            agents: data.agents,
+            absPath: data.absPath,
+            entries: data.entries,
             napkinBullets: data.napkinBullets,
             status: 'backlog' as NapkinPhase,
           });
@@ -432,8 +443,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       });
     }
   },
-
-  setNapkinsBasePath: (p) => set({ napkinsBasePath: p }),
 
   mergeNapkinStatus: (slug: string, status: string) => {
     set((state) => {
@@ -445,8 +454,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         // Status arrived before filesystem data — create placeholder
         napkins.push({
           slug,
-          artifacts: [],
-          agents: [],
+          absPath: '',
+          entries: [],
           napkinBullets: [],
           status: status as NapkinPhase,
         });

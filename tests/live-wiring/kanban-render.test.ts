@@ -54,10 +54,10 @@ describe('T-0600-07: kanban columns render napkins grouped by phase', () => {
     useTerminalStore.setState({
       kanbanVisible: true,
       napkins: [
-        { slug: '0100-alpha', artifacts: [], agents: [], napkinBullets: [], status: 'doing' },
-        { slug: '0200-beta', artifacts: [], agents: [], napkinBullets: [], status: 'doing' },
-        { slug: '0300-gamma', artifacts: [], agents: [], napkinBullets: [], status: 'review' },
-        { slug: '0400-delta', artifacts: [], agents: [], napkinBullets: [], status: 'done' },
+        { slug: '0100-alpha', absPath: '/tmp/0100-alpha', entries: [], napkinBullets: [], status: 'doing' },
+        { slug: '0200-beta', absPath: '/tmp/0200-beta', entries: [], napkinBullets: [], status: 'doing' },
+        { slug: '0300-gamma', absPath: '/tmp/0300-gamma', entries: [], napkinBullets: [], status: 'review' },
+        { slug: '0400-delta', absPath: '/tmp/0400-delta', entries: [], napkinBullets: [], status: 'done' },
       ],
     });
 
@@ -91,7 +91,7 @@ describe('T-0600-07: kanban columns render napkins grouped by phase', () => {
     useTerminalStore.setState({
       kanbanVisible: true,
       napkins: [
-        { slug: '0100-unset', artifacts: [], agents: [], napkinBullets: [], status: 'backlog' },
+        { slug: '0100-unset', absPath: '/tmp/0100-unset', entries: [], napkinBullets: [], status: 'backlog' },
       ],
     });
 
@@ -113,8 +113,8 @@ describe('T-0600-08: kanban cards show .nap.md bullets when expanded', () => {
       napkins: [
         {
           slug: '0100-bullet-test',
-          artifacts: [],
-          agents: [],
+          absPath: '/tmp/0100-bullet-test',
+          entries: [],
           napkinBullets: ['connect real data', 'replace mocks'],
           status: 'doing',
         },
@@ -130,8 +130,6 @@ describe('T-0600-08: kanban cards show .nap.md bullets when expanded', () => {
 
     // Click card header to expand
     const doingCol = container.querySelector('[data-testid="kanban-col-doing"]');
-    const cardHeader = doingCol!.querySelector('div[style]');
-    // Find the clickable card slug text
     const cards = doingCol!.querySelectorAll('div');
     let clicked = false;
     for (const el of cards) {
@@ -142,7 +140,6 @@ describe('T-0600-08: kanban cards show .nap.md bullets when expanded', () => {
       }
     }
     if (!clicked) {
-      // Click the first card header area
       const cardEl = doingCol!.querySelectorAll('div');
       for (const el of cardEl) {
         if (el.textContent?.includes('0100-bullet-test')) {
@@ -168,8 +165,11 @@ describe('T-0600-09: kanban cards show artifact badges (filled vs dimmed)', () =
       napkins: [
         {
           slug: '0100-badge-test',
-          artifacts: ['.nap.md', '.spec.md'],
-          agents: [],
+          absPath: '/tmp/0100-badge-test',
+          entries: [
+            { name: '0100-badge-test.nap.md', absPath: '/tmp/0100-badge-test/0100-badge-test.nap.md', type: 'file' },
+            { name: '0100-badge-test.spec.md', absPath: '/tmp/0100-badge-test/0100-badge-test.spec.md', type: 'file' },
+          ],
           napkinBullets: [],
           status: 'doing',
         },
@@ -189,7 +189,6 @@ describe('T-0600-09: kanban cards show artifact badges (filled vs dimmed)', () =
     }
 
     // Find badge spans — they contain 'nap', 'spec', 'test', 'journeys'
-    // jsdom normalizes hex colors to rgb(), so compare using includes
     const allSpans = container.querySelectorAll('span');
     const badges: { text: string; color: string }[] = [];
     for (const span of allSpans) {
@@ -232,8 +231,12 @@ describe('T-0600-10: kanban cards show agent dots', () => {
       napkins: [
         {
           slug: '0100-dots',
-          artifacts: [],
-          agents: [{ name: '001-arch', files: [] }, { name: '002-eng', files: [] }, { name: '003-test', files: [] }],
+          absPath: '/tmp/0100-dots',
+          entries: [
+            { name: '001-arch', absPath: '/tmp/0100-dots/agents/001-arch', type: 'agent', files: [] },
+            { name: '002-eng', absPath: '/tmp/0100-dots/agents/002-eng', type: 'agent', files: [] },
+            { name: '003-test', absPath: '/tmp/0100-dots/agents/003-test', type: 'agent', files: [] },
+          ],
           napkinBullets: [],
           status: 'doing',
         },

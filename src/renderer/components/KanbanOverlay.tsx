@@ -8,6 +8,7 @@ import {
   type NapkinEntry,
   type NapkinPhase,
   type AgentStatus,
+  type NapkinAgentEntry,
   type TerminalMeta,
 } from '../store';
 import { StatusDot } from './NapkinBrowser';
@@ -22,9 +23,12 @@ const COLUMNS: { key: NapkinPhase; label: string }[] = [
 
 const KNOWN_BADGES = ['nap', 'spec', 'test', 'journeys'] as const;
 
-function badgeFromExt(ext: string): string {
-  // '.nap.md' → 'nap', '.spec.md' → 'spec', etc.
-  return ext.replace(/^\./, '').replace(/\.md$/, '');
+function badgeFromFileName(name: string): string | null {
+  // '0100-design-sprint.nap.md' → 'nap', '0100-design-sprint.spec.md' → 'spec', etc.
+  for (const badge of KNOWN_BADGES) {
+    if (name.endsWith(`.${badge}.md`)) return badge;
+  }
+  return null;
 }
 
 // ── Kanban Card ──
@@ -40,23 +44,32 @@ function KanbanCard({
 }) {
   const [expanded, setExpanded] = useState(false);
 
+  // Extract agents from entries
+  const agentEntries = napkin.entries.filter((e): e is NapkinAgentEntry => e.type === 'agent');
+
   // Derive agent statuses
   const napkinTerminals = terminals
     .filter((t) => t.napkinSlug === napkin.slug && t.role !== 'architect')
     .sort((a, b) => a.createdAt - b.createdAt);
 
-  const agentStatuses: AgentStatus[] = napkin.agents.map((_, i) =>
+  const agentStatuses: AgentStatus[] = agentEntries.map((_, i) =>
     napkinTerminals[i]
       ? terminalStatusToAgent(napkinTerminals[i].status)
       : ('exit' as AgentStatus),
   );
   // Extra terminals beyond filesystem agents
-  for (let i = napkin.agents.length; i < napkinTerminals.length; i++) {
+  for (let i = agentEntries.length; i < napkinTerminals.length; i++) {
     agentStatuses.push(terminalStatusToAgent(napkinTerminals[i].status));
   }
 
-  // Badge presence
-  const presentBadges = new Set(napkin.artifacts.map(badgeFromExt));
+  // Badge presence — derive from file entries
+  const presentBadges = new Set<string>();
+  for (const entry of napkin.entries) {
+    if (entry.type === 'file') {
+      const badge = badgeFromFileName(entry.name);
+      if (badge) presentBadges.add(badge);
+    }
+  }
 
   return (
     <div
@@ -167,7 +180,7 @@ function KanbanCard({
                 alignItems: 'center',
               }}
             >
-              {napkin.agents.map((agent, i) => (
+              {agentEntries.map((agent, i) => (
                 <span
                   key={`ac-${i}`}
                   style={{

@@ -119,8 +119,11 @@ base.describe.serial('T-0600-01: napkin:update IPC populates store', () => {
 
     // Verify alpha's data
     const alpha = napkins.find((n: any) => n.slug === '9901-test-alpha');
-    expect(alpha.artifacts.sort()).toEqual(['.nap.md', '.spec.md']);
-    expect(alpha.agents).toEqual(['001-fs-eng']);
+    const alphaFiles = alpha.entries.filter((e: any) => e.type === 'file').map((e: any) => e.name).sort();
+    expect(alphaFiles).toContain('9901-test-alpha.nap.md');
+    expect(alphaFiles).toContain('9901-test-alpha.spec.md');
+    const alphaAgents = alpha.entries.filter((e: any) => e.type === 'agent').map((e: any) => e.name);
+    expect(alphaAgents).toEqual(['001-fs-eng']);
     expect(alpha.napkinBullets).toEqual(['alpha bullet']);
   });
 });
@@ -183,9 +186,10 @@ base.describe.serial('T-0600-02: status merge with filesystem data', () => {
     );
 
     expect(napkin).toBeDefined();
-    expect(napkin.artifacts.length).toBeGreaterThan(0);
+    expect(napkin.entries.filter((e: any) => e.type === 'file').length).toBeGreaterThan(0);
     expect(napkin.status).toBe('doing');
-    expect(napkin.agents).toEqual(['001-fs-eng']);
+    const mergeAgents = napkin.entries.filter((e: any) => e.type === 'agent').map((e: any) => e.name);
+    expect(mergeAgents).toEqual(['001-fs-eng']);
   });
 });
 
@@ -484,8 +488,11 @@ base.describe.serial('T-0600-11: kanban navigation', () => {
         );
         store.getState().setNapkinData({
           slug: '9901-nav-test',
-          artifacts: ['.nap.md'],
-          agents: ['001-agent'],
+          absPath: '/tmp/napkins/9901-nav-test',
+          entries: [
+            { name: '9901-nav-test.nap.md', absPath: '/tmp/napkins/9901-nav-test/9901-nav-test.nap.md', type: 'file' },
+            { name: '001-agent', absPath: '/tmp/napkins/9901-nav-test/agents/001-agent', type: 'agent', files: [] },
+          ],
           napkinBullets: [],
         });
         store.setState({ kanbanVisible: true });
@@ -557,8 +564,11 @@ base.describe.serial('T-0600-12: breadcrumb with real data', () => {
         );
         store.getState().setNapkinData({
           slug: '0200-sqlite-setup',
-          artifacts: ['.nap.md'],
-          agents: ['001-agent'],
+          absPath: '/tmp/napkins/0200-sqlite-setup',
+          entries: [
+            { name: '0200-sqlite-setup.nap.md', absPath: '/tmp/napkins/0200-sqlite-setup/0200-sqlite-setup.nap.md', type: 'file' },
+            { name: '001-agent', absPath: '/tmp/napkins/0200-sqlite-setup/agents/001-agent', type: 'agent', files: [] },
+          ],
           napkinBullets: [],
         });
         store.getState().setActive(termId);
@@ -675,8 +685,11 @@ base.describe.serial('T-0600-14: breadcrumb click napkin-name', () => {
         );
         store.getState().setNapkinData({
           slug: '9901-bc-napkin',
-          artifacts: ['.nap.md'],
-          agents: ['001-agent'],
+          absPath: '/tmp/napkins/9901-bc-napkin',
+          entries: [
+            { name: '9901-bc-napkin.nap.md', absPath: '/tmp/napkins/9901-bc-napkin/9901-bc-napkin.nap.md', type: 'file' },
+            { name: '001-agent', absPath: '/tmp/napkins/9901-bc-napkin/agents/001-agent', type: 'agent', files: [] },
+          ],
           napkinBullets: [],
         });
         store.getState().setActive(termId);
@@ -739,12 +752,12 @@ base.describe.serial('T-0600-15: fs.watch artifact update', () => {
     );
 
     // Verify only .nap.md initially
-    const artifactsBefore = await page.evaluate(
+    const filesBefore = await page.evaluate(
       () => (window as any).useTerminalStore.getState().napkins.find(
         (n: any) => n.slug === '9901-fs-watch',
-      )?.artifacts ?? [],
+      )?.entries.filter((e: any) => e.type === 'file').map((e: any) => e.name) ?? [],
     );
-    expect(artifactsBefore).toEqual(['.nap.md']);
+    expect(filesBefore).toContain('9901-fs-watch.nap.md');
 
     // Write .test.md file into napkin dir
     const napkinDir = path.join(
@@ -761,18 +774,18 @@ base.describe.serial('T-0600-15: fs.watch artifact update', () => {
         const n = (window as any).useTerminalStore.getState().napkins.find(
           (n: any) => n.slug === '9901-fs-watch',
         );
-        return n && n.artifacts.includes('.test.md');
+        return n && n.entries.some((e: any) => e.type === 'file' && e.name === '9901-fs-watch.test.md');
       },
       { timeout: 10000 },
     );
 
-    const artifactsAfter = await page.evaluate(
+    const filesAfter = await page.evaluate(
       () => (window as any).useTerminalStore.getState().napkins.find(
         (n: any) => n.slug === '9901-fs-watch',
-      )?.artifacts ?? [],
+      )?.entries.filter((e: any) => e.type === 'file').map((e: any) => e.name) ?? [],
     );
-    expect(artifactsAfter).toContain('.nap.md');
-    expect(artifactsAfter).toContain('.test.md');
+    expect(filesAfter).toContain('9901-fs-watch.nap.md');
+    expect(filesAfter).toContain('9901-fs-watch.test.md');
   });
 });
 
@@ -812,7 +825,7 @@ base.describe.serial('T-0600-16: new agent dir via fs.watch', () => {
         const n = (window as any).useTerminalStore.getState().napkins.find(
           (n: any) => n.slug === '9901-new-agent',
         );
-        return n && n.agents.length >= 1;
+        return n && n.entries.some((e: any) => e.type === 'agent');
       },
       { timeout: 10000 },
     );
@@ -831,18 +844,18 @@ base.describe.serial('T-0600-16: new agent dir via fs.watch', () => {
         const n = (window as any).useTerminalStore.getState().napkins.find(
           (n: any) => n.slug === '9901-new-agent',
         );
-        return n && n.agents.includes('002-fs-eng');
+        return n && n.entries.some((e: any) => e.type === 'agent' && e.name === '002-fs-eng');
       },
       { timeout: 10000 },
     );
 
-    const agents = await page.evaluate(
+    const agentNames = await page.evaluate(
       () => (window as any).useTerminalStore.getState().napkins.find(
         (n: any) => n.slug === '9901-new-agent',
-      )?.agents ?? [],
+      )?.entries.filter((e: any) => e.type === 'agent').map((e: any) => e.name) ?? [],
     );
-    expect(agents).toContain('001-test-arch');
-    expect(agents).toContain('002-fs-eng');
+    expect(agentNames).toContain('001-test-arch');
+    expect(agentNames).toContain('002-fs-eng');
   });
 });
 

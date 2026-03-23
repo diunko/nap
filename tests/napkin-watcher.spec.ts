@@ -74,7 +74,13 @@ base.describe.serial('T-0500-01: readNapkinDir — artifact extensions', () => {
     }, [napkinsDir, '0100-test'] as [string, string]);
 
     expect(result.slug).toBe('0100-test');
-    expect(result.artifacts.sort()).toEqual(['.nap.md', '.spec.md', '.test.md']);
+    // All files visible (including random.txt and notes.log — no extension allowlist)
+    const fileNames = result.entries.filter((e: any) => e.type === 'file').map((e: any) => e.name).sort();
+    expect(fileNames).toContain('0100-test.nap.md');
+    expect(fileNames).toContain('0100-test.spec.md');
+    expect(fileNames).toContain('0100-test.test.md');
+    expect(fileNames).toContain('random.txt');
+    expect(fileNames).toContain('notes.log');
   });
 });
 
@@ -108,7 +114,8 @@ base.describe.serial('T-0500-02: readNapkinDir — agent dir names', () => {
       return globalThis.__napTest!.readNapkinDir(dir, slug);
     }, [napkinsDir, '0200-agents'] as [string, string]);
 
-    expect(result.agents.sort()).toEqual(['001-test-arch-sqlite', '002-fs-eng']);
+    const agentNames = result.entries.filter((e: any) => e.type === 'agent').map((e: any) => e.name).sort();
+    expect(agentNames).toEqual(['001-test-arch-sqlite', '002-fs-eng']);
   });
 });
 
@@ -182,7 +189,8 @@ base.describe.serial('T-0500-04: readNapkinDir — missing .nap.md', () => {
     }, [napkinsDir, '0400-no-nap'] as [string, string]);
 
     expect(result.napkinBullets).toEqual([]);
-    expect(result.artifacts).toContain('.spec.md');
+    const fileNames04 = result.entries.filter((e: any) => e.type === 'file').map((e: any) => e.name);
+    expect(fileNames04).toContain('0400-no-nap.spec.md');
   });
 });
 
@@ -211,7 +219,8 @@ base.describe.serial('T-0500-05: readNapkinDir — no agents/ dir', () => {
       return globalThis.__napTest!.readNapkinDir(dir, slug);
     }, [napkinsDir, '0500-no-agents'] as [string, string]);
 
-    expect(result.agents).toEqual([]);
+    const agents05 = result.entries.filter((e: any) => e.type === 'agent');
+    expect(agents05).toEqual([]);
   });
 });
 
@@ -385,7 +394,8 @@ base.describe.serial('T-0500-07: fs.watch — file create', () => {
     );
     expect(napkinUpdate).toBeDefined();
     expect(napkinUpdate.slug).toBe(slug);
-    expect(napkinUpdate.artifacts).toContain('.spec.md');
+    const files07 = napkinUpdate.entries.filter((e: any) => e.type === 'file').map((e: any) => e.name);
+    expect(files07).toContain('0200-sqlite-setup.spec.md');
   });
 });
 
@@ -482,8 +492,9 @@ base.describe.serial('T-0500-09: fs.watch — file delete', () => {
       (u: any) => !Array.isArray(u) && u.slug === slug,
     );
     expect(napkinUpdate).toBeDefined();
-    expect(napkinUpdate.artifacts).not.toContain('.spec.md');
-    expect(napkinUpdate.artifacts).toContain('.nap.md');
+    const files09 = napkinUpdate.entries.filter((e: any) => e.type === 'file').map((e: any) => e.name);
+    expect(files09).not.toContain('0100-delete.spec.md');
+    expect(files09).toContain('0100-delete.nap.md');
   });
 });
 
@@ -794,7 +805,7 @@ base.describe.serial('T-0500-15: IPC payload shape', () => {
     await cleanupApp(app, tmpDir);
   });
 
-  base('readNapkinDir returns { slug, artifacts, agents, napkinBullets }', async () => {
+  base('readNapkinDir returns NapkinSnapshot { slug, absPath, entries, napkinBullets }', async () => {
     const napkinsDir = setupNapkinDir(tmpDir, '0100-shape', {
       artifacts: ['.nap.md', '.spec.md', '.test.md', '.journeys.md'],
       agents: ['001-arch', '002-eng'],
@@ -806,26 +817,37 @@ base.describe.serial('T-0500-15: IPC payload shape', () => {
       return globalThis.__napTest!.readNapkinDir(dir, slug);
     }, [napkinsDir, '0100-shape'] as [string, string]);
 
-    // Verify all four fields present with correct types
+    // Verify NapkinSnapshot fields
     expect(typeof result.slug).toBe('string');
     expect(result.slug).toBe('0100-shape');
-    expect(Array.isArray(result.artifacts)).toBe(true);
-    expect(Array.isArray(result.agents)).toBe(true);
+    expect(typeof result.absPath).toBe('string');
+    expect(result.absPath).toContain('0100-shape');
+    expect(Array.isArray(result.entries)).toBe(true);
     expect(Array.isArray(result.napkinBullets)).toBe(true);
 
-    // Verify content
-    expect(result.artifacts.sort()).toEqual([
-      '.journeys.md',
-      '.nap.md',
-      '.spec.md',
-      '.test.md',
-    ]);
-    expect(result.agents.sort()).toEqual(['001-arch', '002-eng']);
+    // Verify file entries
+    const fileNames = result.entries.filter((e: any) => e.type === 'file').map((e: any) => e.name).sort();
+    expect(fileNames).toContain('0100-shape.nap.md');
+    expect(fileNames).toContain('0100-shape.spec.md');
+    expect(fileNames).toContain('0100-shape.test.md');
+    expect(fileNames).toContain('0100-shape.journeys.md');
+
+    // Verify agent entries
+    const agentNames = result.entries.filter((e: any) => e.type === 'agent').map((e: any) => e.name).sort();
+    expect(agentNames).toEqual(['001-arch', '002-eng']);
+
+    // Verify every entry has absPath
+    for (const entry of result.entries) {
+      expect(typeof entry.absPath).toBe('string');
+      expect(entry.absPath.startsWith('/')).toBe(true);
+    }
+
+    // Verify napkinBullets
     expect(result.napkinBullets).toEqual(['Bullet one', 'Bullet two']);
 
-    // Verify no extra fields
+    // Verify NapkinSnapshot shape
     const keys = Object.keys(result).sort();
-    expect(keys).toEqual(['agents', 'artifacts', 'napkinBullets', 'slug']);
+    expect(keys).toEqual(['absPath', 'entries', 'napkinBullets', 'slug']);
   });
 });
 
@@ -909,7 +931,8 @@ base.describe.serial('T-0500-17: agent dir at runtime', () => {
       (u: any) => !Array.isArray(u) && u.slug === slug,
     );
     expect(napkinUpdate).toBeDefined();
-    expect(napkinUpdate.agents).toContain('001-test-arch');
+    const agents17 = napkinUpdate.entries.filter((e: any) => e.type === 'agent').map((e: any) => e.name);
+    expect(agents17).toContain('001-test-arch');
   });
 });
 

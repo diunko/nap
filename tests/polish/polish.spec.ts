@@ -598,14 +598,14 @@ base.describe.serial('T-0600 shared app: log, ps, links, filter', () => {
     await page.evaluate(() => {
       const store = (window as any).useTerminalStore;
       store.getState().setNapkinData([
-        { slug: '0100-design-sprint', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-        { slug: '0200-sqlite-persistence', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-        { slug: '0300-socket-server', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-        { slug: '0400-layout-mock', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-        { slug: '0500-fs-service', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-        { slug: '0600-live-wiring', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-        { slug: '0700-cmd-w-close', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-        { slug: '0800-scroll-lock', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+        { slug: '0100-design-sprint', absPath: '/tmp/0100', entries: [{ name: '0100-design-sprint.nap.md', absPath: '/tmp/0100/0100-design-sprint.nap.md', type: 'file' }], napkinBullets: [] },
+        { slug: '0200-sqlite-persistence', absPath: '/tmp/0200', entries: [{ name: '0200-sqlite-persistence.nap.md', absPath: '/tmp/0200/0200-sqlite-persistence.nap.md', type: 'file' }], napkinBullets: [] },
+        { slug: '0300-socket-server', absPath: '/tmp/0300', entries: [{ name: '0300-socket-server.nap.md', absPath: '/tmp/0300/0300-socket-server.nap.md', type: 'file' }], napkinBullets: [] },
+        { slug: '0400-layout-mock', absPath: '/tmp/0400', entries: [{ name: '0400-layout-mock.nap.md', absPath: '/tmp/0400/0400-layout-mock.nap.md', type: 'file' }], napkinBullets: [] },
+        { slug: '0500-fs-service', absPath: '/tmp/0500', entries: [{ name: '0500-fs-service.nap.md', absPath: '/tmp/0500/0500-fs-service.nap.md', type: 'file' }], napkinBullets: [] },
+        { slug: '0600-live-wiring', absPath: '/tmp/0600', entries: [{ name: '0600-live-wiring.nap.md', absPath: '/tmp/0600/0600-live-wiring.nap.md', type: 'file' }], napkinBullets: [] },
+        { slug: '0700-cmd-w-close', absPath: '/tmp/0700', entries: [{ name: '0700-cmd-w-close.nap.md', absPath: '/tmp/0700/0700-cmd-w-close.nap.md', type: 'file' }], napkinBullets: [] },
+        { slug: '0800-scroll-lock', absPath: '/tmp/0800', entries: [{ name: '0800-scroll-lock.nap.md', absPath: '/tmp/0800/0800-scroll-lock.nap.md', type: 'file' }], napkinBullets: [] },
       ]);
     });
     await page.waitForTimeout(200);

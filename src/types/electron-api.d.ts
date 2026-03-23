@@ -64,9 +64,8 @@ interface ElectronAPI {
   sendLogResponse: (requestId: number, lines: string[]) => void;
   openFilePath: (filePath: string) => void;
   getInitialNapkins: () => Promise<{
-    napkins: { slug: string; artifacts: string[]; agents: { name: string; files: string[] }[]; napkinBullets: string[] }[];
+    napkins: { slug: string; absPath: string; entries: { name: string; absPath: string; type: string; files?: { name: string; absPath: string; type: string }[] }[]; napkinBullets: string[] }[];
     statuses: { slug: string; status: string }[];
-    napkinsBasePath: string | null;
   }>;
   getInitialTerminalOpts: () => Promise<{ name: string; command?: string }>;
   sendUiState: (state: { activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean }) => void;
@@ -77,7 +76,6 @@ interface ElectronAPI {
   switchNepic: (nepicId: string) => Promise<{
     architectSessionId: string | null;
     napkinStatuses: { slug: string; status: string }[];
-    napkinsBasePath: string;
   }>;
 }
 

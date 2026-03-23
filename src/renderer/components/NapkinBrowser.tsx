@@ -10,7 +10,9 @@ import {
   type AgentStatus,
   type NapkinPhase,
   type NapkinEntry,
-  type AgentEntry,
+  type NapkinFileEntry,
+  type NapkinAgentEntry,
+  type NapkinDirEntry,
   type TerminalMeta,
 } from '../store';
 
@@ -27,7 +29,8 @@ interface ArchitectData {
 
 interface NapkinAgent {
   name: string;
-  files: string[];
+  absPath: string;
+  files: NapkinFileEntry[];
   terminalId?: string;
   status: AgentStatus;
   isOrphaned?: boolean;
@@ -37,7 +40,8 @@ interface NapkinCardData {
   slug: string;
   name: string;
   phase: NapkinPhase;
-  artifacts: string[];       // extensions like '.nap.md'
+  fileEntries: NapkinFileEntry[];
+  dirEntries: NapkinDirEntry[];
   agents: NapkinAgent[];
   napkinBullets: string[];
 }
@@ -62,14 +66,20 @@ function deriveArchitects(terminals: TerminalMeta[]): ArchitectData[] {
 
 function deriveNapkinCards(napkins: NapkinEntry[], terminals: TerminalMeta[]): NapkinCardData[] {
   return napkins.map((n) => {
+    // Separate entries by type
+    const fileEntries = n.entries.filter((e): e is NapkinFileEntry => e.type === 'file');
+    const agentEntries = n.entries.filter((e): e is NapkinAgentEntry => e.type === 'agent');
+    const dirEntries = n.entries.filter((e): e is NapkinDirEntry => e.type === 'dir');
+
     // Find terminals associated with this napkin (non-architect)
     const napkinTerminals = terminals
       .filter((t) => t.napkinSlug === n.slug && t.role !== 'architect')
       .sort((a, b) => a.createdAt - b.createdAt);
 
     // Map filesystem agents to terminal data
-    const agents: NapkinAgent[] = n.agents.map((agent, i) => ({
+    const agents: NapkinAgent[] = agentEntries.map((agent, i) => ({
       name: agent.name,
+      absPath: agent.absPath,
       files: agent.files,
       terminalId: napkinTerminals[i]?.id,
       status: napkinTerminals[i]
@@ -79,9 +89,10 @@ function deriveNapkinCards(napkins: NapkinEntry[], terminals: TerminalMeta[]): N
     }));
 
     // Add extra terminals not matched to filesystem agents
-    for (let i = n.agents.length; i < napkinTerminals.length; i++) {
+    for (let i = agentEntries.length; i < napkinTerminals.length; i++) {
       agents.push({
         name: napkinTerminals[i].name,
+        absPath: '',
         files: [],
         terminalId: napkinTerminals[i].id,
         status: terminalStatusToAgent(napkinTerminals[i].status, napkinTerminals[i].isOrphaned),
@@ -93,11 +104,96 @@ function deriveNapkinCards(napkins: NapkinEntry[], terminals: TerminalMeta[]): N
       slug: n.slug,
       name: n.slug,
       phase: n.status,
-      artifacts: n.artifacts,
+      fileEntries,
+      dirEntries,
       agents,
       napkinBullets: n.napkinBullets,
     };
   });
+}
+
+// ── File row with hover controls (extended view) ──
+
+function FileRow({
+  file,
+  indent,
+  showControls,
+}: {
+  file: NapkinFileEntry;
+  indent: number;
+  showControls: boolean;
+}) {
+  return (
+    <div
+      style={{
+        padding: `1px 0 1px ${indent}px`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        cursor: 'pointer',
+        borderRadius: 3,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+        const ctrl = e.currentTarget.querySelector<HTMLElement>('[data-file-controls]');
+        if (ctrl) ctrl.style.visibility = 'visible';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+        const ctrl = e.currentTarget.querySelector<HTMLElement>('[data-file-controls]');
+        if (ctrl) ctrl.style.visibility = 'hidden';
+      }}
+    >
+      <span
+        style={{
+          color: '#6b7280',
+          flexShrink: 0,
+          width: 10,
+          textAlign: 'center',
+          fontSize: 12,
+        }}
+      >
+        *
+      </span>
+      <span
+        style={{
+          flex: 1,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          color: '#9cdcfe',
+        }}
+      >
+        {file.name}
+      </span>
+      {showControls && (
+        <span data-file-controls style={{ display: 'flex', gap: 8, flexShrink: 0, visibility: 'hidden' }}>
+          <span
+            style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(file.absPath);
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+          >
+            &#x2398;
+          </span>
+          <span
+            style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              window.electronAPI.openFilePath(file.absPath);
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+          >
+            &#x2197;
+          </span>
+        </span>
+      )}
+    </div>
+  );
 }
 
 // ── Dot component ──
@@ -209,10 +305,8 @@ function NapkinCard({
   viewMode,
   onToggle,
   onClickAgent,
-  napkinsBasePath,
 }: {
   napkin: NapkinCardData;
-  napkinsBasePath: string | null;
   isFocused: boolean;
   viewMode: CardViewMode;
   onToggle: () => void;
@@ -274,84 +368,31 @@ function NapkinCard({
       {/* Body — focused/extended view */}
       {isFocused && (
         <div style={{ padding: '0 0 4px 0' }}>
-          {/* Artifacts */}
-          {napkin.artifacts.map((ext, i) => {
-            const displayName = ext.replace(/^\./, '');
-            const fileName = `${napkin.slug}${ext}`;
-            const absPath = napkinsBasePath ? `${napkinsBasePath}/${napkin.slug}/${fileName}` : fileName;
-            return (
+          {/* Files */}
+          {napkin.fileEntries.map((file, i) => (
+            <FileRow key={`f-${i}`} file={file} indent={16} showControls={showExtended} />
+          ))}
+
+          {/* Non-agent subdirs (extended only) */}
+          {showExtended && napkin.dirEntries.map((dir, i) => (
+            <div key={`d-${i}`}>
               <div
-                key={`a-${i}`}
                 style={{
                   padding: '1px 0 1px 16px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  cursor: 'pointer',
                   borderRadius: 3,
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                  const ctrl = e.currentTarget.querySelector<HTMLElement>('[data-file-controls]');
-                  if (ctrl) ctrl.style.visibility = 'visible';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  const ctrl = e.currentTarget.querySelector<HTMLElement>('[data-file-controls]');
-                  if (ctrl) ctrl.style.visibility = 'hidden';
-                }}
               >
-                <span
-                  style={{
-                    color: '#6b7280',
-                    flexShrink: 0,
-                    width: 10,
-                    textAlign: 'center',
-                    fontSize: 12,
-                  }}
-                >
-                  *
-                </span>
-                <span
-                  style={{
-                    flex: 1,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    color: '#9cdcfe',
-                  }}
-                >
-                  {showExtended ? fileName : displayName}
-                </span>
-                {showExtended && (
-                  <span data-file-controls style={{ display: 'flex', gap: 8, flexShrink: 0, visibility: 'hidden' }}>
-                    <span
-                      style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(absPath);
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-                    >
-                      &#x2398;
-                    </span>
-                    <span
-                      style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.electronAPI.openFilePath(absPath);
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-                    >
-                      &#x2197;
-                    </span>
-                  </span>
-                )}
+                <span style={{ color: '#6b7280', flexShrink: 0, width: 10, textAlign: 'center', fontSize: 12 }}>*</span>
+                <span style={{ color: '#cccccc' }}>{dir.name}/</span>
               </div>
-            );
-          })}
+              {dir.files.map((file, fi) => (
+                <FileRow key={`df-${fi}`} file={file} indent={32} showControls={true} />
+              ))}
+            </div>
+          ))}
 
           {/* Agents */}
           {napkin.agents.map((agent, i) => (
@@ -394,61 +435,22 @@ function NapkinCard({
                 </span>
               </div>
 
-              {/* Extended view: virtual entries + real files under each agent */}
+              {/* Extended view: [terminal] (only if agent has live session) + real files */}
               {showExtended && (
                 <>
-                  <div
-                    style={{
-                      padding: '1px 0 1px 32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      cursor: 'pointer',
-                      borderRadius: 3,
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (agent.terminalId) {
-                        onClickAgent(agent);
-                      }
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
-                    }
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
-                    <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
-                      [terminal]
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      padding: '1px 0 1px 32px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      borderRadius: 3,
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
-                    }
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
-                    <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
-                      [diff]
-                    </span>
-                  </div>
-                  {agent.files.map((file, fi) => (
+                  {agent.terminalId && (
                     <div
-                      key={`f-${fi}`}
                       style={{
                         padding: '1px 0 1px 32px',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 6,
+                        cursor: 'pointer',
                         borderRadius: 3,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClickAgent(agent);
                       }}
                       onMouseEnter={(e) =>
                         (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
@@ -456,8 +458,13 @@ function NapkinCard({
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
                       <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
-                      <span style={{ color: '#9cdcfe', fontSize: 12 }}>{file}</span>
+                      <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
+                        [terminal]
+                      </span>
                     </div>
+                  )}
+                  {agent.files.map((file, fi) => (
+                    <FileRow key={`af-${fi}`} file={file} indent={32} showControls={true} />
                   ))}
                 </>
               )}
@@ -498,7 +505,6 @@ export function NapkinBrowser() {
   const resumeOrphanedTerminal = useTerminalStore((s) => s.resumeOrphanedTerminal);
   const napkins = useTerminalStore((s) => s.napkins);
   const terminals = useTerminalStore((s) => s.terminals);
-  const napkinsBasePath = useTerminalStore((s) => s.napkinsBasePath);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   // Cmd+K handler
@@ -639,7 +645,6 @@ export function NapkinBrowser() {
             viewMode={cardViewMode}
             onToggle={() => expandCard(napkin.slug)}
             onClickAgent={handleClickAgent}
-            napkinsBasePath={napkinsBasePath}
           />
         ))}
       </div>

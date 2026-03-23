@@ -135,8 +135,7 @@ function App() {
     // Napkin: filesystem data update
     const removeNapkinUpdate = window.electronAPI.onNapkinUpdate((data) => {
       useTerminalStore.getState().setNapkinData(
-        data as { slug: string; artifacts: string[]; agents: { name: string; files: string[] }[]; napkinBullets: string[] }
-          | { slug: string; artifacts: string[]; agents: { name: string; files: string[] }[]; napkinBullets: string[] }[],
+        data as any,
       );
     });
 
@@ -178,13 +177,10 @@ function App() {
     });
 
     // Pull initial napkin data (watcher's push may fire before listener is ready)
-    window.electronAPI.getInitialNapkins().then(({ napkins, statuses, napkinsBasePath }) => {
+    window.electronAPI.getInitialNapkins().then(({ napkins, statuses }) => {
       const store = useTerminalStore.getState();
-      if (napkinsBasePath) {
-        store.setNapkinsBasePath(napkinsBasePath);
-      }
       if (napkins.length > 0) {
-        store.setNapkinData(napkins);
+        store.setNapkinData(napkins as any);
       }
       for (const { slug, status } of statuses) {
         store.mergeNapkinStatus(slug, status);

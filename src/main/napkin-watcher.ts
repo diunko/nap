@@ -2,19 +2,33 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { BrowserWindow } from 'electron';
 
-export interface AgentData {
+export interface NapkinFileEntry {
   name: string;
-  files: string[];
+  absPath: string;
+  type: 'file';
 }
 
-export interface NapkinData {
+export interface NapkinAgentEntry {
+  name: string;
+  absPath: string;
+  type: 'agent';
+  files: NapkinFileEntry[];
+}
+
+export interface NapkinDirEntry {
+  name: string;
+  absPath: string;
+  type: 'dir';
+  files: NapkinFileEntry[];
+}
+
+export interface NapkinSnapshot {
   slug: string;
-  artifacts: string[];
-  agents: AgentData[];
+  absPath: string;
+  entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[];
   napkinBullets: string[];
 }
 
-const KNOWN_ARTIFACTS = ['.nap.md', '.spec.md', '.test.md', '.journeys.md'];
 const DEBOUNCE_MS = 200;
 
 let watcher: fs.FSWatcher | null = null;
@@ -25,51 +39,73 @@ let activeNepicDir: string | null = null;
 let activeWindow: BrowserWindow | null = null;
 
 /**
- * Read a single napkin directory and return its structured data.
+ * Read a single napkin directory and return a full filesystem snapshot.
  */
-export async function readNapkinDir(napkinsDir: string, slug: string): Promise<NapkinData> {
+export async function readNapkinDir(napkinsDir: string, slug: string): Promise<NapkinSnapshot> {
   const dirPath = path.join(napkinsDir, slug);
-  const data: NapkinData = { slug, artifacts: [], agents: [], napkinBullets: [] };
+  const snapshot: NapkinSnapshot = { slug, absPath: dirPath, entries: [], napkinBullets: [] };
 
-  // Read artifact files
+  let dirEntries: fs.Dirent[];
   try {
-    const entries = await fs.promises.readdir(dirPath);
-    for (const entry of entries) {
-      for (const ext of KNOWN_ARTIFACTS) {
-        if (entry.endsWith(ext)) {
-          data.artifacts.push(ext);
-          break;
-        }
-      }
-    }
+    dirEntries = await fs.promises.readdir(dirPath, { withFileTypes: true });
   } catch {
-    // dir doesn't exist or unreadable — return empty data
-    return data;
+    return snapshot;
   }
 
-  // Read agents/ subdirectory and their files
-  const agentsDir = path.join(dirPath, 'agents');
-  try {
-    const agentEntries = await fs.promises.readdir(agentsDir, { withFileTypes: true });
-    for (const entry of agentEntries) {
-      if (entry.isDirectory()) {
-        const agentFiles: string[] = [];
+  for (const entry of dirEntries) {
+    const entryPath = path.join(dirPath, entry.name);
+    if (entry.isFile()) {
+      snapshot.entries.push({ name: entry.name, absPath: entryPath, type: 'file' });
+    } else if (entry.isDirectory()) {
+      if (entry.name === 'agents') {
+        // Promote agents/ children to top-level entries as type='agent'
         try {
-          const files = await fs.promises.readdir(path.join(agentsDir, entry.name));
-          for (const f of files) {
-            agentFiles.push(f);
+          const agentDirs = await fs.promises.readdir(entryPath, { withFileTypes: true });
+          for (const agentDir of agentDirs) {
+            if (agentDir.isDirectory()) {
+              const agentPath = path.join(entryPath, agentDir.name);
+              const agentFiles: NapkinFileEntry[] = [];
+              try {
+                const files = await fs.promises.readdir(agentPath);
+                for (const f of files) {
+                  agentFiles.push({ name: f, absPath: path.join(agentPath, f), type: 'file' });
+                }
+              } catch {
+                // unreadable agent dir — include with empty files
+              }
+              snapshot.entries.push({
+                name: agentDir.name,
+                absPath: agentPath,
+                type: 'agent',
+                files: agentFiles,
+              });
+            }
           }
         } catch {
-          // unreadable agent dir — include with empty files
+          // no agents/ dir or unreadable — fine
         }
-        data.agents.push({ name: entry.name, files: agentFiles });
+      } else {
+        // Non-agent subdir → type='dir'
+        const subFiles: NapkinFileEntry[] = [];
+        try {
+          const files = await fs.promises.readdir(entryPath);
+          for (const f of files) {
+            subFiles.push({ name: f, absPath: path.join(entryPath, f), type: 'file' });
+          }
+        } catch {
+          // unreadable subdir — include with empty files
+        }
+        snapshot.entries.push({
+          name: entry.name,
+          absPath: entryPath,
+          type: 'dir',
+          files: subFiles,
+        });
       }
     }
-  } catch {
-    // no agents/ dir — fine
   }
 
-  // Read napkin bullets from .nap.md
+  // Extract napkin bullets from .nap.md
   const napMdPath = path.join(dirPath, `${slug}.nap.md`);
   try {
     const content = await fs.promises.readFile(napMdPath, 'utf-8');
@@ -77,23 +113,23 @@ export async function readNapkinDir(napkinsDir: string, slug: string): Promise<N
     for (const line of lines) {
       // Top-level bullets only: lines starting with * (no leading whitespace)
       if (/^\*\s/.test(line)) {
-        data.napkinBullets.push(line.replace(/^\*\s*/, '').trim());
+        snapshot.napkinBullets.push(line.replace(/^\*\s*/, '').trim());
       }
     }
   } catch {
     // no .nap.md — fine
   }
 
-  return data;
+  return snapshot;
 }
 
 /**
- * Full scan of 30-napkins/ — returns all napkin data.
+ * Full scan of 30-napkins/ — returns all napkin snapshots.
  */
-async function fullScan(napkinsDir: string): Promise<NapkinData[]> {
+async function fullScan(napkinsDir: string): Promise<NapkinSnapshot[]> {
   try {
     const entries = await fs.promises.readdir(napkinsDir, { withFileTypes: true });
-    const napkins: NapkinData[] = [];
+    const napkins: NapkinSnapshot[] = [];
     for (const entry of entries) {
       if (entry.isDirectory()) {
         napkins.push(await readNapkinDir(napkinsDir, entry.name));
@@ -116,7 +152,7 @@ function slugFromWatchPath(filename: string): string | null {
   return parts[0] || null;
 }
 
-function sendUpdate(win: BrowserWindow, payload: NapkinData | NapkinData[]): void {
+function sendUpdate(win: BrowserWindow, payload: NapkinSnapshot | NapkinSnapshot[]): void {
   if (!win.isDestroyed()) {
     win.webContents.send('napkin:update', payload);
   }
@@ -209,18 +245,10 @@ export async function startNapkinWatcher(
  * Return current napkin data for the active nepic (pull-based).
  * Used by the renderer to request initial data after its IPC listener is ready.
  */
-export async function getActiveNapkinData(): Promise<NapkinData[]> {
+export async function getActiveNapkinData(): Promise<NapkinSnapshot[]> {
   if (!activeNepicDir) return [];
   const napkinsDir = path.join(activeNepicDir, '30-napkins');
   return fullScan(napkinsDir);
-}
-
-/**
- * Return the absolute path to the active nepic's 30-napkins/ directory.
- */
-export function getActiveNapkinsPath(): string | null {
-  if (!activeNepicDir) return null;
-  return path.join(activeNepicDir, '30-napkins');
 }
 
 /**

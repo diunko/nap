@@ -147,10 +147,10 @@ test('T-0400-05: Cmd+K filter shows matching napkins', async ({ page }) => {
   await page.evaluate(() => {
     const store = (window as any).useTerminalStore;
     store.getState().setNapkinData([
-      { slug: '0100-design-sprint', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-      { slug: '0200-sqlite-persistence', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-      { slug: '0300-socket-server', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
-      { slug: '0400-layout-mock', artifacts: ['.nap.md'], agents: [], napkinBullets: [] },
+      { slug: '0100-design-sprint', absPath: '/tmp/0100-design-sprint', entries: [{ name: '0100-design-sprint.nap.md', absPath: '/tmp/0100-design-sprint/0100-design-sprint.nap.md', type: 'file' }], napkinBullets: [] },
+      { slug: '0200-sqlite-persistence', absPath: '/tmp/0200-sqlite-persistence', entries: [{ name: '0200-sqlite-persistence.nap.md', absPath: '/tmp/0200-sqlite-persistence/0200-sqlite-persistence.nap.md', type: 'file' }], napkinBullets: [] },
+      { slug: '0300-socket-server', absPath: '/tmp/0300-socket-server', entries: [{ name: '0300-socket-server.nap.md', absPath: '/tmp/0300-socket-server/0300-socket-server.nap.md', type: 'file' }], napkinBullets: [] },
+      { slug: '0400-layout-mock', absPath: '/tmp/0400-layout-mock', entries: [{ name: '0400-layout-mock.nap.md', absPath: '/tmp/0400-layout-mock/0400-layout-mock.nap.md', type: 'file' }], napkinBullets: [] },
     ]);
   });
   await page.waitForTimeout(200);
