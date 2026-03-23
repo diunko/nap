@@ -111,6 +111,9 @@ const readyTerminals = new Set<string>();
 let pendingExits = 0;
 let quitAfterExits = false;
 
+// When true, the app is shutting down — onExit should NOT mark sessions 'exited'
+let appIsClosing = false;
+
 // Architect resume state (for expired-session fallback)
 let architectResumeId: string | null = null;
 let architectResumeTime = 0;
@@ -200,9 +203,11 @@ function createPtyProcess(
     outputBuffers.delete(id);
     readyTerminals.delete(id);
     try {
-      const session = getSession(id);
-      if (session && session.status !== 'done') {
-        setSessionStatus(id, 'exited');
+      if (!appIsClosing) {
+        const session = getSession(id);
+        if (session && session.status !== 'done') {
+          setSessionStatus(id, 'exited');
+        }
       }
     } catch {
       // DB already closed during shutdown — safe to ignore
@@ -434,7 +439,7 @@ ipcMain.handle('get-resume-data', () => {
     const allSessions = getAllSessions();
     const orphaned = allSessions
       .filter((s) =>
-        s.status === 'running' &&
+        s.status !== 'exited' &&
         !livePtyIds.includes(s.id) &&
         s.id !== resumedArchitectSession?.id,
       )
@@ -1043,9 +1048,9 @@ app.on('will-quit', () => {
 });
 
 app.on('window-all-closed', () => {
-  // Kill all ptys, then wait for their onExit callbacks to fire
-  // before quitting. This ensures node-pty's ThreadSafeFunction
-  // completes its work before V8 tears down.
+  // Flag must be set BEFORE killing ptys so onExit handlers
+  // know not to mark sessions as 'exited' during clean quit.
+  appIsClosing = true;
   killAllPtys();
   if (pendingExits === 0) {
     app.quit();

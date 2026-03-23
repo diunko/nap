@@ -36,6 +36,7 @@ function seedDb(
       ccSessionUuid: string | null;
       cwd: string;
       parentId?: string | null;
+      createdAt?: number;
     }>;
   },
 ): void {
@@ -63,7 +64,8 @@ function seedDb(
       const uuid = s.ccSessionUuid ? `'${s.ccSessionUuid}'` : 'NULL';
       const parentId = s.parentId ? `'${s.parentId}'` : 'NULL';
       const napkinSlug = s.napkinSlug ? `'${s.napkinSlug}'` : 'NULL';
-      sql += `\nINSERT INTO sessions (id, name, role, nepic_id, napkin_slug, status, cc_session_uuid, cwd, parent_id, created_at) VALUES ('${s.id}', '${s.name}', '${s.role}', '${s.nepicId}', ${napkinSlug}, '${s.status}', ${uuid}, '${s.cwd}', ${parentId}, ${Date.now()});`;
+      const createdAt = s.createdAt ?? Date.now();
+      sql += `\nINSERT INTO sessions (id, name, role, nepic_id, napkin_slug, status, cc_session_uuid, cwd, parent_id, created_at) VALUES ('${s.id}', '${s.name}', '${s.role}', '${s.nepicId}', ${napkinSlug}, '${s.status}', ${uuid}, '${s.cwd}', ${parentId}, ${createdAt});`;
     }
   }
 
@@ -418,6 +420,7 @@ base.describe.serial('T-0800-07: multiple architects — resume the active one',
   });
 
   base('only the running architect is resumed, done architect is not', async () => {
+    const now = Date.now();
     seedDb(tmpDir, {
       nepicId: 'nepic-multi',
       terminalId: runningArchId,
@@ -431,6 +434,7 @@ base.describe.serial('T-0800-07: multiple architects — resume the active one',
           status: 'done',
           ccSessionUuid: 'uuid-done-arch',
           cwd: tmpDir,
+          createdAt: now - 1000,
         },
         {
           id: runningArchId,
@@ -440,6 +444,7 @@ base.describe.serial('T-0800-07: multiple architects — resume the active one',
           status: 'running',
           ccSessionUuid: 'uuid-running-arch',
           cwd: tmpDir,
+          createdAt: now,
         },
       ],
     });
