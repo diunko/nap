@@ -154,7 +154,7 @@ function ArchitectCard({
   return (
     <div
       style={{
-        padding: isFocused ? '0 12px 0 9px' : '0 12px',
+        padding: '0 12px 0 9px',
         cursor: 'pointer',
         background: isFocused ? '#37373d' : 'transparent',
         borderLeft: isFocused ? '3px solid #007acc' : '3px solid transparent',
@@ -209,8 +209,10 @@ function NapkinCard({
   viewMode,
   onToggle,
   onClickAgent,
+  napkinsBasePath,
 }: {
   napkin: NapkinCardData;
+  napkinsBasePath: string | null;
   isFocused: boolean;
   viewMode: CardViewMode;
   onToggle: () => void;
@@ -223,7 +225,7 @@ function NapkinCard({
     <div
       data-testid="napkin-card"
       style={{
-        padding: isFocused ? '0 12px 0 9px' : '0 12px',
+        padding: '0 12px 0 9px',
         cursor: 'pointer',
         background: isFocused ? '#37373d' : 'transparent',
         borderLeft: isFocused ? '3px solid #007acc' : '3px solid transparent',
@@ -275,7 +277,8 @@ function NapkinCard({
           {/* Artifacts */}
           {napkin.artifacts.map((ext, i) => {
             const displayName = ext.replace(/^\./, '');
-            const fullName = `${napkin.slug}${ext}`;
+            const fileName = `${napkin.slug}${ext}`;
+            const absPath = napkinsBasePath ? `${napkinsBasePath}/${napkin.slug}/${fileName}` : fileName;
             return (
               <div
                 key={`a-${i}`}
@@ -287,10 +290,16 @@ function NapkinCard({
                   cursor: 'pointer',
                   borderRadius: 3,
                 }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
-                }
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  const ctrl = e.currentTarget.querySelector<HTMLElement>('[data-file-controls]');
+                  if (ctrl) ctrl.style.visibility = 'visible';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  const ctrl = e.currentTarget.querySelector<HTMLElement>('[data-file-controls]');
+                  if (ctrl) ctrl.style.visibility = 'hidden';
+                }}
               >
                 <span
                   style={{
@@ -312,15 +321,15 @@ function NapkinCard({
                     color: '#9cdcfe',
                   }}
                 >
-                  {showExtended ? fullName : displayName}
+                  {showExtended ? fileName : displayName}
                 </span>
                 {showExtended && (
-                  <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <span data-file-controls style={{ display: 'flex', gap: 8, flexShrink: 0, visibility: 'hidden' }}>
                     <span
                       style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigator.clipboard.writeText(fullName);
+                        navigator.clipboard.writeText(absPath);
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
                       onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
@@ -331,7 +340,7 @@ function NapkinCard({
                       style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.electronAPI.openFilePath(fullName);
+                        window.electronAPI.openFilePath(absPath);
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
                       onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
@@ -366,16 +375,8 @@ function NapkinCard({
                 }
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
-                <span
-                  style={{
-                    color: '#6b7280',
-                    flexShrink: 0,
-                    width: 10,
-                    textAlign: 'center',
-                    fontSize: 12,
-                  }}
-                >
-                  *
+                <span style={{ flexShrink: 0, width: 10, display: 'flex', justifyContent: 'center' }}>
+                  <StatusDot status={agent.status} size={8} />
                 </span>
                 <span
                   style={{
@@ -388,8 +389,7 @@ function NapkinCard({
                 >
                   {agent.name}/
                 </span>
-                <StatusDot status={agent.status} size={8} />
-                <span style={{ color: '#6b7280', fontSize: 12, flexShrink: 0 }}>
+                <span style={{ color: dotColor(agent.status), fontSize: 12, flexShrink: 0 }}>
                   {agent.status}
                 </span>
               </div>
@@ -417,6 +417,7 @@ function NapkinCard({
                     }
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
+                    <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
                     <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
                       [terminal]
                     </span>
@@ -434,6 +435,7 @@ function NapkinCard({
                     }
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
+                    <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
                     <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
                       [diff]
                     </span>
@@ -453,6 +455,7 @@ function NapkinCard({
                       }
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
+                      <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
                       <span style={{ color: '#9cdcfe', fontSize: 12 }}>{file}</span>
                     </div>
                   ))}
@@ -495,6 +498,7 @@ export function NapkinBrowser() {
   const resumeOrphanedTerminal = useTerminalStore((s) => s.resumeOrphanedTerminal);
   const napkins = useTerminalStore((s) => s.napkins);
   const terminals = useTerminalStore((s) => s.terminals);
+  const napkinsBasePath = useTerminalStore((s) => s.napkinsBasePath);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   // Cmd+K handler
@@ -635,6 +639,7 @@ export function NapkinBrowser() {
             viewMode={cardViewMode}
             onToggle={() => expandCard(napkin.slug)}
             onClickAgent={handleClickAgent}
+            napkinsBasePath={napkinsBasePath}
           />
         ))}
       </div>

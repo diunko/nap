@@ -85,6 +85,7 @@ interface TerminalStore {
 
   // Napkin data (live-wired)
   napkins: NapkinEntry[];
+  napkinsBasePath: string | null;
   kanbanVisible: boolean;
 
   createTerminal: (name: string, parentId?: string, command?: string) => string;
@@ -115,6 +116,7 @@ interface TerminalStore {
 
   // Napkin actions
   setNapkinData: (data: { slug: string; artifacts: string[]; agents: AgentEntry[]; napkinBullets: string[] } | { slug: string; artifacts: string[]; agents: AgentEntry[]; napkinBullets: string[] }[]) => void;
+  setNapkinsBasePath: (path: string | null) => void;
   mergeNapkinStatus: (slug: string, status: string) => void;
   toggleKanban: () => void;
 }
@@ -137,6 +139,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   // Napkin data
   napkins: [],
+  napkinsBasePath: null,
   kanbanVisible: false,
 
   createTerminal: (name: string, parentId?: string, command?: string) => {
@@ -369,6 +372,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const result = await window.electronAPI.switchNepic(id);
     // Guard: if another switch superseded this one, bail
     if (get().activeNepicId !== id) return;
+    set({ napkinsBasePath: result.napkinsBasePath });
     for (const { slug, status } of result.napkinStatuses) {
       get().mergeNapkinStatus(slug, status);
     }
@@ -428,6 +432,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       });
     }
   },
+
+  setNapkinsBasePath: (p) => set({ napkinsBasePath: p }),
 
   mergeNapkinStatus: (slug: string, status: string) => {
     set((state) => {

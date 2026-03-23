@@ -45,7 +45,7 @@ import {
 } from './session-store';
 import type { UiState } from './session-store';
 import { initNapkinStore, closeNapkinStore, changeNapkinStatus, getAllNapkinStatuses, getNapkinStatusesForNepic } from './napkin-store';
-import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir, getActiveNapkinData } from './napkin-watcher';
+import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir, getActiveNapkinData, getActiveNapkinsPath } from './napkin-watcher';
 import { resolveByName } from './name-resolver';
 import { reconcile } from './reconcile';
 import { setWriter, enqueue, clearQueue } from './message-queue';
@@ -394,7 +394,8 @@ ipcMain.handle('get-ui-state', () => {
 ipcMain.handle('get-napkin-data', async () => {
   const napkins = await getActiveNapkinData();
   const statuses = getAllNapkinStatuses();
-  return { napkins, statuses };
+  const napkinsBasePath = getActiveNapkinsPath();
+  return { napkins, statuses, napkinsBasePath };
 });
 
 // IPC: get resume data (architect session + orphaned sessions)
@@ -560,6 +561,7 @@ ipcMain.handle('nepic:switch', async (_event, nepicId: string) => {
   return {
     architectSessionId: architect?.id ?? null,
     napkinStatuses,
+    napkinsBasePath: path.join(nepicDir, '30-napkins'),
   };
 });
 

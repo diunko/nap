@@ -216,6 +216,14 @@ export async function getActiveNapkinData(): Promise<NapkinData[]> {
 }
 
 /**
+ * Return the absolute path to the active nepic's 30-napkins/ directory.
+ */
+export function getActiveNapkinsPath(): string | null {
+  if (!activeNepicDir) return null;
+  return path.join(activeNepicDir, '30-napkins');
+}
+
+/**
  * Stop the napkin watcher and clean up.
  */
 export function stopNapkinWatcher(): void {
