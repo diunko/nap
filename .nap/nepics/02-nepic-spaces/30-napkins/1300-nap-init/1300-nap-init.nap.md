@@ -40,11 +40,14 @@
     * `30-napkins/`
     * `40-board/` with status subdirs (10-draft through 60-done)
 
-  * `.claude/skills/`
+  * `.nap/.gitignore` — nap.db, nap.db-shm, nap.db-wal, sock
+
+  * skills (opt-in via flags)
+    * `nap init --add-skills` → copies to `.claude/skills/` (project-level)
+    * `nap init --add-skills --user` → copies to `~/.claude/skills/` (global)
+    * no flag → no skills installed
     * `napkin/` — brainstorming skill
     * `napkin-format/` — formatting skill
-
-  * `.nap/.gitignore` — nap.db, nap.db-shm, nap.db-wal, sock
 
 * where templates come from
   * bundled in the package — `src/templates/` in source tree
