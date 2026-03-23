@@ -1,6 +1,6 @@
 import { test as base, expect } from '@playwright/test';
 import type { ElectronApplication, Page } from 'playwright-core';
-import { launchApp, cleanupApp } from '../helpers';
+import { launchApp } from '../helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -26,7 +26,7 @@ base.describe.serial('T-1000-01: directory scaffold', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('all required subdirs created for new nepic', async () => {
@@ -83,7 +83,7 @@ base.describe.serial('T-1000-02: slug generation — NN is next available', () =
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('pre-existing 01-first, 02-second → third gets 03-third', async () => {
@@ -116,7 +116,7 @@ base.describe.serial('T-1000-03: first nepic ever', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('empty nepics dir → slug is 01-genesis', async () => {
@@ -143,7 +143,7 @@ base.describe.serial('T-1000-04: SQLite nepic row inserted', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('new nepic row has correct fields and is_active=1', async () => {
@@ -187,7 +187,7 @@ base.describe.serial('T-1000-05: previous nepic deactivated', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('old nepic is_active=0, new nepic is_active=1, exactly 1 active', async () => {
@@ -228,7 +228,7 @@ base.describe.serial('T-1000-06: multiple previous nepics all deactivated', () =
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('3 old nepics deactivated, only new one active', async () => {
@@ -277,7 +277,7 @@ base.describe.serial('T-1000-07: architect session created', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('session row has role=architect, nepic_id, ccSessionUuid, correct cwd', async () => {
@@ -326,7 +326,7 @@ base.describe.serial('T-1000-08: architect pty spawned', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('pty exists for architect session ID, command includes --session-id', async () => {
@@ -367,7 +367,7 @@ base.describe.serial('T-1000-09: architect prompt.md created', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('prompt.md exists in 20-architects/001-architect/ and is non-empty', async () => {
@@ -412,7 +412,7 @@ base.describe.serial('T-1000-10: ui_state updated', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('ui_state.active_nepic_id = new nepic id', async () => {
@@ -451,7 +451,7 @@ base.describe.serial('T-1000-11: gutter re-renders with new icon', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('store activeNepicId matches, gutter shows new icon', async () => {
@@ -517,7 +517,7 @@ base.describe.serial('T-1000-12: architect terminal appears and is active', () =
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('store has architect terminal entry, it is activeTerminalId, xterm exists', async () => {
@@ -584,7 +584,7 @@ base.describe.serial('T-1000-13: previous nepic sessions keep running', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('first nepic pty still alive after second nepic created', async () => {
@@ -632,7 +632,7 @@ base.describe.serial('T-1000-14: duplicate name gets distinct slug', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('two nepics named "auth" get different NN prefixes, both dirs exist', async () => {
@@ -680,7 +680,7 @@ base.describe.serial('T-1000-15: missing .nap/ dir created on demand', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('nepic creation succeeds even without pre-existing .nap/ dir', async () => {
@@ -731,7 +731,7 @@ base.describe.serial('T-1000-16: napkin watcher starts for new nepic', () => {
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('new napkin dir triggers napkin:update in renderer', async () => {
@@ -786,7 +786,7 @@ base.describe.serial('T-1000-17: e2e — (+) click through architect terminal', 
   });
 
   base.afterAll(async () => {
-    await cleanupApp(app, tmpDir);
+    await forceCleanup(app, tmpDir);
   });
 
   base('click (+), enter name, architect terminal appears with active icon', async () => {
