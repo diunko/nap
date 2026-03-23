@@ -646,6 +646,7 @@ async function handleSocketRequest(msg: unknown): Promise<Record<string, unknown
         name: req.name,
         cwd: req.cwd || projectCwd,
         parentId: req.parentId ?? null,
+        napkinSlug: req.napkinSlug || undefined,
       });
       const ptyCommand = session.ccSessionUuid
         ? injectSessionId(req.command, session.ccSessionUuid)

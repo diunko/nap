@@ -5,6 +5,7 @@ export interface StartRequest {
   name?: string;
   cwd?: string;
   parentId?: string | null;
+  napkinSlug?: string;
 }
 
 export interface PsRequest {

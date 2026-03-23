@@ -488,7 +488,7 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
 
     case 'start': {
       if (!args[0]) {
-        process.stderr.write('Usage: nap start <command> [--name <name>] [--cwd <path>]\n');
+        process.stderr.write('Usage: nap start <command> [--name <name>] [--cwd <path>] [--napkin <slug>]\n');
         process.exit(1);
       }
       const sock = resolveSocketOrDie();
@@ -499,6 +499,7 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
         name: flags['name'] || undefined,
         cwd: (flags['cwd'] as string) || process.cwd(),
         parentId: process.env['NAP_SESSION_ID'] || null,
+        napkinSlug: (flags['napkin'] as string) || undefined,
       });
       if (res['error']) {
         process.stderr.write(String(res['message']) + '\n');
