@@ -84,3 +84,12 @@ Each bullet is a "what if." Not a todo. Not a spec. An idea with energy — some
     * per-role overrides? architect gets `--verbose`, test-eng gets `--verbose --allowedTools ...`?
   * nap start, nap spawn, architect resume — all read from the same config
   * change once, applies everywhere
+
+* What if "done" agents were still pokeable?
+  * right now `nap poke` rejects agents with status=done
+  * but the pty is still alive — the CC session is sitting at a prompt
+  * "done" means "finished the main task" not "conversation over"
+  * you should be able to poke them with follow-up bugs, questions, iterations
+  * maybe: poke changes status from done back to running?
+  * or: poke works regardless of status, status is just a signal to the architect
+  * the agent's CC session has full context — wasting it by locking them out
