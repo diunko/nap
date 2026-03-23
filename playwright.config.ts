@@ -6,6 +6,6 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   retries: 0,
-  workers: 1,
+  workers: "50%",
   reporter: 'list',
 });

@@ -4,10 +4,13 @@ import { launchApp } from '../helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
-/** Force-exit app (skips pty teardown) — prevents timeout when handleNepicCreate spawned ptys */
+/** Dispose all pty handlers, then quit cleanly — no crash, no macOS dialog */
 async function forceCleanup(app: ElectronApplication, tmpDir: string): Promise<void> {
   try {
-    await app.evaluate(({ app: a }) => a.exit(0));
+    await app.evaluate(({ app: a }) => {
+      globalThis.__napTest?.teardownPtys();
+      a.quit();
+    });
   } catch { /* app may already be closing */ }
   await app.close();
   fs.rmSync(tmpDir, { recursive: true, force: true });

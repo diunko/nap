@@ -1,4 +1,10 @@
-import { app, BrowserWindow, ipcMain, IpcMainEvent, Menu, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, IpcMainEvent, Menu, dialog, shell, systemPreferences } from 'electron';
+
+// In test mode, tell macOS to ignore saved application state —
+// prevents the "unexpectedly quit" dialog from blocking test runs
+if (process.env.NAP_TEST && process.platform === 'darwin') {
+  systemPreferences.setUserDefault('ApplePersistenceIgnoreState', 'boolean', true);
+}
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -56,6 +62,7 @@ function parseArgvFlag(flag: string): string | undefined {
 }
 
 const projectCwd = parseArgvFlag('--cwd') || process.cwd();
+
 const initialTerminalName = parseArgvFlag('--name') || 'shell';
 const initialTerminalCommand = parseArgvFlag('--command');
 const socketPath = getServerSocketPath(projectCwd);
@@ -836,6 +843,17 @@ app.whenReady().then(async () => {
       getNepicById,
       getNapkinStatusesForNepic,
       handleNepicCreate,
+      killAllPtys,
+      /** Dispose ALL handlers (data+exit) then kill — safe for immediate app.quit() */
+      teardownPtys: () => {
+        for (const entry of ptys.values()) {
+          entry.dataDisposable.dispose();
+          entry.exitDisposable.dispose();
+          entry.process.kill();
+        }
+        ptys.clear();
+        pendingExits = 0;
+      },
       SCHEMA,
       Database,
       getDb: () => database,

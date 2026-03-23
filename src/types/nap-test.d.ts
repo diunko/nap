@@ -50,6 +50,8 @@ interface NapTestHelpers {
   Database: typeof Database;
   getDb: () => Database.Database;
   getLivePtyIds: () => string[];
+  killAllPtys: () => void;
+  teardownPtys: () => void;
   path: typeof path;
   fs: typeof fs;
   os: typeof os;
