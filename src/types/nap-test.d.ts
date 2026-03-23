@@ -8,8 +8,12 @@ import type {
   saveUiState,
   loadUiState,
   getArchitectForNepic,
+  createNepicRow,
+  getAllNepics,
+  setNepicActive,
+  getNepicById,
 } from '../main/session-store';
-import type { changeNapkinStatus, getAllNapkinStatuses } from '../main/napkin-store';
+import type { changeNapkinStatus, getAllNapkinStatuses, getNapkinStatusesForNepic } from '../main/napkin-store';
 import type { readNapkinDir, startNapkinWatcher, stopNapkinWatcher } from '../main/napkin-watcher';
 import type { reconcile } from '../main/reconcile';
 import type Database from 'better-sqlite3';
@@ -33,6 +37,15 @@ interface NapTestHelpers {
   startNapkinWatcher: typeof startNapkinWatcher;
   stopNapkinWatcher: typeof stopNapkinWatcher;
   reconcile: typeof reconcile;
+  createNepicRow: typeof createNepicRow;
+  getAllNepics: typeof getAllNepics;
+  setNepicActive: typeof setNepicActive;
+  getNepicById: typeof getNepicById;
+  getNapkinStatusesForNepic: typeof getNapkinStatusesForNepic;
+  handleNepicCreate: (name: string) => {
+    nepic: { id: string; name: string; slug: string };
+    architectSession: { id: string; name: string; role: string; cwd: string; ccSessionUuid: string };
+  };
   SCHEMA: string;
   Database: typeof Database;
   getDb: () => Database.Database;

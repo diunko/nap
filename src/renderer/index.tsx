@@ -181,6 +181,12 @@ function App() {
         }
       }
 
+      // Load nepics from SQLite into the store
+      window.electronAPI.getNepics().then((nepics) => {
+        const store = useTerminalStore.getState();
+        store.setNepics(nepics.map((n) => ({ id: n.id, name: n.name, slug: n.slug })));
+      });
+
       // Resume architect and load orphaned sessions before creating first terminal
       window.electronAPI.getResumeData().then((resumeData) => {
         const store = useTerminalStore.getState();

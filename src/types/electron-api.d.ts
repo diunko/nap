@@ -25,6 +25,24 @@ interface ElectronPtyAPI {
   resume: (id: string, ccSessionUuid: string) => void;
 }
 
+interface NepicInfo {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+}
+
+interface CreateNepicResult {
+  nepic: { id: string; name: string; slug: string };
+  architectSession: {
+    id: string;
+    name: string;
+    role: string;
+    cwd: string;
+    ccSessionUuid: string;
+  };
+}
+
 interface ElectronAPI {
   pty: ElectronPtyAPI;
   onToggleSidebar: (callback: () => void) => () => void;
@@ -49,6 +67,12 @@ interface ElectronAPI {
   sendUiState: (state: { activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean }) => void;
   getUiState: () => Promise<{ activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean } | null>;
   getResumeData: () => Promise<ResumeData>;
+  createNepic: (name: string) => Promise<CreateNepicResult>;
+  getNepics: () => Promise<NepicInfo[]>;
+  switchNepic: (nepicId: string) => Promise<{
+    architectSessionId: string | null;
+    napkinStatuses: { slug: string; status: string }[];
+  }>;
 }
 
 declare global {

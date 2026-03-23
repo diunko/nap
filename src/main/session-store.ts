@@ -155,6 +155,46 @@ export function getArchitectForNepic(nepicId: string): Session | undefined {
   return row ? rowToSession(row) : undefined;
 }
 
+// ── Nepic operations ──
+
+export function createNepicRow(opts: { id: string; name: string; slug: string }): void {
+  const d = ensureDb();
+  d.prepare('UPDATE nepics SET is_active = 0 WHERE is_active = 1').run();
+  d.prepare(
+    'INSERT INTO nepics (id, name, slug, created_at, is_active) VALUES (?, ?, ?, ?, 1)',
+  ).run(opts.id, opts.name, opts.slug, Date.now());
+}
+
+export function setNepicActive(id: string): void {
+  const d = ensureDb();
+  d.prepare('UPDATE nepics SET is_active = 0 WHERE is_active = 1').run();
+  d.prepare('UPDATE nepics SET is_active = 1 WHERE id = ?').run(id);
+}
+
+export function getNepicById(id: string): { id: string; name: string; slug: string } | undefined {
+  const d = ensureDb();
+  const row = d.prepare('SELECT id, name, slug FROM nepics WHERE id = ?').get(id) as
+    | { id: string; name: string; slug: string }
+    | undefined;
+  return row ?? undefined;
+}
+
+export function getAllNepics(): { id: string; name: string; slug: string; isActive: boolean }[] {
+  const d = ensureDb();
+  const rows = d.prepare('SELECT id, name, slug, is_active FROM nepics ORDER BY slug').all() as {
+    id: string;
+    name: string;
+    slug: string;
+    is_active: number;
+  }[];
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    slug: r.slug,
+    isActive: !!r.is_active,
+  }));
+}
+
 // ── UI State persistence ──
 
 export interface UiState {

@@ -1,9 +1,48 @@
+import { useState, useRef, useEffect } from 'react';
 import { useTerminalStore } from '../store';
-import { MOCK_NEPICS } from '../mock-data';
 
 export function Gutter() {
+  const nepics = useTerminalStore((s) => s.nepics);
   const activeNepicId = useTerminalStore((s) => s.activeNepicId);
   const setActiveNepic = useTerminalStore((s) => s.setActiveNepic);
+  const switchNepic = useTerminalStore((s) => s.switchNepic);
+  const addNepic = useTerminalStore((s) => s.addNepic);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isAdding && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isAdding]);
+
+  const handleCreate = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    setIsAdding(false);
+    setNewName('');
+
+    const result = await window.electronAPI.createNepic(name);
+    addNepic(result.nepic);
+    setActiveNepic(result.nepic.id);
+
+    const store = useTerminalStore.getState();
+    store.addSocketTerminal(
+      result.architectSession.id,
+      result.architectSession.name,
+      null,
+      result.architectSession.cwd,
+      result.architectSession.role,
+    );
+    store.setActive(result.architectSession.id);
+  };
+
+  /** Extract a display label from a nepic slug: strip numeric prefix, take first char uppercase */
+  function nepicLabel(slug: string): string {
+    const withoutPrefix = slug.replace(/^\d+-/, '');
+    return withoutPrefix.charAt(0).toUpperCase();
+  }
 
   return (
     <div
@@ -18,18 +57,16 @@ export function Gutter() {
         alignItems: 'center',
         padding: '12px 0',
         gap: 4,
+        position: 'relative',
       }}
     >
-      {MOCK_NEPICS.map((nepic) => {
+      {nepics.map((nepic) => {
         const isActive = nepic.id === activeNepicId;
-        const isAdd = nepic.label === '+';
         return (
           <div
             key={nepic.id}
             data-testid="nepic-icon"
-            onClick={() => {
-              if (!isAdd) setActiveNepic(nepic.id);
-            }}
+            onClick={() => switchNepic(nepic.id)}
             style={{
               width: 38,
               height: 38,
@@ -37,8 +74,8 @@ export function Gutter() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: isAdd ? 20 : 15,
-              fontWeight: isAdd ? 300 : 600,
+              fontSize: 15,
+              fontWeight: 600,
               cursor: 'pointer',
               color: isActive ? '#e5e5e5' : '#6b7280',
               background: isActive ? '#37373d' : 'transparent',
@@ -49,7 +86,7 @@ export function Gutter() {
             onMouseEnter={(e) => {
               if (!isActive) {
                 e.currentTarget.style.background = '#37373d';
-                e.currentTarget.style.color = isAdd ? '#007acc' : '#cccccc';
+                e.currentTarget.style.color = '#cccccc';
               }
             }}
             onMouseLeave={(e) => {
@@ -59,7 +96,6 @@ export function Gutter() {
               }
             }}
           >
-            {/* Active indicator bar */}
             {isActive && (
               <div
                 style={{
@@ -73,10 +109,86 @@ export function Gutter() {
                 }}
               />
             )}
-            {nepic.label}
+            {nepicLabel(nepic.slug)}
           </div>
         );
       })}
+
+      {/* (+) button */}
+      <div
+        data-testid="nepic-add"
+        onClick={() => setIsAdding(true)}
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 10,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 20,
+          fontWeight: 300,
+          cursor: 'pointer',
+          color: '#6b7280',
+          background: 'transparent',
+          position: 'relative',
+          transition: 'all 0.15s',
+          fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = '#37373d';
+          e.currentTarget.style.color = '#007acc';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.color = '#6b7280';
+        }}
+      >
+        +
+      </div>
+
+      {/* Name input overlay */}
+      {isAdding && (
+        <div
+          style={{
+            position: 'absolute',
+            left: 64,
+            bottom: 12,
+            background: '#252526',
+            border: '1px solid #007acc',
+            borderRadius: 4,
+            padding: '4px 8px',
+            zIndex: 100,
+          }}
+        >
+          <input
+            ref={inputRef}
+            data-testid="nepic-name-input"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCreate();
+              if (e.key === 'Escape') {
+                setIsAdding(false);
+                setNewName('');
+              }
+            }}
+            onBlur={() => {
+              setIsAdding(false);
+              setNewName('');
+            }}
+            placeholder="nepic name"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#e5e5e5',
+              outline: 'none',
+              fontFamily: "'Menlo', monospace",
+              fontSize: 13,
+              width: 160,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

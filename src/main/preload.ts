@@ -97,6 +97,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendLogResponse: (requestId: number, lines: string[]) =>
     ipcRenderer.send('socket:log-response', requestId, lines),
   openFilePath: (filePath: string) => ipcRenderer.send('open-file-path', filePath),
+  createNepic: (name: string) =>
+    ipcRenderer.invoke('nepic:create', name) as Promise<{
+      nepic: { id: string; name: string; slug: string };
+      architectSession: { id: string; name: string; role: string; cwd: string; ccSessionUuid: string };
+    }>,
+  getNepics: () =>
+    ipcRenderer.invoke('get-nepics') as Promise<{ id: string; name: string; slug: string; isActive: boolean }[]>,
+  switchNepic: (nepicId: string) =>
+    ipcRenderer.invoke('nepic:switch', nepicId) as Promise<{
+      architectSessionId: string | null;
+      napkinStatuses: { slug: string; status: string }[];
+    }>,
   getInitialTerminalOpts: () => ipcRenderer.invoke('get-initial-terminal-opts') as Promise<{ name: string; command?: string }>,
   sendUiState: (state: { activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean }) =>
     ipcRenderer.send('ui-state:update', state),

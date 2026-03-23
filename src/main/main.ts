@@ -19,6 +19,7 @@ function getPtyCaptureStream(): fs.WriteStream {
   }
   return ptyCaptureStream;
 }
+import { randomUUID } from 'crypto';
 import {
   initSessionStore,
   closeSessionStore,
@@ -31,9 +32,13 @@ import {
   saveUiState,
   loadUiState,
   getArchitectForNepic,
+  createNepicRow,
+  getAllNepics,
+  setNepicActive,
+  getNepicById,
 } from './session-store';
 import type { UiState } from './session-store';
-import { initNapkinStore, closeNapkinStore, changeNapkinStatus, getAllNapkinStatuses } from './napkin-store';
+import { initNapkinStore, closeNapkinStore, changeNapkinStatus, getAllNapkinStatuses, getNapkinStatusesForNepic } from './napkin-store';
 import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir } from './napkin-watcher';
 import { resolveByName } from './name-resolver';
 import { reconcile } from './reconcile';
@@ -418,6 +423,137 @@ ipcMain.handle('get-resume-data', () => {
   }
 });
 
+// ── Nepic creation ──
+
+function handleNepicCreate(name: string): {
+  nepic: { id: string; name: string; slug: string };
+  architectSession: { id: string; name: string; role: string; cwd: string; ccSessionUuid: string };
+} {
+  // 1. Generate slug: NN-name where NN is next available number
+  const nepicsBase = path.join(projectCwd, '.nap', 'nepics');
+  fs.mkdirSync(nepicsBase, { recursive: true });
+
+  let maxNum = 0;
+  try {
+    for (const d of fs.readdirSync(nepicsBase)) {
+      const match = d.match(/^(\d+)-/);
+      if (match) {
+        maxNum = Math.max(maxNum, parseInt(match[1], 10));
+      }
+    }
+  } catch {
+    // empty or unreadable — start at 0
+  }
+
+  const nn = String(maxNum + 1).padStart(2, '0');
+  const slug = `${nn}-${name}`;
+  const nepicDir = path.join(nepicsBase, slug);
+
+  // 2. Scaffold directories
+  const dirs = [
+    '10-docs',
+    '15-feedback',
+    '20-architects/001-architect',
+    '30-napkins',
+    '40-board/10-draft',
+    '40-board/20-backlog',
+    '40-board/30-todo',
+    '40-board/40-doing',
+    '40-board/50-review',
+    '40-board/60-done',
+  ];
+  for (const d of dirs) {
+    fs.mkdirSync(path.join(nepicDir, d), { recursive: true });
+  }
+
+  // 3. Write architect prompt.md template
+  const promptContent = `You're the architect for nepic "${name}". Read your role and the project context:
+
+1. \`.nap/00-org/10-promise.nap.md\`
+2. \`.nap/00-org/40-roles/\`
+
+Start by understanding what this nepic is about. Create napkins in \`30-napkins/\` for each feature.
+`;
+  fs.writeFileSync(
+    path.join(nepicDir, '20-architects', '001-architect', 'prompt.md'),
+    promptContent,
+  );
+
+  // 4. SQLite: deactivate all nepics, insert new one as active
+  const nepicId = randomUUID();
+  createNepicRow({ id: nepicId, name, slug });
+
+  // 5. Create architect session
+  const architectSession = createSession({
+    name: '001-architect',
+    cwd: nepicDir,
+    role: 'architect',
+    nepicId,
+  });
+
+  // 6. Spawn architect pty
+  const baseCommand = 'claude --verbose "read prompt.md and follow its instructions"';
+  const command = injectSessionId(baseCommand, architectSession.ccSessionUuid!);
+  createPtyProcess(architectSession.id, { command, cwd: nepicDir });
+
+  // 7. Update ui_state
+  saveUiState({
+    activeNepicId: nepicId,
+    activeTerminalId: architectSession.id,
+    sidebarVisible: true,
+  });
+
+  // 8. Restart napkin watcher for new nepic
+  stopNapkinWatcher();
+  if (mainWindow) {
+    startNapkinWatcher(nepicDir, mainWindow);
+  }
+
+  return {
+    nepic: { id: nepicId, name, slug },
+    architectSession: {
+      id: architectSession.id,
+      name: architectSession.name,
+      role: 'architect',
+      cwd: nepicDir,
+      ccSessionUuid: architectSession.ccSessionUuid!,
+    },
+  };
+}
+
+// IPC: create a new nepic
+ipcMain.handle('nepic:create', (_event, name: string) => {
+  return handleNepicCreate(name);
+});
+
+// IPC: switch active nepic
+ipcMain.handle('nepic:switch', async (_event, nepicId: string) => {
+  const nepic = getNepicById(nepicId);
+  if (!nepic) return { architectSessionId: null, napkinStatuses: [] };
+
+  setNepicActive(nepicId);
+
+  const nepicDir = path.join(projectCwd, '.nap', 'nepics', nepic.slug);
+
+  stopNapkinWatcher();
+  if (mainWindow) {
+    await startNapkinWatcher(nepicDir, mainWindow);
+  }
+
+  const napkinStatuses = getNapkinStatusesForNepic(nepicId);
+  const architect = getArchitectForNepic(nepicId);
+
+  return {
+    architectSessionId: architect?.id ?? null,
+    napkinStatuses,
+  };
+});
+
+// IPC: get all nepics
+ipcMain.handle('get-nepics', () => {
+  return getAllNepics();
+});
+
 // IPC: resume an orphaned agent's pty
 ipcMain.on('pty:resume', (_event: IpcMainEvent, id: string, ccSessionUuid: string) => {
   const session = getSession(id);
@@ -694,6 +830,12 @@ app.whenReady().then(async () => {
       reconcile,
       startNapkinWatcher,
       stopNapkinWatcher,
+      createNepicRow,
+      getAllNepics,
+      setNepicActive,
+      getNepicById,
+      getNapkinStatusesForNepic,
+      handleNepicCreate,
       SCHEMA,
       Database,
       getDb: () => database,

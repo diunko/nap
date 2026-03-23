@@ -56,6 +56,12 @@ export interface TerminalMeta {
 
 export type CardViewMode = 'collapsed' | 'focused' | 'extended';
 
+export interface NepicInfo {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 interface TerminalStore {
   terminals: TerminalMeta[];
   activeTerminalId: string | null;
@@ -68,6 +74,9 @@ interface TerminalStore {
   activeNepicId: string;
   browserFilterText: string;
   browserFilterVisible: boolean;
+
+  // Nepics
+  nepics: NepicInfo[];
 
   // Napkin data (live-wired)
   napkins: NapkinEntry[];
@@ -86,11 +95,16 @@ interface TerminalStore {
   addOrphanedTerminal: (id: string, name: string, opts: { role?: string; napkinSlug?: string; ccSessionUuid?: string; parentId?: string; cwd?: string }) => void;
   resumeOrphanedTerminal: (id: string) => void;
 
+  // Nepic actions
+  setNepics: (nepics: NepicInfo[]) => void;
+  addNepic: (nepic: NepicInfo) => void;
+
   // Browser actions
   expandCard: (slug: string) => void;
   collapseCard: () => void;
   extendCard: () => void;
   setActiveNepic: (id: string) => void;
+  switchNepic: (id: string) => void;
   setBrowserFilter: (text: string) => void;
   setBrowserFilterVisible: (visible: boolean) => void;
 
@@ -109,9 +123,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   // Browser state
   focusedCardSlug: null,
   cardViewMode: 'collapsed' as CardViewMode,
-  activeNepicId: 'spaces',
+  activeNepicId: '',
   browserFilterText: '',
   browserFilterVisible: false,
+
+  // Nepics
+  nepics: [],
 
   // Napkin data
   napkins: [],
@@ -308,6 +325,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }));
   },
 
+  // Nepic actions
+  setNepics: (nepics) => set({ nepics }),
+
+  addNepic: (nepic) =>
+    set((state) => ({ nepics: [...state.nepics, nepic] })),
+
   // Browser actions
   expandCard: (slug: string) => {
     const current = get().focusedCardSlug;
@@ -335,6 +358,20 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set({ activeNepicId: id });
   },
 
+  switchNepic: async (id: string) => {
+    if (id === get().activeNepicId) return;
+    set({ activeNepicId: id, napkins: [] });
+    const result = await window.electronAPI.switchNepic(id);
+    // Guard: if another switch superseded this one, bail
+    if (get().activeNepicId !== id) return;
+    for (const { slug, status } of result.napkinStatuses) {
+      get().mergeNapkinStatus(slug, status);
+    }
+    if (result.architectSessionId) {
+      set({ activeTerminalId: result.architectSessionId });
+    }
+  },
+
   setBrowserFilter: (text: string) => {
     set({ browserFilterText: text });
   },
@@ -346,31 +383,45 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   // Napkin actions
   setNapkinData: (data) => {
-    const items = Array.isArray(data) ? data : [data];
-    set((state) => {
-      const napkins = [...state.napkins];
-      for (const item of items) {
-        const idx = napkins.findIndex((n) => n.slug === item.slug);
-        if (idx >= 0) {
-          // Merge: update filesystem fields, preserve status
-          napkins[idx] = {
-            ...napkins[idx],
-            artifacts: item.artifacts,
-            agents: item.agents,
-            napkinBullets: item.napkinBullets,
-          };
-        } else {
-          napkins.push({
+    if (Array.isArray(data)) {
+      // Full scan — replace all napkins (preserving statuses for matching slugs)
+      set((state) => {
+        const napkins = data.map((item) => {
+          const existing = state.napkins.find((n) => n.slug === item.slug);
+          return {
             slug: item.slug,
             artifacts: item.artifacts,
             agents: item.agents,
             napkinBullets: item.napkinBullets,
+            status: existing?.status ?? ('backlog' as NapkinPhase),
+          };
+        });
+        return { napkins };
+      });
+    } else {
+      // Incremental update — merge single item
+      set((state) => {
+        const napkins = [...state.napkins];
+        const idx = napkins.findIndex((n) => n.slug === data.slug);
+        if (idx >= 0) {
+          napkins[idx] = {
+            ...napkins[idx],
+            artifacts: data.artifacts,
+            agents: data.agents,
+            napkinBullets: data.napkinBullets,
+          };
+        } else {
+          napkins.push({
+            slug: data.slug,
+            artifacts: data.artifacts,
+            agents: data.agents,
+            napkinBullets: data.napkinBullets,
             status: 'backlog' as NapkinPhase,
           });
         }
-      }
-      return { napkins };
-    });
+        return { napkins };
+      });
+    }
   },
 
   mergeNapkinStatus: (slug: string, status: string) => {

@@ -76,6 +76,11 @@ export function getAllNapkinStatuses(): { slug: string; status: string }[] {
   return d.prepare('SELECT slug, status FROM napkins').all() as { slug: string; status: string }[];
 }
 
+export function getNapkinStatusesForNepic(nepicId: string): { slug: string; status: string }[] {
+  const d = ensureDb();
+  return d.prepare('SELECT slug, status FROM napkins WHERE nepic_id = ?').all(nepicId) as { slug: string; status: string }[];
+}
+
 export function changeNapkinStatus(slug: string, newStatus: string): void {
   if (!VALID_STATUSES.includes(newStatus as NapkinStatus)) {
     throw new Error(`Invalid status: ${newStatus}. Must be one of: ${VALID_STATUSES.join(', ')}`);
