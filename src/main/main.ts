@@ -393,7 +393,8 @@ ipcMain.handle('get-ui-state', () => {
 // IPC: get initial napkin data (pull-based, for renderer startup)
 ipcMain.handle('get-napkin-data', async () => {
   const napkins = await getActiveNapkinData();
-  const statuses = getAllNapkinStatuses();
+  const napkinSlugs = new Set(napkins.map((n) => n.slug));
+  const statuses = getAllNapkinStatuses().filter((s) => napkinSlugs.has(s.slug));
   const napkinsBasePath = getActiveNapkinsPath();
   return { napkins, statuses, napkinsBasePath };
 });
@@ -907,7 +908,23 @@ app.whenReady().then(async () => {
       }
     });
     if (nepicDirs.length > 0 && mainWindow) {
-      const nepicDir = path.join(nepicsBase, nepicDirs[0]);
+      // Use saved active nepic, then DB active nepic, then last alphabetically
+      let watchSlug = nepicDirs[nepicDirs.length - 1];
+      try {
+        const saved = loadUiState();
+        if (saved?.activeNepicId) {
+          const nepic = getNepicById(saved.activeNepicId);
+          if (nepic && nepicDirs.includes(nepic.slug)) {
+            watchSlug = nepic.slug;
+          }
+        } else {
+          const active = getAllNepics().find((n) => n.isActive);
+          if (active && nepicDirs.includes(active.slug)) {
+            watchSlug = active.slug;
+          }
+        }
+      } catch { /* use default */ }
+      const nepicDir = path.join(nepicsBase, watchSlug);
       startNapkinWatcher(nepicDir, mainWindow);
 
       // Send initial napkin statuses from SQLite
