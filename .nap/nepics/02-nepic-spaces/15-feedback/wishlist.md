@@ -93,3 +93,14 @@ Each bullet is a "what if." Not a todo. Not a spec. An idea with energy — some
   * maybe: poke changes status from done back to running?
   * or: poke works regardless of status, status is just a signal to the architect
   * the agent's CC session has full context — wasting it by locking them out
+
+* What if `nap init` was agentic?
+  * right now: scaffolds templates, static files, done
+  * what if it read the project first?
+    * package.json, README, git history, source structure
+    * generated a tailored architect onboarding
+    * maybe even a first-pass mega napkin draft
+  * the architect starts with understanding, not just templates
+  * but: keep it optional — fast static init is the default, agentic is a flag
+    * `nap init` — fast, static templates
+    * `nap init --smart` — reads project, generates context
