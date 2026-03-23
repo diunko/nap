@@ -1,1 +1,3 @@
 nap.db
+nap.db-shm
+nap.db-wal
