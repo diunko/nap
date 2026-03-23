@@ -523,14 +523,14 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
         const header = ['NAME', 'STATUS', 'PARENT', 'CWD', 'UPTIME'];
         const plainStatus = (s: string) => `\u25cf ${s}`;
         const displayRows = sessions.map((s) => [
-          s.name, plainStatus(s.status), s.parent, s.cwd, s.uptime,
+          s.name || '', plainStatus(s.status || ''), s.parent || '-', s.cwd || '', s.uptime || '',
         ]);
         const coloredRows = sessions.map((s) => [
-          s.name,
-          coloredStatus(s.status),
-          s.parent,
-          s.cwd,
-          s.uptime,
+          s.name || '',
+          coloredStatus(s.status || ''),
+          s.parent || '-',
+          s.cwd || '',
+          s.uptime || '',
         ]);
         printTable(header, coloredRows, displayRows);
       }
