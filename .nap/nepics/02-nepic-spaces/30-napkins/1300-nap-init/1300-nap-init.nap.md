@@ -54,6 +54,8 @@
 
 * where templates come from
   * bundled with the CLI binary
+    * // yeah, just arrange them neatly somewhere in the package,
+    * // so that it's easy to see to edit and tweak
   * self-contained, works offline
   * no network, no template repos
 
@@ -61,16 +63,25 @@
   * `nap init` with no args → derives from directory basename
   * `nap init --name "my-project"` → explicit name
   * name becomes nepic slug: `01-my-project`
+    * // let's hardcode first nepic as v1
 
 * what happens after init
   * user runs `nap open .`
   * app opens, creates nap.db, boots architect pty
+    * // how do we (app?) manage(s) architect sessions?
+    * // do we create nap.db on init or on open?
   * architect reads prompt.md → reads role → explores codebase → ready to brainstorm
   * user and architect jam on the idea using /napkin
 
 * what nap init does NOT do
   * doesn't open the app
   * doesn't create nap.db (app does that on first launch)
+    * // let's discuss. pros and cons? 
+    * // if it exists on first open, i think app will be happy too
+    * // actually, is then first and non-first opens even different?
+    * // i think i like the idea of separating this bootstrapping from open
+    * // so that init does all the bootstrapping
+    * // and open doesn't have any of special bootstrapping code
   * doesn't run any agents
   * doesn't read project context into prompts
     * architect will explore on their own
