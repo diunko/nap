@@ -38,6 +38,8 @@ import {
   saveUiState,
   loadUiState,
   getArchitectForNepic,
+  getArchitectForNepicLaunch,
+  getActiveNepicId,
   createNepicRow,
   getAllNepics,
   setNepicActive,
@@ -65,7 +67,33 @@ const projectCwd = parseArgvFlag('--cwd') || process.cwd();
 
 const initialTerminalName = parseArgvFlag('--name') || 'shell';
 const initialTerminalCommand = parseArgvFlag('--command');
+const architectFlag = process.argv.includes('--architect');
 const socketPath = getServerSocketPath(projectCwd);
+
+// ── Template helpers for nepic creation ──
+
+function findTemplatesDir(): string {
+  // Built/dev: out/main/main.js → out/main/templates/
+  const fromBuilt = path.join(__dirname, 'templates');
+  if (fs.existsSync(fromBuilt)) return fromBuilt;
+  // Dev fallback: out/main/main.js → ../../src/templates/
+  const fromDev = path.join(__dirname, '..', '..', 'src', 'templates');
+  if (fs.existsSync(fromDev)) return fromDev;
+  throw new Error('templates directory not found');
+}
+
+function copyDirRecursive(src: string, dest: string): void {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -371,6 +399,7 @@ ipcMain.on(
 ipcMain.handle('get-initial-terminal-opts', () => ({
   name: initialTerminalName,
   command: initialTerminalCommand,
+  architect: architectFlag,
 }));
 
 // ── UI State tracking ──
@@ -481,17 +510,20 @@ function handleNepicCreate(name: string): {
     fs.mkdirSync(path.join(nepicDir, d), { recursive: true });
   }
 
-  // 3. Write architect prompt.md template
-  const promptContent = `You're the architect for nepic "${name}". Read your role and the project context:
+  // 3. Copy templates (prompt.md, feedback files)
+  const templatesDir = findTemplatesDir();
+  const nepicTemplateDir = path.join(templatesDir, 'nepic');
 
-1. \`.nap/00-org/10-promise.nap.md\`
-2. \`.nap/00-org/40-roles/\`
+  // Copy 15-feedback/ from template
+  copyDirRecursive(
+    path.join(nepicTemplateDir, '15-feedback'),
+    path.join(nepicDir, '15-feedback'),
+  );
 
-Start by understanding what this nepic is about. Create napkins in \`30-napkins/\` for each feature.
-`;
-  fs.writeFileSync(
-    path.join(nepicDir, '20-architects', '001-architect', 'prompt.md'),
-    promptContent,
+  // Copy 20-architects/ from template (includes prompt.md)
+  copyDirRecursive(
+    path.join(nepicTemplateDir, '20-architects'),
+    path.join(nepicDir, '20-architects'),
   );
 
   // 4. SQLite: deactivate all nepics, insert new one as active
@@ -807,23 +839,60 @@ app.whenReady().then(async () => {
     // .nap/nepics/ doesn't exist yet — no reconciliation needed
   }
 
-  // ── Architect auto-resume ──
-  try {
-    const savedState = loadUiState();
-    if (savedState?.activeNepicId) {
-      const architect = getArchitectForNepic(savedState.activeNepicId);
-      if (architect) {
-        resumedArchitectSession = architect;
-        const uuid = architect.ccSessionUuid;
-        const command = uuid ? `claude --verbose --resume ${uuid}` : 'claude --verbose';
-        architectResumeId = uuid ? architect.id : null;
-        architectResumeTime = Date.now();
-        architectResumeCwd = architect.cwd;
-        createPtyProcess(architect.id, { command, cwd: architect.cwd });
+  // ── Architect launch or auto-resume ──
+  if (architectFlag) {
+    // --architect: launch fresh architect Claude session
+    try {
+      const activeNepicId = getActiveNepicId();
+      if (activeNepicId) {
+        const architect = getArchitectForNepicLaunch(activeNepicId);
+        const nepic = getNepicById(activeNepicId);
+        if (architect && nepic) {
+          const promptPath = `.nap/nepics/${nepic.slug}/20-architects/001-architect/prompt.md`;
+          const displayName = initialTerminalName !== 'shell'
+            ? `[Architect] ${initialTerminalName}`
+            : '[Architect]';
+
+          // Update session status to running
+          setSessionStatus(architect.id, 'running');
+
+          // Build command
+          const baseCommand = `claude --verbose "read ${promptPath} and follow its instructions"`;
+          const command = injectSessionId(baseCommand, architect.ccSessionUuid!);
+
+          // Set resumed architect so renderer picks it up
+          resumedArchitectSession = { ...architect, name: displayName, status: 'running' };
+
+          // Spawn pty with project cwd
+          createPtyProcess(architect.id, { command, cwd: projectCwd });
+        } else {
+          console.warn('[architect] No architect session found for active nepic — falling back to shell');
+        }
+      } else {
+        console.warn('[architect] No active nepic found — falling back to shell');
       }
+    } catch {
+      console.warn('[architect] Failed to launch architect — falling back to shell');
     }
-  } catch {
-    // Resume is best-effort — proceed without it
+  } else {
+    // Auto-resume: resume existing architect session
+    try {
+      const savedState = loadUiState();
+      if (savedState?.activeNepicId) {
+        const architect = getArchitectForNepic(savedState.activeNepicId);
+        if (architect) {
+          resumedArchitectSession = architect;
+          const uuid = architect.ccSessionUuid;
+          const command = uuid ? `claude --verbose --resume ${uuid}` : 'claude --verbose';
+          architectResumeId = uuid ? architect.id : null;
+          architectResumeTime = Date.now();
+          architectResumeCwd = architect.cwd;
+          createPtyProcess(architect.id, { command, cwd: architect.cwd });
+        }
+      }
+    } catch {
+      // Resume is best-effort — proceed without it
+    }
   }
 
   // Expose internals for Playwright tests (session-store uses native modules
@@ -839,6 +908,8 @@ app.whenReady().then(async () => {
       saveUiState,
       loadUiState,
       getArchitectForNepic,
+      getArchitectForNepicLaunch,
+      getActiveNepicId,
       changeNapkinStatus,
       getAllNapkinStatuses,
       readNapkinDir,

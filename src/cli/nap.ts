@@ -43,12 +43,13 @@ Bootstrap a project for agent collaboration.
   --user            With --add-skills: install to ~/.claude/skills/ instead
   --help            Show this help
 `,
-  open: `Usage: nap open [path] [--name <name>] [--command <cmd>]
+  open: `Usage: nap open [path] [--architect] [--name <name>] [--command <cmd>]
 
 Launch Nap.app for a project directory.
 
   path              Project directory (default: .)
-  --name <name>     Name for the first terminal (default: shell)
+  -a, --architect   Launch with architect Claude session as first terminal
+  --name <name>     Display name for architect terminal (default: shell)
   --command <cmd>   Command to run in the first terminal (default: login shell)
   --help            Show this help
 
@@ -150,7 +151,9 @@ function parseArgs(argv: string[]): {
 
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg.startsWith('--')) {
+    if (arg === '-a') {
+      flags['architect'] = true;
+    } else if (arg.startsWith('--')) {
       const key = arg.slice(2);
       const next = argv[i + 1];
       if (next && !next.startsWith('--')) {
@@ -470,6 +473,9 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
       }
       if (flags['command'] && typeof flags['command'] === 'string') {
         electronArgs.push('--command', flags['command']);
+      }
+      if (flags['architect']) {
+        electronArgs.push('--architect');
       }
       const child = spawn(electronBin, electronArgs, {
         detached: true,

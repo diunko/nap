@@ -373,7 +373,7 @@ base.describe.serial('T-1000-09: architect prompt.md created', () => {
     await forceCleanup(app, tmpDir);
   });
 
-  base('prompt.md exists in 20-architects/001-architect/ and is non-empty', async () => {
+  base('prompt.md exists in 20-architects/001-architect/ and contains template content', async () => {
     const result = await app.evaluate(({ }, dir) => {
       const { handleNepicCreate, fs, path } = globalThis.__napTest!;
       const res = handleNepicCreate('prompt-test');
@@ -392,13 +392,13 @@ base.describe.serial('T-1000-09: architect prompt.md created', () => {
       return {
         exists,
         nonEmpty: content.length > 0,
-        containsNepicName: content.includes('prompt-test'),
+        containsRoleRef: content.includes('Read your role'),
       };
     }, tmpDir);
 
     expect(result.exists).toBe(true);
     expect(result.nonEmpty).toBe(true);
-    expect(result.containsNepicName).toBe(true);
+    expect(result.containsRoleRef).toBe(true);
   });
 });
 

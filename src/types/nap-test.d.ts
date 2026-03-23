@@ -8,6 +8,8 @@ import type {
   saveUiState,
   loadUiState,
   getArchitectForNepic,
+  getArchitectForNepicLaunch,
+  getActiveNepicId,
   createNepicRow,
   getAllNepics,
   setNepicActive,
@@ -31,6 +33,8 @@ interface NapTestHelpers {
   saveUiState: typeof saveUiState;
   loadUiState: typeof loadUiState;
   getArchitectForNepic: typeof getArchitectForNepic;
+  getArchitectForNepicLaunch: typeof getArchitectForNepicLaunch;
+  getActiveNepicId: typeof getActiveNepicId;
   changeNapkinStatus: typeof changeNapkinStatus;
   getAllNapkinStatuses: typeof getAllNapkinStatuses;
   readNapkinDir: typeof readNapkinDir;

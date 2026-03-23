@@ -229,6 +229,17 @@ function App() {
 
         // Create first terminal with options from --name/--command flags
         window.electronAPI.getInitialTerminalOpts().then((opts) => {
+          // --architect: first terminal is the architect (already added via getResumeData)
+          if (opts.architect) {
+            const state = useTerminalStore.getState();
+            const archTerminal = state.terminals.find((t) => t.role === 'architect');
+            if (archTerminal) {
+              state.setActive(archTerminal.id);
+              return;
+            }
+            // No architect found — fall through to create shell
+          }
+
           const shellId = useTerminalStore.getState().createTerminal(opts.name, undefined, opts.command);
 
           // After first terminal is created, restore active terminal if valid.

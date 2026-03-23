@@ -114,7 +114,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       napkins: { slug: string; absPath: string; entries: { name: string; absPath: string; type: string; files?: { name: string; absPath: string; type: string }[] }[]; napkinBullets: string[] }[];
       statuses: { slug: string; status: string }[];
     }>,
-  getInitialTerminalOpts: () => ipcRenderer.invoke('get-initial-terminal-opts') as Promise<{ name: string; command?: string }>,
+  getInitialTerminalOpts: () => ipcRenderer.invoke('get-initial-terminal-opts') as Promise<{ name: string; command?: string; architect?: boolean }>,
   sendUiState: (state: { activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean }) =>
     ipcRenderer.send('ui-state:update', state),
   getUiState: () => ipcRenderer.invoke('get-ui-state') as Promise<{ activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean } | null>,

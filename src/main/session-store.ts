@@ -155,6 +155,20 @@ export function getArchitectForNepic(nepicId: string): Session | undefined {
   return row ? rowToSession(row) : undefined;
 }
 
+export function getArchitectForNepicLaunch(nepicId: string): Session | undefined {
+  const d = ensureDb();
+  const row = d.prepare(
+    "SELECT * FROM sessions WHERE role = 'architect' AND nepic_id = ? AND status IN ('new', 'running') ORDER BY created_at DESC LIMIT 1",
+  ).get(nepicId) as SessionRow | undefined;
+  return row ? rowToSession(row) : undefined;
+}
+
+export function getActiveNepicId(): string | undefined {
+  const d = ensureDb();
+  const row = d.prepare('SELECT id FROM nepics WHERE is_active = 1 LIMIT 1').get() as { id: string } | undefined;
+  return row?.id;
+}
+
 // ── Nepic operations ──
 
 export function createNepicRow(opts: { id: string; name: string; slug: string }): void {

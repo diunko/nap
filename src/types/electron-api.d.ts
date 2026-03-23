@@ -67,7 +67,7 @@ interface ElectronAPI {
     napkins: { slug: string; absPath: string; entries: { name: string; absPath: string; type: string; files?: { name: string; absPath: string; type: string }[] }[]; napkinBullets: string[] }[];
     statuses: { slug: string; status: string }[];
   }>;
-  getInitialTerminalOpts: () => Promise<{ name: string; command?: string }>;
+  getInitialTerminalOpts: () => Promise<{ name: string; command?: string; architect?: boolean }>;
   sendUiState: (state: { activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean }) => void;
   getUiState: () => Promise<{ activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean } | null>;
   getResumeData: () => Promise<ResumeData>;

@@ -1,0 +1,297 @@
+
+Running 222 tests using 5 workers
+
+  ✓    4 tests/clean-quit.spec.ts:80:7 › T-0700-01: saveUiState writes correct values › saves state and reads back via raw SQL (23ms)
+  ✓    5 tests/architect-resume/architect-resume.spec.ts:113:7 › T-0800-01: find architect session for active nepic › query returns architect matching active nepic, includes ccSessionUuid (35ms)
+  ✓    2 tests/electron/terminal.spec.ts:31:7 › Electron Terminal — IPC Bridge › T-0100-01: pty data reaches xterm through IPC bridge (49ms)
+  ✓    6 tests/clean-quit.spec.ts:101:7 › T-0700-01: saveUiState writes correct values › second save upserts (no duplicate row) (6ms)
+  ✓    7 tests/architect-resume/architect-resume.spec.ts:155:7 › T-0800-01: find architect session for active nepic › query does not return non-architect sessions (9ms)
+  ✓    9 tests/clean-quit.spec.ts:125:7 › T-0700-01: saveUiState writes correct values › saves null activeTerminalId without error (7ms)
+
+  ✓   11 tests/clean-quit.spec.ts:162:7 › T-0700-02: loadUiState reads from ui_state table › reads inserted row with correct types (9ms)
+  ✓   12 tests/clean-quit.spec.ts:184:7 › T-0700-02: loadUiState reads from ui_state table › sidebarVisible=1 returns true (boolean, not integer) (2ms)
+  ✓   13 tests/clean-quit.spec.ts:198:7 › T-0700-02: loadUiState reads from ui_state table › validates active_terminal_id against sessions — returns null for missing session (1ms)
+  ✓    1 tests/cmd-w-close/close-active.spec.ts:44:1 › T-0700-08: pty:close removes terminal end-to-end (2.4s)
+  ✓   14 tests/clean-quit.spec.ts:211:7 › T-0700-02: loadUiState reads from ui_state table › validates active_terminal_id — returns ID when session exists (1ms)
+  ✓   10 tests/architect-resume/architect-resume.spec.ts:190:7 › T-0800-02: resume spawn uses claude --resume <uuid> › startup spawns pty with --resume flag when cc_session_uuid exists (1.3s)
+
+  ✓    8 tests/electron/terminal.spec.ts:53:7 › Electron Terminal — IPC Bridge › T-0100-02: xterm input reaches pty through IPC bridge (reverse path) (1.5s)
+  ✓   18 tests/electron/terminal.spec.ts:86:7 › Electron Terminal — IPC Bridge › T-0100-03: resize propagates from window to pty (345ms)
+  -   19 tests/electron/terminal.spec.ts:143:8 › Electron Terminal — IPC Bridge › T-0100-06: high-throughput output does not choke IPC bridge — scrollback is 100k, assertion obsolete
+  ✓   16 tests/clean-quit.spec.ts:243:7 › T-0700-03: first launch — no ui_state row › loadUiState returns null when table is empty (8ms)
+  ✓   20 tests/electron/terminal.spec.ts:181:7 › Electron Terminal — IPC Bridge › T-0100-07: WebGL addon initialization (happy path) (8ms)
+  ✓   21 tests/clean-quit.spec.ts:253:7 › T-0700-03: first launch — no ui_state row › no crash — app launches fine without ui_state row (2ms)
+  ✓   15 tests/cmd-w-close/close-active.spec.ts:112:1 › T-0700-09: terminal:close-active IPC triggers closeActiveTerminal (1.5s)
+  ✓   22 tests/electron/terminal.spec.ts:216:7 › Electron Terminal — Pty Lifecycle › T-0100-04: pty exits but window stays alive (515ms)
+  ✓   17 tests/architect-resume/architect-resume.spec.ts:244:7 › T-0800-03: no cc_session_uuid → fresh claude session › startup spawns fresh claude when cc_session_uuid is null (2.0s)
+  ✓    3 tests/integration-stress/integration.spec.ts:163:7 › T-0500-01: full CLI command sequence runs unattended › full integration sequence (3.4s)
+
+  ✓   23 tests/clean-quit.spec.ts:274:7 › T-0700-04: before-quit saves renderer state › quit persists tracked UI state to db (1.2s)
+  ✓   24 tests/integration-stress/stress.spec.ts:158:7 › T-0500-03: 10 concurrent terminals with high-output commands › spawn 10, all complete, all have output (166ms)
+  ✓   25 tests/electron/terminal.spec.ts:274:7 › Electron Terminal — Window Close Cleanup › T-0100-05: window close kills pty cleanly (2.0s)
+  -   30 tests/electron/terminal.spec.ts:351:6 › T-0100-08: native module build (node-pty + electron-rebuild)
+  ✓   26 tests/architect-resume/architect-resume.spec.ts:299:7 › T-0800-04: expired CC session falls back to fresh › pty exits quickly → fallback spawns fresh claude (2.3s)
+
+  ✓   28 tests/clean-quit.spec.ts:312:7 › T-0700-05: restored UI state applies on launch › sidebar=false round-trips through quit/relaunch (2.4s)
+
+  ✓   32 tests/architect-resume/architect-resume.spec.ts:356:7 › T-0800-05: orphaned session detection › session with status=running and no live pty appears as orphaned in renderer (1.2s)
+
+  ✓   27 tests/integration-stress/integration.spec.ts:259:7 › T-0500-02: parent-child chain three levels deep › shell -> child -> grandchild done chain propagates correctly (3.1s)
+  ✓   33 tests/clean-quit.spec.ts:368:7 › T-0700-06: stale terminal ID falls back to first terminal › nonexistent terminal ID → falls back to architect (1.2s)
+  ✓   29 tests/integration-stress/stress.spec.ts:226:7 › T-0500-04: rapid terminal switching — no content corruption › 10 terminals with markers, rapid switching, correct content per terminal (2.9s)
+  ✓   31 tests/layout-mock.spec.ts:38:1 › T-0400-02: buffer preserved across terminal switch in three-column layout (2.2s)
+  ✓   35 tests/integration-stress/integration.spec.ts:347:7 › T-0500-08: integration test is idempotent › sequence runs twice with same names — no stale conflicts (273ms)
+  ✓   34 tests/architect-resume/architect-resume.spec.ts:420:7 › T-0800-07: multiple architects — resume the active one › only the running architect is resumed, done architect is not (2.2s)
+
+  ✓   38 tests/layout-mock.spec.ts:83:1 › T-0400-03: Cmd+B toggles browser column, gutter stays visible (1.9s)
+  ✓   39 tests/live-wiring/live-wiring.spec.ts:91:7 › T-0600-01: napkin:update IPC populates store › store.napkins populated with data matching fixture slugs (523ms)
+  ✓   36 tests/clean-quit.spec.ts:407:7 › T-0700-07: sidebar_visible full round-trip › sidebar default=true → toggle false → quit → relaunch → still false (2.5s)
+  ✓   40 tests/architect-resume/architect-resume.spec.ts:484:7 › T-0800-08: resumed architect becomes active terminal › activeTerminalId points to resumed architect after launch (1.3s)
+
+  ✓   42 tests/live-wiring/live-wiring.spec.ts:153:7 › T-0600-02: status merge with filesystem data › store napkin has both artifacts (from fs) and status (from SQLite) (825ms)
+  ✓   41 tests/layout-mock.spec.ts:145:1 › T-0400-05: Cmd+K filter shows matching napkins (1.7s)
+
+  ✓   43 tests/clean-quit.spec.ts:467:7 › T-0700-08: save does not block pty shutdown › quit with 2 terminals completes in <3s, both ptys exit (1.2s)
+  ✓   45 tests/live-wiring/live-wiring.spec.ts:217:7 › T-0600-03: agent status change via IPC › socket:status-changed updates terminal status in store (35ms)
+  ✓   44 tests/architect-resume/architect-resume.spec.ts:537:7 › T-0800-09: orphaned agent click to resume › resumeOrphanedTerminal sends pty:resume IPC and clears orphaned flag (1.2s)
+
+  ✓   47 tests/clean-quit.spec.ts:515:7 › T-0700-09: save happens before closeDatabase › ui_state row exists in db file after quit (proves save before close) (1.1s)
+
+  ✓   49 tests/architect-resume/architect-resume.spec.ts:611:7 › T-0800-10: non-architect agents are NOT auto-resumed › only architect auto-resumed; fs-eng and test-eng become orphaned (1.3s)
+  ✓   46 tests/layout-mock.spec.ts:203:1 › T-0400-06: terminal cols track window resize with three columns (2.2s)
+  ✓   50 tests/clean-quit.spec.ts:551:7 › T-0700-10: invalid nepic ID in ui_state › app launches normally with invalid active_nepic_id (1.1s)
+  ✓   48 tests/live-wiring/live-wiring.spec.ts:287:7 › T-0600-04: NapkinBrowser renders from store › rendered napkin names match real filesystem, not mock data (830ms)
+  ✓   51 tests/architect-resume/architect-resume.spec.ts:711:7 › T-0800-11: no prior sessions — fresh launch › app launches normally, default shell terminal exists, no --resume in ptys (5ms)
+
+  ✓   54 tests/live-wiring/live-wiring.spec.ts:349:7 › T-0600-05: sidebar phase badges from SQLite › napkin card phase badge text matches SQLite status (817ms)
+
+  ✓   53 tests/clean-quit.spec.ts:593:7 › T-0700-11: existing quit flow regression › quit with 2 terminals: ptys killed, socket cleaned, db exists (2.3s)
+  ✓   55 tests/architect-resume/architect-resume.spec.ts:745:7 › T-0800-12: full quit/relaunch — architect + UI state › architect resumed, sidebar hidden, activeTerminalId restored after relaunch (2.3s)
+  ✓   52 tests/layout-mock.spec.ts:235:1 › T-0400-07: scroll lock survives sidebar toggle (2.6s)
+  ✓   56 tests/live-wiring/live-wiring.spec.ts:411:7 › T-0600-06: Cmd+` toggles kanban overlay › kanban overlay toggles on/off via IPC (416ms)
+  ✓   58 tests/napkin-watcher.spec.ts:65:7 › T-0500-01: readNapkinDir — artifact extensions › returns correct artifact extensions, ignores unknown files (111ms)
+  ✓   59 tests/layout-mock.spec.ts:304:1 › T-0400-09: setActive with agent terminalId switches terminal (1.3s)
+  ✓   57 tests/multi-terminal/multi-terminal.spec.ts:39:1 › T-0200-01: buffer preserved across terminal switch (1.7s)
+  ✓   60 tests/live-wiring/live-wiring.spec.ts:479:7 › T-0600-11: kanban navigation › navigation handler dismisses overlay, focuses card, switches terminal (428ms)
+  ✓   61 tests/napkin-watcher.spec.ts:102:7 › T-0500-02: readNapkinDir — agent dir names › returns agent dir names, ignores stray files in agents/ (60ms)
+  ✓   63 tests/nepic-creation/nepic-creation.spec.ts:35:7 › T-1000-01: directory scaffold › all required subdirs created for new nepic (21ms)
+  ✓   62 tests/multi-terminal/multi-terminal.spec.ts:90:1 › T-0200-02: WebGL context survives reparent (1.2s)
+  ✓   65 tests/napkin-watcher.spec.ts:137:7 › T-0500-03: readNapkinDir — napkin bullets › extracts top-level * lines, strips prefix, ignores nested/plain (54ms)
+  ✓   64 tests/live-wiring/live-wiring.spec.ts:555:7 › T-0600-12: breadcrumb with real data › breadcrumb segments contain napkin slug and agent name (330ms)
+  ✓   37 tests/integration-stress/stress.spec.ts:346:7 › T-0500-05: 10 WebGL contexts — no context lost › 10 terminals with WebGL, no context loss after switching (10.4s)
+  -   70 tests/integration-stress/stress.spec.ts:456:8 › T-0500-06: memory stays bounded with scrollback pressure › 10 terminals filling scrollback — memory < 500MB, scrollback evicted — scrollback is 100k, assertion obsolete
+  ✓   66 tests/nepic-creation/nepic-creation.spec.ts:92:7 › T-1000-02: slug generation — NN is next available › pre-existing 01-first, 02-second → third gets 03-third (46ms)
+  ✓   67 tests/multi-terminal/multi-terminal.spec.ts:183:1 › T-0200-03: background terminal receives pty output (1.3s)
+  ✓   72 tests/nepic-creation/nepic-creation.spec.ts:125:7 › T-1000-03: first nepic ever › empty nepics dir → slug is 01-genesis (8ms)
+  ✓   69 tests/live-wiring/live-wiring.spec.ts:614:7 › T-0600-13: breadcrumb click S › clicking S breadcrumb switches to architect terminal (547ms)
+  ✓   68 tests/napkin-watcher.spec.ts:181:7 › T-0500-04: readNapkinDir — missing .nap.md › returns empty napkinBullets when .nap.md does not exist (138ms)
+  ✓   74 tests/nepic-creation/nepic-creation.spec.ts:152:7 › T-1000-04: SQLite nepic row inserted › new nepic row has correct fields and is_active=1 (29ms)
+  ✓   75 tests/live-wiring/live-wiring.spec.ts:677:7 › T-0600-14: breadcrumb click napkin-name › clicking napkin name in breadcrumb sets focusedCardSlug (529ms)
+  ✓   76 tests/napkin-watcher.spec.ts:212:7 › T-0500-05: readNapkinDir — no agents/ dir › returns empty agents when agents/ does not exist (109ms)
+  ✓   77 tests/nepic-creation/nepic-creation.spec.ts:196:7 › T-1000-05: previous nepic deactivated › old nepic is_active=0, new nepic is_active=1, exactly 1 active (21ms)
+  ✓   71 tests/integration-stress/stress.spec.ts:549:7 › T-0500-07: poke delivery under contention › 3 simultaneous pokes to one target — all delivered, no interleaving (2.2s)
+  ✓   81 tests/nepic-switching/nepic-switching.spec.ts:45:7 › T-1100-01: SQLite is_active toggle › switch to B: A deactivated, B active, exactly 1 active (14ms)
+  ✓   73 tests/multi-terminal/multi-terminal.spec.ts:235:1 › T-0200-04: rapid switching preserves correct state (2.2s)
+  ✓   79 tests/napkin-watcher.spec.ts:248:7 › T-0500-06: startup full scan › sends all 3 napkins as array via IPC on startNapkinWatcher (511ms)
+  ✓   80 tests/nepic-creation/nepic-creation.spec.ts:237:7 › T-1000-06: multiple previous nepics all deactivated › 3 old nepics deactivated, only new one active (19ms)
+  ✓   78 tests/live-wiring/live-wiring.spec.ts:739:7 › T-0600-15: fs.watch artifact update › writing .test.md file updates store artifacts in real-time (750ms)
+  ✓   82 tests/nepic-switching/nepic-switching.spec.ts:92:7 › T-1100-06: ptys survive switch › A architect pty still alive after switching to B (28ms)
+  ✓   87 tests/nepic-switching/nepic-switching.spec.ts:143:7 › T-1100-02: watcher switches to new nepic dir › after switch, renderer gets B napkins, not A napkins (40ms)
+  ✓   85 tests/nepic-creation/nepic-creation.spec.ts:286:7 › T-1000-07: architect session created › session row has role=architect, nepic_id, ccSessionUuid, correct cwd (17ms)
+  ✓   88 tests/nepic-switching/nepic-switching.spec.ts:237:7 › T-1100-04: terminal switches to new architect › activeTerminalId changes to B architect after switch (60ms)
+  ✓   83 tests/multi-terminal/multi-terminal.spec.ts:316:1 › T-0200-05: sidebar toggle changes terminal cols (1.6s)
+  ✓   86 tests/live-wiring/live-wiring.spec.ts:814:7 › T-0600-16: new agent dir via fs.watch › creating agent dir updates store agents list (743ms)
+  ✓   90 tests/nepic-switching/nepic-switching.spec.ts:312:7 › T-1100-10: sidebar shows new nepic napkins › store napkins only contain B slugs after switch, no A slugs (51ms)
+  ✓   89 tests/nepic-creation/nepic-creation.spec.ts:335:7 › T-1000-08: architect pty spawned › pty exists for architect session ID, command includes --session-id (16ms)
+  ✓   84 tests/napkin-watcher.spec.ts:367:7 › T-0500-07: fs.watch — file create › creating a file triggers IPC update with correct slug (1.3s)
+  ✓   93 tests/nepic-switching/nepic-switching.spec.ts:398:7 › T-1100-07: gutter highlight moves › activeNepicId = B after switch, gutter indicator on B icon (358ms)
+  ✓   91 tests/multi-terminal/multi-terminal.spec.ts:362:1 › T-0200-06: pty exit sets status to exited, keeps card (1.4s)
+  ✘   94 tests/nepic-creation/nepic-creation.spec.ts:376:7 › T-1000-09: architect prompt.md created › prompt.md exists in 20-architects/001-architect/ and contains template content (21ms)
+  ✓   96 tests/nepic-switching/nepic-switching.spec.ts:479:7 › T-1100-05: no-architect edge case › switch to nepic with no architect — no crash, activeTerminalId stays valid (64ms)
+  ✓   98 tests/nepic-switching/nepic-switching.spec.ts:566:7 › T-1100-03: napkin statuses from SQLite › after switch, store napkins have status from SQLite (33ms)
+  ✓   97 tests/poke-nap-done/poke-nap-done.spec.ts:202:7 › T-0400: poke, nap, done › T-0400-01: poke delivers message to cat terminal (10ms)
+  ✓  100 tests/poke-nap-done/poke-nap-done.spec.ts:225:7 › T-0400: poke, nap, done › T-0400-01: poke delivers special characters without shell interpretation (10ms)
+  ✓   92 tests/live-wiring/live-wiring.spec.ts:884:7 › T-0600-17: kanban doesn't interfere with terminal › terminal receives output while kanban is open, cols unchanged (844ms)
+  ✓   95 tests/napkin-watcher.spec.ts:424:7 › T-0500-08: fs.watch — file modify › modifying .nap.md delivers updated napkinBullets count (1.3s)
+  ✓   99 tests/nepic-switching/nepic-switching.spec.ts:650:7 › T-1100-08: ui_state persistence › ui_state.active_nepic_id = B after switch (267ms)
+  ✓  105 tests/nepic-switching/nepic-switching.spec.ts:741:7 › T-1100-09: round-trip preserves state › switch A→B→A: A napkins restored, A architect active (88ms)
+  ✓  103 tests/polish/polish.spec.ts:192:7 › T-0600-01: per-project socket › socket lives at .nap/sock inside project dir, CLI connects (969ms)
+  ✓  104 tests/nepic-creation/nepic-creation.spec.ts:421:7 › T-1000-10: ui_state updated › ui_state.active_nepic_id = new nepic id (27ms)
+  ✓  106 tests/nepic-switching/nepic-switching.spec.ts:860:7 › T-1100-12: same nepic click is no-op › clicking active nepic does not trigger IPC or clear napkins (340ms)
+  ✓  102 tests/napkin-watcher.spec.ts:475:7 › T-0500-09: fs.watch — file delete › deleting .spec.md removes it from artifacts list (1.3s)
+  ✓  108 tests/nepic-creation/nepic-creation.spec.ts:460:7 › T-1000-11: gutter re-renders with new icon › store activeNepicId matches, gutter shows new icon (356ms)
+  ✓  101 tests/poke-nap-done/poke-nap-done.spec.ts:250:7 › T-0400: poke, nap, done › T-0400-02: poke queue preserves FIFO order (3.1s)
+  ✓  112 tests/poke-nap-done/poke-nap-done.spec.ts:308:7 › T-0400: poke, nap, done › T-0400-03: poke to exited terminal returns error (26ms)
+  ✓  113 tests/poke-nap-done/poke-nap-done.spec.ts:330:7 › T-0400: poke, nap, done › T-0400-03: poke to done terminal returns error (8ms)
+  ✓  114 tests/poke-nap-done/poke-nap-done.spec.ts:360:7 › T-0400: poke, nap, done › T-0400-07: nap done sets status, pokes parent, stores message (14ms)
+  ✓  115 tests/poke-nap-done/poke-nap-done.spec.ts:409:7 › T-0400: poke, nap, done › T-0400-07: done succeeds even when parent has exited (21ms)
+  ✓  111 tests/nepic-creation/nepic-creation.spec.ts:526:7 › T-1000-12: architect terminal appears and is active › store has architect terminal entry, it is activeTerminalId, xterm exists (327ms)
+  ✓  107 tests/polish/polish.spec.ts:214:7 › T-0600-04: two projects simultaneously › each nap ps shows only its own sessions (3.1s)
+  ✓  116 tests/poke-nap-done/poke-nap-done.spec.ts:452:7 › T-0400: poke, nap, done › T-0400-09: second nap done is no-op — message not overwritten, parent not re-poked (1.0s)
+  ✓  119 tests/poke-nap-done/poke-nap-done.spec.ts:511:7 › T-0400: poke, nap, done › T-0400-05: nap nap on already-done terminal returns immediately (29ms)
+  ✓  109 tests/nepic-switching/nepic-switching.spec.ts:945:7 › T-1100-11: rapid switching stability › A→B→C→A rapid fire settles on A (2.0s)
+  ✓  110 tests/napkin-watcher.spec.ts:523:7 › T-0500-10: debounce batches rapid changes › 5 rapid file writes produce exactly 1 IPC update (1.1s)
+  ✓  117 tests/nepic-creation/nepic-creation.spec.ts:593:7 › T-1000-13: previous nepic sessions keep running › first nepic pty still alive after second nepic created (11ms)
+  ✘  118 tests/polish/polish.spec.ts:256:7 › nap open › T-0600-08: nap open spawns Electron detached, socket becomes live (1.1s)
+  ✓  121 tests/reconciliation/reconciliation.spec.ts:59:7 › T-0900-01: happy path — all dirs match SQLite › all existing rows preserved, no new rows, no rows hidden (6ms)
+  ✓  123 tests/nepic-creation/nepic-creation.spec.ts:641:7 › T-1000-14: duplicate name gets distinct slug › two nepics named "auth" get different NN prefixes, both dirs exist (10ms)
+  ✓  124 tests/reconciliation/reconciliation.spec.ts:126:7 › T-0900-02: new napkin dir — no SQLite entry › new napkin row inserted with status=backlog and correct nepic_id (6ms)
+  ✓  125 tests/polish/polish.spec.ts:286:7 › nap open › T-0600-09: nap open when already running → error (1.2s)
+  ✓  122 tests/napkin-watcher.spec.ts:572:7 › T-0500-11: debounce per-napkin-dir › changes to different napkins fire independent updates (1.3s)
+  ✓  126 tests/nepic-creation/nepic-creation.spec.ts:689:7 › T-1000-15: missing .nap/ dir created on demand › nepic creation succeeds even without pre-existing .nap/ dir (9ms)
+  ✓  120 tests/poke-nap-done/poke-nap-done.spec.ts:542:7 › T-0400: poke, nap, done › T-0400-04: nap nap blocks until done, then exits 0 with done-message (3.0s)
+  ✓  130 tests/nepic-creation/nepic-creation.spec.ts:740:7 › T-1000-16: napkin watcher starts for new nepic › new napkin dir triggers napkin:update in renderer (231ms)
+  ✓  127 tests/reconciliation/reconciliation.spec.ts:173:7 › T-0900-03: new agent dir — no SQLite session › new session row created with correct defaults (5ms)
+  ✘  128 tests/polish/polish.spec.ts:306:7 › nap open › T-0600-10: nap open ./relative resolves to absolute (1.1s)
+  ✓  129 tests/napkin-watcher.spec.ts:625:7 › T-0500-12: empty 30-napkins/ › empty napkins dir sends empty array, no crash (518ms)
+  ✓  132 tests/nepic-creation/nepic-creation.spec.ts:795:7 › T-1000-17: e2e — (+) click through architect terminal › click (+), enter name, architect terminal appears with active icon (218ms)
+  ✓  133 tests/reconciliation/reconciliation.spec.ts:220:7 › T-0900-04: orphaned napkin — SQLite row, no dir › row preserved with hidden=1, original fields intact (10ms)
+  ✓  135 tests/polish/polish.spec.ts:358:7 › T-0600 shared app: log, ps, links, filter › T-0600-11: nap log dumps terminal scrollback (89ms)
+  ✓  138 tests/polish/polish.spec.ts:381:7 › T-0600 shared app: log, ps, links, filter › T-0600-12: nap log piped to tail produces correct output (93ms)
+  ✓  139 tests/polish/polish.spec.ts:419:7 › T-0600 shared app: log, ps, links, filter › T-0600-13: nap log ghost → error with session name (28ms)
+  ✓  140 tests/polish/polish.spec.ts:427:7 › T-0600 shared app: log, ps, links, filter › T-0600-14: nap ps shows colored status dots per session status (64ms)
+  ✓  141 tests/polish/polish.spec.ts:467:7 › T-0600 shared app: log, ps, links, filter › T-0600-15: nap ps --json output is valid JSON with no ANSI (27ms)
+  ✓  142 tests/polish/polish.spec.ts:483:7 › T-0600 shared app: log, ps, links, filter › T-0600-16: nap ps table columns aligned across varying name lengths (28ms)
+T-0600-18: xterm internals inaccessible, skipping link activation test
+  ✓  143 tests/polish/polish.spec.ts:507:7 › T-0600 shared app: log, ps, links, filter › T-0600-18: file link provider produces links for file paths in terminal (23ms)
+  ✓  136 tests/scroll-lock/scroll-lock.spec.ts:65:7 › Scroll Lock — Viewport Behavior › T9: follow lock keeps viewport at bottom during output (18ms)
+  ✓  145 tests/scroll-lock/scroll-lock.spec.ts:95:7 › Scroll Lock — Viewport Behavior › T10: follow lock overrides scroll-up on next write (8ms)
+  ✓  146 tests/scroll-lock/scroll-lock.spec.ts:137:7 › Scroll Lock — Viewport Behavior › T11: read lock pins viewport during output (109ms)
+  ✓  147 tests/scroll-lock/scroll-lock.spec.ts:173:7 › Scroll Lock — Viewport Behavior › T12: read lock allows non-write scrolling and updates locked position (217ms)
+  ✓  144 tests/polish/polish.spec.ts:596:7 › T-0600 shared app: log, ps, links, filter › T-0600-20: Cmd+K opens filter, typing "sqlite" shows only matching napkin cards (431ms)
+  ✓  148 tests/scroll-lock/scroll-lock.spec.ts:221:7 › Scroll Lock — Viewport Behavior › T17: follow lock survives resize (216ms)
+  -  150 tests/scroll-lock/scroll-lock.spec.ts:261:8 › Scroll Lock — Viewport Behavior › T18: read lock survives resize
+  ✓  151 tests/scroll-lock/scroll-lock.spec.ts:306:7 › Scroll Lock — Viewport Behavior › T19: scrollOnUserInput restored after follow → off (5ms)
+  ✓  149 tests/polish/polish.spec.ts:640:7 › T-0600 shared app: log, ps, links, filter › T-0600-21: Escape clears filter and shows all napkin cards (208ms)
+  ✓  137 tests/reconciliation/reconciliation.spec.ts:284:7 › T-0900-05: orphaned session — SQLite row, no agent dir › session row preserved with hidden=1, UUID and metadata intact (7ms)
+  ✓  131 tests/poke-nap-done/poke-nap-done.spec.ts:577:7 › T-0400: poke, nap, done › T-0400-06: nap nap timeout exits 1 without killing target (3.0s)
+  ✓  152 tests/scroll-lock/scroll-lock.spec.ts:333:7 › Scroll Lock — Viewport Behavior › T20: follow lock holds at bottom during burst writes (7ms)
+  ✓  134 tests/napkin-watcher.spec.ts:680:7 › T-0500-13: 30-napkins/ doesn't exist yet › no crash on start, update fires when dir appears (1.8s)
+  ✓  153 tests/polish/polish.spec.ts:652:7 › T-0600 shared app: log, ps, links, filter › T-0600-22: clicking a filtered napkin card focuses it (415ms)
+  ✓  154 tests/reconciliation/reconciliation.spec.ts:351:7 › T-0900-06: branch switch round-trip › orphan → reconnect restores all metadata, clears hidden (29ms)
+  ✓  158 tests/reconciliation/reconciliation.spec.ts:444:7 › T-0900-07: empty 30-napkins/ — no dirs at all › no crash, pre-existing rows orphaned (9ms)
+  ✓  156 tests/scroll-lock/scroll-lock.spec.ts:378:7 › Scroll Lock — Cmd+G Toggle › T13: single Cmd+G toggles off → follow, second (after 500ms) toggles follow → off (718ms)
+  ✓  159 tests/snapshot-redesign.spec.ts:98:7 › T-1200-01: readNapkinDir returns all files › entries include arbitrary files (random.txt, notes.log) as type=file (75ms)
+  ✓  160 tests/reconciliation/reconciliation.spec.ts:508:7 › T-0900-08: missing 30-napkins/ — dir doesn't exist › no crash, graceful ENOENT handling (3ms)
+  ✓  157 tests/napkin-watcher.spec.ts:762:7 › T-0500-14: new napkin dir at runtime › new napkin dir triggers IPC update with correct data (1.3s)
+  ✓  163 tests/reconciliation/reconciliation.spec.ts:547:7 › T-0900-09: agent dir with no prompt.md › session row created for empty agent dir (6ms)
+  ✓  161 tests/scroll-lock/scroll-lock.spec.ts:398:7 › Scroll Lock — Cmd+G Toggle › T14: rapid double Cmd+G goes off → follow → read (761ms)
+  ✓  162 tests/snapshot-redesign.spec.ts:135:7 › T-1200-02: readNapkinDir sets absPath on every entry › every entry (file, agent, dir) has correct absolute absPath (55ms)
+  ✓  165 tests/reconciliation/reconciliation.spec.ts:603:7 › T-0900-10: reconciliation runs before UI renders › SQLite has rows for pre-existing dirs by first window load (203ms)
+  ✓  155 tests/poke-nap-done/poke-nap-done.spec.ts:624:7 › T-0400-10: full spawn-wait-receive loop › parent starts child, nap nap child, child done, parent receives result (2.1s)
+  ✓  164 tests/napkin-watcher.spec.ts:808:7 › T-0500-15: IPC payload shape › readNapkinDir returns NapkinSnapshot { slug, absPath, entries, napkinBullets } (78ms)
+  ✓  167 tests/snapshot-redesign.spec.ts:182:7 › T-1200-03: agent dirs promoted as type=agent with files › agents/ children are NapkinAgentEntry with files[], agents/ dir itself absent (90ms)
+Socket round-trip p95: 1ms, median: 0ms
+  ✓  166 tests/scroll-lock/scroll-lock.spec.ts:438:7 › Scroll Lock — Store Mirror › T15: store.scrollLockModes reflects mode after IPC toggle (724ms)
+  ✓  170 tests/socket-cli/socket-cli.spec.ts:85:7 › T-0300-01: socket round-trip latency › socket-only p95 latency < 50ms over 100 requests (27ms)
+  ✓  168 tests/reconciliation/reconciliation.spec.ts:651:7 › T-0900-11: performance — 40 napkins x 3 agents < 100ms › reconciliation of 120 dirs completes under 100ms (73ms)
+  ✓  169 tests/napkin-watcher.spec.ts:858:7 › T-0500-16: watcher stops on app quit › app exits cleanly with active watcher (exit code 0) (839ms)
+  ✓  171 tests/snapshot-redesign.spec.ts:226:7 › T-1200-04: non-agent subdirs as type=dir › research/ subdir captured as NapkinDirEntry with files (121ms)
+  ✓  173 tests/socket-cli/socket-cli.spec.ts:107:7 › T-0300-03: stale socket detection on app launch › app replaces stale socket file and starts successfully (864ms)
+  ✓  176 tests/snapshot-redesign.spec.ts:261:7 › T-1200-05: napkinBullets extracted from .nap.md › top-level bullets extracted, nested excluded (132ms)
+  ✓  178 tests/snapshot-redesign.spec.ts:290:7 › T-1200-06: empty napkin dir › empty dir returns entries=[], napkinBullets=[], absPath set (62ms)
+  ✓  172 tests/scroll-lock/scroll-lock.spec.ts:479:7 › Scroll Lock — Per-Terminal Isolation › T16: scroll lock on terminal A does not affect terminal B (317ms)
+  ✓  174 tests/reconciliation/reconciliation.spec.ts:700:7 › T-0900-12: never deletes rows, never deletes files › row counts unchanged after orphaning — hidden, not deleted (27ms)
+  ✓  177 tests/socket-cli/socket-cli.spec.ts:144:7 › T-0300-04: two app instances detect each other › second instance detects first and quits (1.0s)
+  ✓  180 tests/sqlite-setup.spec.ts:110:7 › T-0200-01: SQLite store — interface parity › createSession returns Session with correct types (4ms)
+  ✓  183 tests/sqlite-setup.spec.ts:124:7 › T-0200-01: SQLite store — interface parity › getSession returns Session for existing, undefined for missing (3ms)
+  ✓  184 tests/sqlite-setup.spec.ts:142:7 › T-0200-01: SQLite store — interface parity › getAllSessions returns Session[] (5ms)
+  ✓  185 tests/sqlite-setup.spec.ts:155:7 › T-0200-01: SQLite store — interface parity › removeSession + getSession returns undefined (2ms)
+  ✓  175 tests/napkin-watcher.spec.ts:913:7 › T-0500-17: agent dir at runtime › new agent dir appears in agents list via IPC (1.3s)
+  ✓  181 tests/status-api.spec.ts:104:7 › T2: changeNapkinStatus — SQLite update, existing napkin › existing napkin row updated to new status (5ms)
+  ✓  186 tests/sqlite-setup.spec.ts:165:7 › T-0200-01: SQLite store — interface parity › optional fields: SQL null → TS undefined; parentId stays null (3ms)
+  ✓  179 tests/snapshot-redesign.spec.ts:326:7 › T-1200-10: NapkinBrowser renders arbitrary files in focused view › both random.txt and .nap.md visible as * bullet items when card focused (323ms)
+  ✓  182 tests/socket-cli/socket-cli.spec.ts:231:7 › T-0300-05: NAP_SESSION_ID propagation › terminal pty env contains NAP_SESSION_ID matching its id (27ms)
+  ✓  191 tests/socket-cli/socket-cli.spec.ts:264:7 › T-0300-05: NAP_SESSION_ID propagation › nap start child gets parentId = caller terminal id (72ms)
+  ✓  188 tests/status-api.spec.ts:139:7 › T3: changeNapkinStatus — auto-create napkin row › napkin row created with correct slug and status when none exists (5ms)
+  ✓  189 tests/sqlite-setup.spec.ts:199:7 › T-0200-02: Schema init is idempotent › double init: no errors, all 4 tables exist, rows unchanged (16ms)
+  ✓  192 tests/socket-cli/socket-cli.spec.ts:327:7 › T-0300-06: nap start creates terminal › nap start creates session, card appears, command runs (29ms)
+  ✓  190 tests/snapshot-redesign.spec.ts:385:7 › T-1200-11: extended view hover controls with absPath › extended view file rows have copy/open controls, copy writes absPath (321ms)
+  ✓  193 tests/status-api.spec.ts:182:7 › T4: changeNapkinStatus — symlink created in new status dir › symlink at 40-board/40-doing/<slug> points to ../../30-napkins/<slug> (6ms)
+  ✓  187 tests/napkin-watcher.spec.ts:961:7 › T-0500-18: concurrent changes during startup › modification during scan does not lose data (1.5s)
+  ✓  195 tests/socket-cli/socket-cli.spec.ts:379:7 › T-0300-06: nap start creates terminal › command runs through shell (pipes work) (28ms)
+  ✓  194 tests/sqlite-setup.spec.ts:271:7 › T-0200-03: CC session UUID generation and storage › createSession generates a valid v4 UUID (4ms)
+  ✓  199 tests/sqlite-setup.spec.ts:279:7 › T-0200-03: CC session UUID generation and storage › UUID round-trips through getSession (1ms)
+  ✓  196 tests/snapshot-redesign.spec.ts:468:7 › T-1200-12: agent files with hover controls in extended view › agent files render with copy/open controls in extended view (316ms)
+  ✓  200 tests/sqlite-setup.spec.ts:289:7 › T-0200-03: CC session UUID generation and storage › UUID matches raw SQL cc_session_uuid column (1ms)
+  ✓  198 tests/socket-cli/socket-cli.spec.ts:412:7 › T-0300-09: socket cleanup on app quit › graceful quit removes socket file (863ms)
+  ✓  202 tests/sqlite-setup.spec.ts:320:7 › T-0200-05: Session status transitions persist › create → done: status and doneMessage persist (4ms)
+  ✓  197 tests/status-api.spec.ts:219:7 › T5: changeNapkinStatus — old symlink removed › old symlink gone after status change, new one exists (10ms)
+  ✓  204 tests/sqlite-setup.spec.ts:332:7 › T-0200-05: Session status transitions persist › create → exited: status persists, exitedAt set (3ms)
+  ✓  206 tests/sqlite-setup.spec.ts:344:7 › T-0200-05: Session status transitions persist › done idempotency: SQL guard prevents overwrite (2ms)
+  ✓  201 tests/snapshot-redesign.spec.ts:540:7 › T-1200-15: fs.watch — new non-agent subdir appears › creating notes/ subdir with file updates store entries with type=dir (741ms)
+  ✓  205 tests/status-api.spec.ts:261:7 › T6: First status set — no old symlink to remove › no error, symlink created when no prior symlink exists (4ms)
+  ✓  203 tests/socket-cli/socket-cli.spec.ts:439:7 › T-0300-09: socket cleanup on app quit › SIGTERM removes socket file (1.2s)
+  ✓  207 tests/sqlite-setup.spec.ts:376:7 › T-0200-06: Database file creation › creates file and .nap/ directory from scratch (6ms)
+  ✓  210 tests/sqlite-setup.spec.ts:401:7 › T-0200-06: Database file creation › getDbPath returns <cwd>/.nap/nap.db (2ms)
+  ✓  208 tests/snapshot-redesign.spec.ts:610:7 › T-1200-16: full scan sends NapkinSnapshot array › initial IPC payload is array of NapkinSnapshot with entries[], absPath (525ms)
+  ✓  211 tests/sqlite-setup.spec.ts:409:7 › T-0200-06: Database file creation › opening existing db does not throw (4ms)
+  ✓  209 tests/status-api.spec.ts:301:7 › T7: Target board dir missing — auto-create › creates board dir and symlink when target dir does not exist (4ms)
+  ✓  212 tests/snapshot-redesign.spec.ts:675:7 › T-1200-18: performance — 40 napkins scan <100ms › 40 napkins with files, agents, subdirs scanned in <100ms (116ms)
+
+  ✓  214 tests/status-api.spec.ts:343:7 › T8: Invalid status rejected › throws on invalid status "shipped" (4ms)
+  ✓  213 tests/sqlite-setup.spec.ts:475:9 › T-0200-07: nap start generates UUID, pty gets --session-id › session has ccSessionUuid, pty receives --session-id <uuid> (974ms)
+  ✓  215 tests/status-api.spec.ts:380:7 › T9: Socket round-trip — napkin-status command › napkin-status request returns ok, updates SQLite and symlink (6ms)
+  ✓  217 tests/status-api.spec.ts:431:7 › T10: Socket — napkin slug not found › returns error for non-existent napkin slug, no SQLite row created (4ms)
+  ✓  216 tests/sqlite-setup.spec.ts:539:9 › T-0200-08: nap ps returns SQLite-backed sessions › start two sessions → ps lists both with names, statuses, uptimes (6ms)
+  ✓  218 tests/status-api.spec.ts:467:7 › T11: IPC notification fires after status change › renderer receives napkin:status-changed IPC with correct payload (10ms)
+  ✓  219 tests/sqlite-setup.spec.ts:602:7 › T-0200-09: nap done persists to SQLite › done persists through pty exit — status stays "done", not "exited" (1.5s)
+  ✓  220 tests/status-api.spec.ts:522:7 › T12: Existing session status command still works › session status request returns running for active session (3ms)
+  ✓  222 tests/sqlite-setup.spec.ts:670:9 › T-0200-10: Database location is .nap/nap.db next to .nap/sock › db and socket both in <cwd>/.nap/ (595ms)
+  ✓  221 tests/status-api.spec.ts:558:7 › T15: SQLite authoritative — symlink failure does not rollback › SQLite updated even when symlink operation fails (9ms)
+
+
+  1) tests/nepic-creation/nepic-creation.spec.ts:376:7 › T-1000-09: architect prompt.md created › prompt.md exists in 20-architects/001-architect/ and contains template content 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32mtrue[39m
+    Received: [31mfalse[39m
+
+      399 |     expect(result.exists).toBe(true);
+      400 |     expect(result.nonEmpty).toBe(true);
+    > 401 |     expect(result.containsRoleRef).toBe(true);
+          |                                    ^
+      402 |   });
+      403 | });
+      404 |
+        at /Users/dimaunk/dvl/aibanana/nap/tests/nepic-creation/nepic-creation.spec.ts:401:36
+
+  2) tests/polish/polish.spec.ts:256:7 › nap open › T-0600-08: nap open spawns Electron detached, socket becomes live 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m0[39m
+    Received: [31m1[39m
+
+      267 |       // nap open should exit quickly (doesn't block)
+      268 |       const result = await runCliAsync(['open', testDir], { env });
+    > 269 |       expect(result.exitCode).toBe(0);
+          |                               ^
+      270 |       expect(result.elapsed).toBeLessThan(2_000);
+      271 |
+      272 |       // Poll for socket to become live
+        at /Users/dimaunk/dvl/aibanana/nap/tests/polish/polish.spec.ts:269:31
+
+  3) tests/polish/polish.spec.ts:306:7 › nap open › T-0600-10: nap open ./relative resolves to absolute 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m0[39m
+    Received: [31m1[39m
+
+      320 |       // Run from parent dir with relative path
+      321 |       const result = await runCliAsync(['open', `./${projName}`], { cwd: parent, env });
+    > 322 |       expect(result.exitCode).toBe(0);
+          |                               ^
+      323 |
+      324 |       // Socket should appear at the absolute path
+      325 |       await waitForSocket(socketPath, 15_000);
+        at /Users/dimaunk/dvl/aibanana/nap/tests/polish/polish.spec.ts:322:31
+
+  3 failed
+    tests/nepic-creation/nepic-creation.spec.ts:376:7 › T-1000-09: architect prompt.md created › prompt.md exists in 20-architects/001-architect/ and contains template content 
+    tests/polish/polish.spec.ts:256:7 › nap open › T-0600-08: nap open spawns Electron detached, socket becomes live 
+    tests/polish/polish.spec.ts:306:7 › nap open › T-0600-10: nap open ./relative resolves to absolute 
+  4 skipped
+  215 passed (54.0s)
