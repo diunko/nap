@@ -86,6 +86,23 @@ Reads test.md + the code. Writes actual test code. Runs it. Reports failures.
 
 Test eng reports failures → fullstack eng fixes → test eng re-runs. Loop until green.
 
+## IMPORTANT: Two ways to use agents
+
+**Research (Claude Code internal Explore agent):**
+- Use for one-off codebase questions, finding code, quick investigations
+- The report comes back into YOUR context — fast, lightweight
+- Use freely — this is like googling something or checking docs
+- Example: "find all files that import session-store" or "how does the pty lifecycle work?"
+
+**Work (NAP agents via `nap start`):**
+- Use for EVERYTHING that produces artifacts — implementation, test writing, design exploration
+- Creates a full Claude Code session in its own terminal
+- The human can watch, talk to, steer — full visibility
+- **ALWAYS use this for anything beyond research**
+- Example: writing code, running tests, building mocks, fixing bugs
+
+The difference: research is a quick round-trip inside your head. Work creates a teammate the human can see.
+
 ## Launching agents
 
 Every agent is a full Claude Code session in its own terminal. Not a subagent buried inside another session. The human can click on any agent in the sidebar, watch it work, talk to it, invoke skills — full Claude Code capabilities.

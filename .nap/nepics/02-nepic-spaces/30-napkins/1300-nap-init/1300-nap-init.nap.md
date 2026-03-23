@@ -4,84 +4,66 @@
   * creates `.nap/` structure from bundled templates
   * fails if `.nap/` already exists ("project already initialized")
   * does NOT open the app — just scaffolds
+  * does ALL bootstrapping — open has zero special first-launch code
 
 * what it creates
 
-  * `.nap/00-org/` — the team playbook
-    * `20-workflow.nap.md` — how agents communicate, CLI mechanics, the pipeline
-      * IMPORTANT: prominently distinguish two agent patterns
-        * Claude Code internal Explore agent — one-off research
-          * codebase questions, finding code, quick investigations
-          * report comes back into your context
-          * use this freely for research
-        * `nap start` agents — work that produces artifacts
-          * implementation, test writing, design exploration
-          * creates a visible agent with own terminal
-          * human can watch, talk to, steer
-          * ALWAYS use this for anything beyond research
-      * `nap done` — completion signal, no message
-      * `nap nap` — architect waits for agent
-      * `nap status` — change napkin status
-      * response.md for all communication
-      * prompt.md contract — self-contained, last line is nap done instruction
-    * `30-structure.nap.md` — directory layout, numbering, file extensions
-    * `40-roles/`
-      * `architect.md` — the orchestrator
-        * clear expectations: holds system shape, doesn't write code
-        * launches agents via `nap start`, reviews output, routes failures
-        * uses Explore agent for research, `nap start` for everything else
-        * writes specs, prompts, manages pipeline
-        * when context runs out: writes handoff, successor boots
-      * `fullstack-eng.md`
-      * `test-architect.md` — native modules = Playwright, never vitest
-      * `test-eng.md`
+  * `.nap/nap.db` — SQLite with schema, first nepic row, architect session row
+    * init does this, not open
+    * open always does the same thing: read db, find nepic, boot architect
+    * no "is this a fresh project?" detection in the app
 
-  * `.nap/nepics/01-<name>/` — first nepic
+  * `.nap/00-org/` — how we work
+    * `10-promise.nap.md` — why we work this way (not a product pitch — team onboarding)
+      * why agents are full CC sessions, not subagents
+      * why visibility matters — the human watches, steers, inspects
+      * condensed version of the product journeys
+    * `20-workflow.nap.md` — the mechanics
+      * IMPORTANT: Explore agent vs `nap start` — prominent, impossible to miss
+        * Explore = research, comes back into your context
+        * `nap start` = work, creates visible agent
+        * ALWAYS `nap start` for anything beyond research
+      * pipeline: napkin → spec → test arch → fs-eng → test-eng
+      * CLI: nap start, nap nap, nap done, nap status
+      * prompt.md contract, response.md for communication
+      * no terminal messages (no poke, no done with message)
+    * `30-structure.nap.md` — directory layout, numbering, extensions
+    * `40-roles/` — architect, fullstack-eng, test-architect, test-eng
+
+  * `.nap/nepics/01-v1/` — first nepic, always named v1
     * `10-docs/`
     * `15-feedback/`
       * `issues.md` — empty template
       * `wishlist.md` — empty template
     * `20-architects/001-architect/`
-      * `prompt.md` — minimal: "read your role, explore the codebase, jam with the human using /napkin"
+      * `prompt.md` — minimal: read your role, explore the codebase, /napkin with the human
     * `30-napkins/`
     * `40-board/` with status subdirs (10-draft through 60-done)
 
   * `.claude/skills/`
-    * `napkin/` — the napkin brainstorming skill
-    * `napkin-format/` — the formatting skill
+    * `napkin/` — brainstorming skill
+    * `napkin-format/` — formatting skill
 
   * `.nap/.gitignore` — nap.db, nap.db-shm, nap.db-wal, sock
 
 * where templates come from
-  * bundled with the CLI binary
-    * // yeah, just arrange them neatly somewhere in the package,
-    * // so that it's easy to see to edit and tweak
+  * bundled in the package — `src/templates/` in source tree
+    * easy to find, edit, tweak
   * self-contained, works offline
   * no network, no template repos
 
-* the name
-  * `nap init` with no args → derives from directory basename
-  * `nap init --name "my-project"` → explicit name
-  * name becomes nepic slug: `01-my-project`
-    * // let's hardcode first nepic as v1
-
-* what happens after init
-  * user runs `nap open .`
-  * app opens, creates nap.db, boots architect pty
-    * // how do we (app?) manage(s) architect sessions?
-    * // do we create nap.db on init or on open?
-  * architect reads prompt.md → reads role → explores codebase → ready to brainstorm
-  * user and architect jam on the idea using /napkin
+* the flow
+  * `cd ~/my-project`
+  * `nap init`
+    * scaffolds everything, creates db, inserts nepic + architect session
+  * `nap open .`
+    * app reads db, finds 01-v1 nepic, finds architect session
+    * boots architect pty: `claude --verbose --session-id <uuid> "read prompt.md..."`
+    * architect reads role → explores codebase → ready to brainstorm
+  * user and architect jam using /napkin
 
 * what nap init does NOT do
   * doesn't open the app
-  * doesn't create nap.db (app does that on first launch)
-    * // let's discuss. pros and cons? 
-    * // if it exists on first open, i think app will be happy too
-    * // actually, is then first and non-first opens even different?
-    * // i think i like the idea of separating this bootstrapping from open
-    * // so that init does all the bootstrapping
-    * // and open doesn't have any of special bootstrapping code
   * doesn't run any agents
   * doesn't read project context into prompts
-    * architect will explore on their own
+    * architect explores on their own
