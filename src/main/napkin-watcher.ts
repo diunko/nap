@@ -192,6 +192,16 @@ export async function startNapkinWatcher(
 }
 
 /**
+ * Return current napkin data for the active nepic (pull-based).
+ * Used by the renderer to request initial data after its IPC listener is ready.
+ */
+export async function getActiveNapkinData(): Promise<NapkinData[]> {
+  if (!activeNepicDir) return [];
+  const napkinsDir = path.join(activeNepicDir, '30-napkins');
+  return fullScan(napkinsDir);
+}
+
+/**
  * Stop the napkin watcher and clean up.
  */
 export function stopNapkinWatcher(): void {

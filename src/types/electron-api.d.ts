@@ -63,6 +63,10 @@ interface ElectronAPI {
   ) => () => void;
   sendLogResponse: (requestId: number, lines: string[]) => void;
   openFilePath: (filePath: string) => void;
+  getInitialNapkins: () => Promise<{
+    napkins: { slug: string; artifacts: string[]; agents: string[]; napkinBullets: string[] }[];
+    statuses: { slug: string; status: string }[];
+  }>;
   getInitialTerminalOpts: () => Promise<{ name: string; command?: string }>;
   sendUiState: (state: { activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean }) => void;
   getUiState: () => Promise<{ activeNepicId: string | null; activeTerminalId: string | null; sidebarVisible: boolean } | null>;

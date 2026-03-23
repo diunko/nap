@@ -45,7 +45,7 @@ import {
 } from './session-store';
 import type { UiState } from './session-store';
 import { initNapkinStore, closeNapkinStore, changeNapkinStatus, getAllNapkinStatuses, getNapkinStatusesForNepic } from './napkin-store';
-import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir } from './napkin-watcher';
+import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir, getActiveNapkinData } from './napkin-watcher';
 import { resolveByName } from './name-resolver';
 import { reconcile } from './reconcile';
 import { setWriter, enqueue, clearQueue } from './message-queue';
@@ -388,6 +388,13 @@ ipcMain.handle('get-ui-state', () => {
   } catch {
     return null;
   }
+});
+
+// IPC: get initial napkin data (pull-based, for renderer startup)
+ipcMain.handle('get-napkin-data', async () => {
+  const napkins = await getActiveNapkinData();
+  const statuses = getAllNapkinStatuses();
+  return { napkins, statuses };
 });
 
 // IPC: get resume data (architect session + orphaned sessions)

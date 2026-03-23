@@ -168,6 +168,17 @@ function App() {
       window.electronAPI.sendLogResponse(data.requestId, lines);
     });
 
+    // Pull initial napkin data (watcher's push may fire before listener is ready)
+    window.electronAPI.getInitialNapkins().then(({ napkins, statuses }) => {
+      const store = useTerminalStore.getState();
+      if (napkins.length > 0) {
+        store.setNapkinData(napkins);
+      }
+      for (const { slug, status } of statuses) {
+        store.mergeNapkinStatus(slug, status);
+      }
+    });
+
     // Hydrate UI state from SQLite, then resume architect, then create first terminal
     window.electronAPI.getUiState().then((savedState) => {
       if (savedState) {
