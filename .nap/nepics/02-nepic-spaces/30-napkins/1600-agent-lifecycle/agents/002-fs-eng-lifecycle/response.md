@@ -59,9 +59,13 @@ All 4 phases implemented + followup fixes. Zero type errors (`tsc --noEmit` pass
 6. **Live docs updated**: `.nap/00-org/20-workflow.nap.md` — same updates
 7. **Template skills**: confirmed complete (232 + 170 lines) — not stubs
 
+## Post-followup fixes
+
+8. **Prompt quoting fixed**: switched from double-quote wrapping to single-quote escaping (`'\\''` pattern). Single quotes suppress all shell expansion — `$`, backticks, double quotes all pass through intact. Extracted `shellEscape()` and `buildClaudeCommand()` as pure functions
+9. **Shell round-trip tests**: 15 vitest tests in `tests/claude-command-quoting.test.ts` — creates a fake `claude` script, runs the constructed command through real `bash -c`, verifies the prompt arrives unmangled. Covers: double quotes, single quotes, both, `$`, backticks, backslashes, empty prompt
+10. **Free-floating sessions in sidebar**: sessions without `--napkin` or `--role architect` (e.g. `nap start claude hi`) now render as cards below napkins. Shows name + status dot, click to focus terminal. Was missing — the NapkinBrowser only rendered architects and napkin-linked agents
+
 ## For architect review
 
-- The `nap start claude` command construction wraps the prompt in double quotes: `claude --verbose "prompt"`. If prompts contain double quotes, this could break — may need shell escaping
 - The architect fallback mechanism (expired session → fresh spawn) is preserved but only applies to the architect identified in the resume loop, not all sessions
-- Free-floating agents without homeDir (spec item 3.5) are handled implicitly — the card renders with no file entries, just the status dot and label. A `[terminal] + command text` rendering could be added but seemed like UI polish beyond the data model work
 - The architect-resume tests (T-0800-03, 05, 07, 09, 10) were rewritten by linter/reviewer to match new auto-resume-all behavior instead of being skipped
