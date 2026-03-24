@@ -233,9 +233,10 @@ base.describe.serial('T-0800-02: resume spawn uses claude --resume <uuid>', () =
 });
 
 // =========================================================================
-// T-0800-03: no cc_session_uuid → fresh claude session
+// T-0800-03: no cc_session_uuid → not resumable
+// 1600: sessions without ccSessionUuid are not resumable (tier 1 / pre-migration)
 // =========================================================================
-base.describe.serial('T-0800-03: no cc_session_uuid → fresh claude session', () => {
+base.describe.serial('T-0800-03: no cc_session_uuid → not resumable', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-0800-03-'));
   const architectId = 'arch-0800-03';
 
@@ -243,7 +244,7 @@ base.describe.serial('T-0800-03: no cc_session_uuid → fresh claude session', (
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  base('startup spawns fresh claude when cc_session_uuid is null', async () => {
+  base('architect with null ccSessionUuid is not auto-resumed', async () => {
     // Seed db with architect session that has NULL cc_session_uuid
     seedDb(tmpDir, {
       nepicId: 'nepic-fresh',
@@ -268,18 +269,17 @@ base.describe.serial('T-0800-03: no cc_session_uuid → fresh claude session', (
     const page = await app.firstWindow();
     await waitForShellReady(page);
 
-    // Architect pty should be live (fresh spawn)
+    // Architect without ccSessionUuid is NOT resumable — no pty spawned for it
     const livePtys = await app.evaluate(() => {
       return globalThis.__napTest!.getLivePtyIds();
     });
-    expect(livePtys).toContain(architectId);
+    expect(livePtys).not.toContain(architectId);
 
-    // Resume data should report architect with no ccSessionUuid
+    // Resume data should have no architect (null uuid = not in resumable set)
     const resumeData = await page.evaluate(() => {
       return window.electronAPI.getResumeData();
     });
-    expect(resumeData.architectSession).not.toBeNull();
-    expect(resumeData.architectSession!.id).toBe('arch-0800-03');
+    expect(resumeData.architectSession).toBeNull();
 
     await closeIsolated(app, socketPath);
   });
@@ -345,31 +345,30 @@ base.describe.serial('T-0800-04: expired CC session falls back to fresh', () => 
 });
 
 // =========================================================================
-// T-0800-05: orphaned session detection — status=running, no live pty
-// 1600: all claude sessions now auto-resume (phase 4), this session would be resumed not orphaned
+// T-0800-05: claude session auto-resumed on launch (was: orphaned detection)
+// 1600: all claude sessions now auto-resume — session with ccSessionUuid gets a pty
 // =========================================================================
-base.describe.serial.skip('T-0800-05: orphaned session detection', () => {
+base.describe.serial('T-0800-05: claude session auto-resumed on launch', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-0800-05-'));
-  const orphanId = 'orphan-0800-05';
+  const sessionId = 'session-0800-05';
 
   base.afterAll(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  base('session with status=running and no live pty appears as orphaned in renderer', async () => {
-    // Seed with a non-architect running session (won't be auto-resumed)
+  base('non-architect claude session with ccSessionUuid is auto-resumed (has live pty)', async () => {
     seedDb(tmpDir, {
-      nepicId: 'nepic-orphan',
+      nepicId: 'nepic-resume-05',
       terminalId: null,
       sidebarVisible: 1,
       sessions: [{
-        id: orphanId,
+        id: sessionId,
         name: '001-test-eng',
         role: 'test-eng',
-        nepicId: 'nepic-orphan',
+        nepicId: 'nepic-resume-05',
         napkinSlug: '0200-test',
         status: 'running',
-        ccSessionUuid: 'uuid-orphan-test',
+        ccSessionUuid: 'uuid-resume-test',
         cwd: tmpDir,
       }],
     });
@@ -382,37 +381,29 @@ base.describe.serial.skip('T-0800-05: orphaned session detection', () => {
     const page = await app.firstWindow();
     await waitForShellReady(page);
 
-    // Wait for orphaned terminal to appear in store
-    const orphanedTerminal = await page.waitForFunction(
-      (oid: string) => {
-        const terminals = (window as any).useTerminalStore.getState().terminals;
-        const t = terminals.find((t: any) => t.id === oid);
-        return t ? { id: t.id, isOrphaned: t.isOrphaned, ccSessionUuid: t.ccSessionUuid } : null;
-      },
-      orphanId,
-      { timeout: 10_000 },
-    );
-
-    const data = await orphanedTerminal.jsonValue();
-    expect(data).not.toBeNull();
-    expect(data!.isOrphaned).toBe(true);
-    expect(data!.ccSessionUuid).toBe('uuid-orphan-test');
-
-    // Verify it's NOT in live ptys (no pty was spawned for it)
+    // Session should have been auto-resumed — it has a live pty
     const livePtys = await app.evaluate(() => {
       return globalThis.__napTest!.getLivePtyIds();
     });
-    expect(livePtys).not.toContain(orphanId);
+    expect(livePtys).toContain(sessionId);
+
+    // Resume data should show it in resumedSessions (not orphaned)
+    const resumeData = await page.evaluate(() => {
+      return window.electronAPI.getResumeData();
+    });
+    const resumed = resumeData.resumedSessions.find((s: any) => s.id === sessionId);
+    expect(resumed).toBeTruthy();
+    expect(resumed!.ccSessionUuid).toBe('uuid-resume-test');
 
     await closeIsolated(app, socketPath);
   });
 });
 
 // =========================================================================
-// T-0800-07: multiple architects — resume the active one
-// 1600: all claude sessions now auto-resume (phase 4), done architect also resumes
+// T-0800-07: multiple architects — all claude sessions resume
+// 1600: done architect also resumes (all claude sessions with status != 'exited')
 // =========================================================================
-base.describe.serial.skip('T-0800-07: multiple architects — resume the active one', () => {
+base.describe.serial('T-0800-07: multiple architects — all resume', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-0800-07-'));
   const doneArchId = 'arch-done-07';
   const runningArchId = 'arch-running-07';
@@ -421,7 +412,7 @@ base.describe.serial.skip('T-0800-07: multiple architects — resume the active 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  base('only the running architect is resumed, done architect is not', async () => {
+  base('both running and done architects are resumed (both have live ptys)', async () => {
     const now = Date.now();
     seedDb(tmpDir, {
       nepicId: 'nepic-multi',
@@ -459,19 +450,19 @@ base.describe.serial.skip('T-0800-07: multiple architects — resume the active 
     const page = await app.firstWindow();
     await waitForShellReady(page);
 
-    // Only the running architect should have a live pty
+    // Both architects should have live ptys (all claude sessions resume)
     const livePtys = await app.evaluate(() => {
       return globalThis.__napTest!.getLivePtyIds();
     });
     expect(livePtys).toContain(runningArchId);
-    expect(livePtys).not.toContain(doneArchId);
+    expect(livePtys).toContain(doneArchId);
 
-    // Resume data should reference running architect
+    // Resume data should reference an architect (first match in creation order)
     const resumeData = await page.evaluate(() => {
       return window.electronAPI.getResumeData();
     });
     expect(resumeData.architectSession).not.toBeNull();
-    expect(resumeData.architectSession!.id).toBe('arch-running-07');
+    expect(resumeData.architectSession!.id).toBe('arch-done-07');
 
     await closeIsolated(app, socketPath);
   });
@@ -530,31 +521,31 @@ base.describe.serial('T-0800-08: resumed architect becomes active terminal', () 
 });
 
 // =========================================================================
-// T-0800-09: orphaned agent click to resume
-// 1600: all claude sessions now auto-resume (phase 4), this session would already be resumed
+// T-0800-09: claude session already resumed on launch (was: orphaned click-to-resume)
+// 1600: all claude sessions auto-resume — no orphaned state to click
 // =========================================================================
-base.describe.serial.skip('T-0800-09: orphaned agent click to resume', () => {
+base.describe.serial('T-0800-09: claude session already resumed on launch', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-0800-09-'));
-  const orphanId = 'orphan-0800-09';
-  const orphanUuid = 'uuid-orphan-resume-09';
+  const sessionId = 'session-0800-09';
+  const sessionUuid = 'uuid-resume-09';
 
   base.afterAll(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  base('resumeOrphanedTerminal sends pty:resume IPC and clears orphaned flag', async () => {
+  base('claude session is auto-resumed with live pty, not orphaned', async () => {
     seedDb(tmpDir, {
       nepicId: 'nepic-click',
       terminalId: null,
       sidebarVisible: 1,
       sessions: [{
-        id: orphanId,
+        id: sessionId,
         name: '001-test-eng',
         role: 'test-eng',
         nepicId: 'nepic-click',
         napkinSlug: '0200-click',
         status: 'running',
-        ccSessionUuid: orphanUuid,
+        ccSessionUuid: sessionUuid,
         cwd: tmpDir,
       }],
     });
@@ -567,47 +558,28 @@ base.describe.serial.skip('T-0800-09: orphaned agent click to resume', () => {
     const page = await app.firstWindow();
     await waitForShellReady(page);
 
-    // Wait for orphaned terminal to appear
-    await page.waitForFunction(
-      (oid: string) => {
-        const terminals = (window as any).useTerminalStore.getState().terminals;
-        return terminals.some((t: any) => t.id === oid && t.isOrphaned);
-      },
-      orphanId,
-      { timeout: 10_000 },
-    );
-
-    // Trigger resume via store action
-    await page.evaluate((oid: string) => {
-      const store = (window as any).useTerminalStore.getState();
-      store.resumeOrphanedTerminal(oid);
-      store.setActive(oid);
-    }, orphanId);
-
-    // After resume, isOrphaned should be false
-    const afterResume = await page.evaluate((oid: string) => {
-      const t = (window as any).useTerminalStore.getState().terminals.find((t: any) => t.id === oid);
-      return { isOrphaned: t?.isOrphaned, activeTerminalId: (window as any).useTerminalStore.getState().activeTerminalId };
-    }, orphanId);
-
-    expect(afterResume.isOrphaned).toBe(false);
-    expect(afterResume.activeTerminalId).toBe(orphanId);
-
-    // The pty should now be live (main received pty:resume)
+    // Session should be auto-resumed — live pty exists
     const livePtys = await app.evaluate(() => {
       return globalThis.__napTest!.getLivePtyIds();
     });
-    expect(livePtys).toContain(orphanId);
+    expect(livePtys).toContain(sessionId);
+
+    // Should appear in resumedSessions, not orphanedSessions
+    const resumeData = await page.evaluate(() => {
+      return window.electronAPI.getResumeData();
+    });
+    expect(resumeData.orphanedSessions.find((s: any) => s.id === sessionId)).toBeFalsy();
+    expect(resumeData.resumedSessions.find((s: any) => s.id === sessionId)).toBeTruthy();
 
     await closeIsolated(app, socketPath);
   });
 });
 
 // =========================================================================
-// T-0800-10: non-architect agents are NOT auto-resumed
-// 1600: all claude sessions now auto-resume (phase 4), this test inverts
+// T-0800-10: all claude agents auto-resumed (was: non-architects NOT resumed)
+// 1600: all claude sessions now auto-resume — architect, fs-eng, test-eng all get ptys
 // =========================================================================
-base.describe.serial.skip('T-0800-10: non-architect agents are NOT auto-resumed', () => {
+base.describe.serial('T-0800-10: all claude agents auto-resumed', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-0800-10-'));
   const architectId = 'arch-0800-10';
   const fsEngId = 'fseng-0800-10';
@@ -617,7 +589,7 @@ base.describe.serial.skip('T-0800-10: non-architect agents are NOT auto-resumed'
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  base('only architect auto-resumed; fs-eng and test-eng become orphaned', async () => {
+  base('architect, fs-eng, and test-eng all auto-resumed with live ptys', async () => {
     seedDb(tmpDir, {
       nepicId: 'nepic-scope',
       terminalId: architectId,
@@ -663,38 +635,19 @@ base.describe.serial.skip('T-0800-10: non-architect agents are NOT auto-resumed'
     const page = await app.firstWindow();
     await waitForShellReady(page);
 
-    // Only architect should have a live pty
+    // All claude sessions should have live ptys
     const livePtys = await app.evaluate(() => {
       return globalThis.__napTest!.getLivePtyIds();
     });
     expect(livePtys).toContain(architectId);
-    expect(livePtys).not.toContain(fsEngId);
-    expect(livePtys).not.toContain(testEngId);
+    expect(livePtys).toContain(fsEngId);
+    expect(livePtys).toContain(testEngId);
 
-    // Wait for orphaned sessions to appear in renderer store
-    await page.waitForFunction(
-      ([fId, tId]: [string, string]) => {
-        const terminals = (window as any).useTerminalStore.getState().terminals;
-        const fs = terminals.find((t: any) => t.id === fId);
-        const te = terminals.find((t: any) => t.id === tId);
-        return fs?.isOrphaned && te?.isOrphaned;
-      },
-      [fsEngId, testEngId] as [string, string],
-      { timeout: 10_000 },
-    );
-
-    const orphanData = await page.evaluate(([fId, tId]: [string, string]) => {
-      const terminals = (window as any).useTerminalStore.getState().terminals;
-      const fs = terminals.find((t: any) => t.id === fId);
-      const te = terminals.find((t: any) => t.id === tId);
-      return {
-        fsEngOrphaned: fs?.isOrphaned,
-        testEngOrphaned: te?.isOrphaned,
-      };
-    }, [fsEngId, testEngId] as [string, string]);
-
-    expect(orphanData.fsEngOrphaned).toBe(true);
-    expect(orphanData.testEngOrphaned).toBe(true);
+    // None should be orphaned
+    const resumeData = await page.evaluate(() => {
+      return window.electronAPI.getResumeData();
+    });
+    expect(resumeData.orphanedSessions).toHaveLength(0);
 
     await closeIsolated(app, socketPath);
   });

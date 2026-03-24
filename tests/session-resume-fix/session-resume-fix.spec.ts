@@ -286,7 +286,7 @@ base.describe.serial('T-1500-03: resume finds running and done, skips exited', (
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  base('orphaned list includes running and done sessions, excludes exited', async () => {
+  base('running and done sessions with ccSessionUuid are auto-resumed, exited excluded', async () => {
     seedDb(tmpDir, {
       nepicId: 'nepic-1500-03',
       terminalId: null,
@@ -327,14 +327,23 @@ base.describe.serial('T-1500-03: resume finds running and done, skips exited', (
 
     const { app, page, socketPath } = await launchIsolated(tmpDir);
 
+    // Running and done sessions with ccSessionUuid are auto-resumed (live ptys)
+    const livePtys = await app.evaluate(() => {
+      return globalThis.__napTest!.getLivePtyIds();
+    });
+    expect(livePtys).toContain(runningId);
+    expect(livePtys).toContain(doneId);
+    expect(livePtys).not.toContain(exitedId);
+
+    // They appear in resumedSessions, not orphanedSessions
     const resumeData = await page.evaluate(() => {
       return window.electronAPI.getResumeData();
     });
 
-    const orphanedIds = resumeData.orphanedSessions.map((s: any) => s.id);
-    expect(orphanedIds).toContain(runningId);
-    expect(orphanedIds).toContain(doneId);
-    expect(orphanedIds).not.toContain(exitedId);
+    const resumedIds = resumeData.resumedSessions.map((s: any) => s.id);
+    expect(resumedIds).toContain(runningId);
+    expect(resumedIds).toContain(doneId);
+    expect(resumedIds).not.toContain(exitedId);
 
     await closeIsolated(app, socketPath);
   });
@@ -399,7 +408,7 @@ base.describe.serial('T-1500-05: quit → relaunch round-trip — sessions survi
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  base('session created in first launch survives quit, appears orphaned in second launch', async () => {
+  base('session created in first launch survives quit, is auto-resumed in second launch', async () => {
     // Phase 1: launch, create session via socket, verify running, quit
     const socketPath1 = testSocketPath();
     const app1 = await electron.launch({
@@ -447,15 +456,21 @@ base.describe.serial('T-1500-05: quit → relaunch round-trip — sessions survi
     const dbStatus = sqliteQuery(dbPath, `SELECT status FROM sessions WHERE id = '${sessionId}'`);
     expect(dbStatus).toBe('running');
 
-    // Phase 2: relaunch with same tmpDir, session should appear as orphaned
+    // Phase 2: relaunch with same tmpDir, session has ccSessionUuid → auto-resumed
     const { app: app2, page: page2, socketPath: socketPath2 } = await launchIsolated(tmpDir);
+
+    // Session should be auto-resumed (has ccSessionUuid from createSession default)
+    const livePtys = await app2.evaluate(() => {
+      return globalThis.__napTest!.getLivePtyIds();
+    });
+    expect(livePtys).toContain(sessionId);
 
     const resumeData = await page2.evaluate(() => {
       return window.electronAPI.getResumeData();
     });
 
-    const orphanedIds = resumeData.orphanedSessions.map((s: any) => s.id);
-    expect(orphanedIds).toContain(sessionId);
+    const resumedIds = resumeData.resumedSessions.map((s: any) => s.id);
+    expect(resumedIds).toContain(sessionId);
 
     await closeIsolated(app2, socketPath2);
   });
