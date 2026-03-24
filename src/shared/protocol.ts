@@ -6,6 +6,9 @@ export interface StartRequest {
   cwd?: string;
   parentId?: string | null;
   napkinSlug?: string;
+  role?: string;
+  homeDir?: string;
+  isClaude?: boolean;
 }
 
 export interface PsRequest {

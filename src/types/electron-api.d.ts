@@ -57,6 +57,7 @@ interface ElectronAPI {
   onSocketTerminalClose: (callback: (data: { id: string }) => void) => () => void;
   onSocketStatusChanged: (callback: (data: { id: string; status: string }) => void) => () => void;
   onNapkinUpdate: (callback: (data: unknown) => void) => () => void;
+  onArchitectUpdate: (callback: (data: unknown) => void) => () => void;
   onNapkinStatusChanged: (callback: (data: { slug: string; status: string }) => void) => () => void;
   onLogRequest: (
     callback: (data: { id: string; requestId: number }) => void,

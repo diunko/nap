@@ -56,13 +56,17 @@ Launch Nap.app for a project directory.
 Environment:
   NAP_APP_PATH      Path to nap-app directory (default: ~/nap-app)
 `,
-  start: `Usage: nap start <command> [--name <name>] [--cwd <path>]
+  start: `Usage: nap start [claude] <command|prompt> [options]
 
 Start a new agent session.
 
-  command           Shell command to run
+  claude            Start a Claude session (tier 2+, auto-injects --verbose --session-id)
+  command           Shell command to run (tier 1, bare terminal)
   --name <name>     Session name (default: agent-N)
   --cwd <path>      Working directory (default: project cwd)
+  --role <role>     Agent role (architect, test-arch, fs-eng, test-eng)
+  --dir <path>      Home directory for the agent
+  --napkin <slug>   Napkin slug (tier 3: sets homeDir + napkinSlug)
   --help            Show this help
 `,
   ps: `Usage: nap ps [--json]
@@ -217,9 +221,15 @@ interface SessionRow {
   id: string;
   name: string;
   status: string;
+  parentId: string | null;
   parent: string;
   cwd: string;
   uptime: string;
+  role: string | null;
+  napkinSlug: string | null;
+  ccSessionUuid: string | null;
+  pid: number | null;
+  resumable: boolean;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -312,6 +322,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   done_message TEXT,
   created_at INTEGER NOT NULL,
   exited_at INTEGER,
+  home_dir TEXT,
+  exit_code INTEGER,
+  launches INTEGER NOT NULL DEFAULT 1,
+  last_resumed_at INTEGER,
   hidden INTEGER NOT NULL DEFAULT 0
 );
 
@@ -488,18 +502,31 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
 
     case 'start': {
       if (!args[0]) {
-        process.stderr.write('Usage: nap start <command> [--name <name>] [--cwd <path>] [--napkin <slug>]\n');
+        process.stderr.write('Usage: nap start [claude] <command|prompt> [--name <name>] [--cwd <path>] [--napkin <slug>]\n');
         process.exit(1);
       }
+
+      const isClaude = args[0] === 'claude';
+      let command: string;
+      if (isClaude) {
+        const prompt = args.slice(1).join(' ');
+        command = prompt ? `claude --verbose "${prompt}"` : 'claude --verbose';
+      } else {
+        command = args[0];
+      }
+
       const sock = resolveSocketOrDie();
       const res = await send(sock, {
         type: 'start',
         id: requestId++,
-        command: args[0],
+        command,
         name: flags['name'] || undefined,
         cwd: (flags['cwd'] as string) || process.cwd(),
         parentId: process.env['NAP_SESSION_ID'] || null,
         napkinSlug: (flags['napkin'] as string) || undefined,
+        role: (flags['role'] as string) || undefined,
+        homeDir: (flags['dir'] as string) || undefined,
+        isClaude,
       });
       if (res['error']) {
         process.stderr.write(String(res['message']) + '\n');
@@ -521,19 +548,48 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
       if (flags['json']) {
         process.stdout.write(JSON.stringify(sessions, null, 2) + '\n');
       } else {
-        const header = ['NAME', 'STATUS', 'PARENT', 'CWD', 'UPTIME'];
-        const plainStatus = (s: string) => `\u25cf ${s}`;
-        const displayRows = sessions.map((s) => [
-          s.name || '', plainStatus(s.status || ''), s.parent || '-', s.cwd || '', s.uptime || '',
-        ]);
-        const coloredRows = sessions.map((s) => [
-          s.name || '',
-          coloredStatus(s.status || ''),
-          s.parent || '-',
-          s.cwd || '',
-          s.uptime || '',
-        ]);
-        printTable(header, coloredRows, displayRows);
+        // Build tree: group sessions by parentId
+        const byParent = new Map<string | null, SessionRow[]>();
+        for (const s of sessions) {
+          const key = s.parentId ?? '__root__';
+          if (!byParent.has(key)) byParent.set(key, []);
+          byParent.get(key)!.push(s);
+        }
+
+        // Render tree lines recursively
+        function renderTree(parentId: string | null, indent: number): void {
+          const key = parentId ?? '__root__';
+          const children = byParent.get(key) || [];
+          for (const s of children) {
+            const prefix = indent > 0 ? '  '.repeat(indent) : '';
+            const label = s.role === 'architect' ? `[Architect] ${s.name}` : s.name;
+            const status = coloredStatus(s.status || '');
+            const napkin = s.napkinSlug || '';
+            const uuid = s.ccSessionUuid ? s.ccSessionUuid.slice(0, 5) + '...' : '';
+            const resumeTag = s.resumable ? (s.status === 'exited' ? 'manual' : 'yes') : 'no';
+            const pidStr = s.pid ? String(s.pid) : '-';
+
+            // Format: NAME  STATUS  NAPKIN  UUID  RESUMABLE
+            const parts = [
+              prefix + label.padEnd(Math.max(24 - indent * 2, 8)),
+              pidStr.padEnd(8),
+              status,
+              napkin.padEnd(8),
+              uuid.padEnd(12),
+              resumeTag,
+            ];
+            process.stdout.write(parts.join('  ') + '\n');
+
+            // Recurse into children
+            renderTree(s.id, indent + 1);
+          }
+        }
+
+        // Header
+        process.stdout.write(
+          'NAME                      PID       STATUS     NAPKIN    SESSION       RESUMABLE\n',
+        );
+        renderTree(null, 0);
       }
       break;
     }

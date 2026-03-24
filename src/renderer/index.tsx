@@ -139,6 +139,11 @@ function App() {
       );
     });
 
+    // Architect: filesystem data update
+    const removeArchitectUpdate = window.electronAPI.onArchitectUpdate((data) => {
+      useTerminalStore.getState().setArchitectData(data as any);
+    });
+
     // Napkin: status changed (from SQLite)
     const removeNapkinStatus = window.electronAPI.onNapkinStatusChanged((data) => {
       useTerminalStore.getState().mergeNapkinStatus(data.slug, data.status);
@@ -177,13 +182,16 @@ function App() {
     });
 
     // Pull initial napkin data (watcher's push may fire before listener is ready)
-    window.electronAPI.getInitialNapkins().then(({ napkins, statuses }) => {
+    window.electronAPI.getInitialNapkins().then((result: any) => {
       const store = useTerminalStore.getState();
-      if (napkins.length > 0) {
-        store.setNapkinData(napkins as any);
+      if (result.napkins?.length > 0) {
+        store.setNapkinData(result.napkins as any);
       }
-      for (const { slug, status } of statuses) {
+      for (const { slug, status } of result.statuses || []) {
         store.mergeNapkinStatus(slug, status);
+      }
+      if (result.architects?.length > 0) {
+        store.setArchitectData(result.architects as any);
       }
     });
 
@@ -206,14 +214,19 @@ function App() {
         store.setNepics(nepics.map((n) => ({ id: n.id, name: n.name, slug: n.slug })));
       });
 
-      // Resume architect and load orphaned sessions before creating first terminal
-      window.electronAPI.getResumeData().then((resumeData) => {
+      // Resume architect and load resumed/orphaned sessions before creating first terminal
+      window.electronAPI.getResumeData().then((resumeData: any) => {
         const store = useTerminalStore.getState();
 
         // Add resumed architect terminal (pty already spawned by main)
         if (resumeData.architectSession) {
           const a = resumeData.architectSession;
           store.addSocketTerminal(a.id, a.name, a.parentId, a.cwd, a.role, a.napkinSlug);
+        }
+
+        // Add other resumed sessions (pty already spawned by main)
+        for (const s of resumeData.resumedSessions || []) {
+          store.addSocketTerminal(s.id, s.name, s.parentId, s.cwd, s.role, s.napkinSlug);
         }
 
         // Add orphaned sessions (no pty, no xterm — just store entries)
@@ -285,6 +298,7 @@ function App() {
       removeSocketClose();
       removeSocketStatus();
       removeNapkinUpdate();
+      removeArchitectUpdate();
       removeNapkinStatus();
       removeKanbanListener();
       window.removeEventListener('keydown', handleKanbanKeydown);

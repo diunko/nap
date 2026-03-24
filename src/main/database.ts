@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   done_message TEXT,
   created_at INTEGER NOT NULL,
   exited_at INTEGER,
+  home_dir TEXT,
+  exit_code INTEGER,
+  launches INTEGER NOT NULL DEFAULT 1,
+  last_resumed_at INTEGER,
   hidden INTEGER NOT NULL DEFAULT 0
 );
 

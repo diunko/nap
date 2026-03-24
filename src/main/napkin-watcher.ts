@@ -32,6 +32,7 @@ export interface NapkinSnapshot {
 const DEBOUNCE_MS = 200;
 
 let watcher: fs.FSWatcher | null = null;
+let architectWatcher: fs.FSWatcher | null = null;
 let parentWatcher: fs.FSWatcher | null = null;
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -158,6 +159,67 @@ function sendUpdate(win: BrowserWindow, payload: NapkinSnapshot | NapkinSnapshot
   }
 }
 
+function sendArchitectUpdate(win: BrowserWindow, payload: NapkinSnapshot | NapkinSnapshot[]): void {
+  if (!win.isDestroyed()) {
+    win.webContents.send('architect:update', payload);
+  }
+}
+
+function scheduleArchitectUpdate(architectsDir: string, slug: string, win: BrowserWindow): void {
+  const key = `arch:${slug}`;
+  const existing = debounceTimers.get(key);
+  if (existing) clearTimeout(existing);
+
+  debounceTimers.set(
+    key,
+    setTimeout(async () => {
+      debounceTimers.delete(key);
+      const data = await readNapkinDir(architectsDir, slug);
+      sendArchitectUpdate(win, data);
+    }, DEBOUNCE_MS),
+  );
+}
+
+async function fullArchitectScan(architectsDir: string): Promise<NapkinSnapshot[]> {
+  try {
+    const entries = await fs.promises.readdir(architectsDir, { withFileTypes: true });
+    const snapshots: NapkinSnapshot[] = [];
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        snapshots.push(await readNapkinDir(architectsDir, entry.name));
+      }
+    }
+    return snapshots;
+  } catch {
+    return [];
+  }
+}
+
+function startWatchingArchitects(architectsDir: string, win: BrowserWindow): void {
+  if (architectWatcher) {
+    architectWatcher.close();
+    architectWatcher = null;
+  }
+
+  try {
+    architectWatcher = fs.watch(architectsDir, { recursive: true }, (_eventType, filename) => {
+      if (!filename) return;
+      const slug = slugFromWatchPath(filename);
+      if (!slug) return;
+      scheduleArchitectUpdate(architectsDir, slug, win);
+    });
+
+    architectWatcher.on('error', () => {
+      if (architectWatcher) {
+        architectWatcher.close();
+        architectWatcher = null;
+      }
+    });
+  } catch {
+    // 20-architects/ may not exist yet
+  }
+}
+
 function scheduleUpdate(napkinsDir: string, slug: string, win: BrowserWindow): void {
   const existing = debounceTimers.get(slug);
   if (existing) clearTimeout(existing);
@@ -210,24 +272,41 @@ export async function startNapkinWatcher(
   activeWindow = win;
 
   const napkinsDir = path.join(nepicDir, '30-napkins');
+  const architectsDir = path.join(nepicDir, '20-architects');
 
-  // Initial full scan
+  // Initial full scan — napkins + architects
   const napkins = await fullScan(napkinsDir);
   sendUpdate(win, napkins);
+
+  const architects = await fullArchitectScan(architectsDir);
+  if (architects.length > 0) {
+    sendArchitectUpdate(win, architects);
+  }
 
   // Start watching 30-napkins/ (may not exist yet)
   startWatchingNapkins(napkinsDir, win);
 
-  // Watch the parent (nepicDir) for 30-napkins/ creation
+  // Start watching 20-architects/ (may not exist yet)
+  startWatchingArchitects(architectsDir, win);
+
+  // Watch the parent (nepicDir) for 30-napkins/ or 20-architects/ creation
   try {
     parentWatcher = fs.watch(nepicDir, (_eventType, filename) => {
       if (filename === '30-napkins' && !watcher) {
-        // 30-napkins/ was just created — start watching it + full scan
         setTimeout(async () => {
           startWatchingNapkins(napkinsDir, win);
           const data = await fullScan(napkinsDir);
           if (data.length > 0) {
             sendUpdate(win, data);
+          }
+        }, 100);
+      }
+      if (filename === '20-architects' && !architectWatcher) {
+        setTimeout(async () => {
+          startWatchingArchitects(architectsDir, win);
+          const data = await fullArchitectScan(architectsDir);
+          if (data.length > 0) {
+            sendArchitectUpdate(win, data);
           }
         }, 100);
       }
@@ -251,6 +330,12 @@ export async function getActiveNapkinData(): Promise<NapkinSnapshot[]> {
   return fullScan(napkinsDir);
 }
 
+export async function getActiveArchitectData(): Promise<NapkinSnapshot[]> {
+  if (!activeNepicDir) return [];
+  const architectsDir = path.join(activeNepicDir, '20-architects');
+  return fullArchitectScan(architectsDir);
+}
+
 /**
  * Stop the napkin watcher and clean up.
  */
@@ -258,6 +343,10 @@ export function stopNapkinWatcher(): void {
   if (watcher) {
     watcher.close();
     watcher = null;
+  }
+  if (architectWatcher) {
+    architectWatcher.close();
+    architectWatcher = null;
   }
   if (parentWatcher) {
     parentWatcher.close();

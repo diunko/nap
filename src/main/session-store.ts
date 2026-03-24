@@ -4,7 +4,7 @@ import type Database from 'better-sqlite3';
 export interface Session {
   id: string;
   name: string;
-  status: 'running' | 'exited' | 'done';
+  status: 'running' | 'exited' | 'done' | 'new';
   command?: string;
   cwd: string;
   parentId: string | null;
@@ -15,6 +15,10 @@ export interface Session {
   nepicId?: string;
   napkinSlug?: string;
   exitedAt?: number;
+  homeDir?: string;
+  exitCode?: number;
+  launches: number;
+  lastResumedAt?: number;
 }
 
 let db: Database.Database | null = null;
@@ -47,6 +51,10 @@ interface SessionRow {
   nepic_id: string | null;
   napkin_slug: string | null;
   exited_at: number | null;
+  home_dir: string | null;
+  exit_code: number | null;
+  launches: number;
+  last_resumed_at: number | null;
 }
 
 function rowToSession(row: SessionRow): Session {
@@ -57,6 +65,7 @@ function rowToSession(row: SessionRow): Session {
     cwd: row.cwd,
     parentId: row.parent_id ?? null,
     createdAt: row.created_at,
+    launches: row.launches ?? 1,
   };
   if (row.command != null) session.command = row.command;
   if (row.done_message != null) session.doneMessage = row.done_message;
@@ -65,6 +74,9 @@ function rowToSession(row: SessionRow): Session {
   if (row.nepic_id != null) session.nepicId = row.nepic_id;
   if (row.napkin_slug != null) session.napkinSlug = row.napkin_slug;
   if (row.exited_at != null) session.exitedAt = row.exited_at;
+  if (row.home_dir != null) session.homeDir = row.home_dir;
+  if (row.exit_code != null) session.exitCode = row.exit_code;
+  if (row.last_resumed_at != null) session.lastResumedAt = row.last_resumed_at;
   return session;
 }
 
@@ -77,16 +89,21 @@ export function createSession(opts: {
   role?: string;
   nepicId?: string;
   napkinSlug?: string;
+  homeDir?: string;
+  isClaude?: boolean;
 }): Session {
   const d = ensureDb();
   const id = opts.id || randomUUID();
   const name = opts.name || `agent-${++agentCounter}`;
-  const ccSessionUuid = randomUUID();
+  const ccSessionUuid = (opts.isClaude ?? true) ? randomUUID() : null;
   const createdAt = Date.now();
 
+  // Auto-compute homeDir for napkin agents (tier 3)
+  const homeDir = opts.homeDir ?? (opts.napkinSlug ? `30-napkins/${opts.napkinSlug}/agents/${name}` : null);
+
   d.prepare(`
-    INSERT INTO sessions (id, name, status, command, cwd, parent_id, created_at, cc_session_uuid, role, nepic_id, napkin_slug)
-    VALUES (?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, name, status, command, cwd, parent_id, created_at, cc_session_uuid, role, nepic_id, napkin_slug, home_dir, launches)
+    VALUES (?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(
     id,
     name,
@@ -98,6 +115,7 @@ export function createSession(opts: {
     opts.role ?? null,
     opts.nepicId ?? null,
     opts.napkinSlug ?? null,
+    homeDir,
   );
 
   const session: Session = {
@@ -107,12 +125,14 @@ export function createSession(opts: {
     cwd: opts.cwd,
     parentId: opts.parentId ?? null,
     createdAt,
-    ccSessionUuid,
+    launches: 1,
   };
+  if (ccSessionUuid != null) session.ccSessionUuid = ccSessionUuid;
   if (opts.command != null) session.command = opts.command;
   if (opts.role != null) session.role = opts.role;
   if (opts.nepicId != null) session.nepicId = opts.nepicId;
   if (opts.napkinSlug != null) session.napkinSlug = opts.napkinSlug;
+  if (homeDir != null) session.homeDir = homeDir;
   return session;
 }
 
@@ -128,13 +148,28 @@ export function getAllSessions(): Session[] {
   return rows.map(rowToSession);
 }
 
-export function setSessionStatus(id: string, status: Session['status']): void {
+export function setSessionStatus(id: string, status: Session['status'], exitCode?: number): void {
   const d = ensureDb();
   if (status === 'exited') {
-    d.prepare('UPDATE sessions SET status = ?, exited_at = ? WHERE id = ?').run(status, Date.now(), id);
+    d.prepare('UPDATE sessions SET status = ?, exited_at = ?, exit_code = ? WHERE id = ?')
+      .run(status, Date.now(), exitCode ?? null, id);
   } else {
     d.prepare('UPDATE sessions SET status = ? WHERE id = ?').run(status, id);
   }
+}
+
+export function incrementSessionLaunch(id: string): void {
+  const d = ensureDb();
+  d.prepare('UPDATE sessions SET launches = launches + 1, last_resumed_at = ? WHERE id = ?')
+    .run(Date.now(), id);
+}
+
+export function getResumableSessions(): Session[] {
+  const d = ensureDb();
+  const rows = d.prepare(
+    "SELECT * FROM sessions WHERE cc_session_uuid IS NOT NULL AND status != 'exited' ORDER BY created_at",
+  ).all() as SessionRow[];
+  return rows.map(rowToSession);
 }
 
 export function setSessionDone(id: string, message: string): void {

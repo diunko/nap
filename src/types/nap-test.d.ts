@@ -14,6 +14,8 @@ import type {
   getAllNepics,
   setNepicActive,
   getNepicById,
+  incrementSessionLaunch,
+  getResumableSessions,
 } from '../main/session-store';
 import type { changeNapkinStatus, getAllNapkinStatuses, getNapkinStatusesForNepic } from '../main/napkin-store';
 import type { readNapkinDir, startNapkinWatcher, stopNapkinWatcher } from '../main/napkin-watcher';
@@ -54,6 +56,8 @@ interface NapTestHelpers {
   Database: typeof Database;
   getDb: () => Database.Database;
   getLivePtyIds: () => string[];
+  incrementSessionLaunch: typeof incrementSessionLaunch;
+  getResumableSessions: typeof getResumableSessions;
   killAllPtys: () => void;
   teardownPtys: () => void;
   path: typeof path;

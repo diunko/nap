@@ -44,10 +44,12 @@ import {
   getAllNepics,
   setNepicActive,
   getNepicById,
+  incrementSessionLaunch,
+  getResumableSessions,
 } from './session-store';
 import type { UiState } from './session-store';
 import { initNapkinStore, closeNapkinStore, changeNapkinStatus, getAllNapkinStatuses, getNapkinStatusesForNepic } from './napkin-store';
-import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir, getActiveNapkinData } from './napkin-watcher';
+import { startNapkinWatcher, stopNapkinWatcher, readNapkinDir, getActiveNapkinData, getActiveArchitectData } from './napkin-watcher';
 import { resolveByName } from './name-resolver';
 import { reconcile } from './reconcile';
 import { setWriter, enqueue, clearQueue } from './message-queue';
@@ -206,7 +208,7 @@ function createPtyProcess(
       if (!appIsClosing) {
         const session = getSession(id);
         if (session && session.status !== 'done') {
-          setSessionStatus(id, 'exited');
+          setSessionStatus(id, 'exited', exitCode);
         }
       }
     } catch {
@@ -427,20 +429,40 @@ ipcMain.handle('get-ui-state', () => {
 // IPC: get initial napkin data (pull-based, for renderer startup)
 ipcMain.handle('get-napkin-data', async () => {
   const napkins = await getActiveNapkinData();
+  const architects = await getActiveArchitectData();
   const napkinSlugs = new Set(napkins.map((n) => n.slug));
   const statuses = getAllNapkinStatuses().filter((s) => napkinSlugs.has(s.slug));
-  return { napkins, statuses };
+  return { napkins, statuses, architects };
 });
 
-// IPC: get resume data (architect session + orphaned sessions)
+// IPC: get resume data (architect session + other resumed/orphaned sessions)
 ipcMain.handle('get-resume-data', () => {
   try {
     const livePtyIds = [...ptys.keys()];
     const allSessions = getAllSessions();
+
+    // Sessions that are not exited, have no live pty, and weren't the architect
+    // (these are orphaned — e.g. bare terminals that can't be resumed)
     const orphaned = allSessions
       .filter((s) =>
         s.status !== 'exited' &&
         !livePtyIds.includes(s.id) &&
+        s.id !== resumedArchitectSession?.id,
+      )
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        role: s.role,
+        napkinSlug: s.napkinSlug,
+        ccSessionUuid: s.ccSessionUuid,
+        parentId: s.parentId,
+        cwd: s.cwd,
+      }));
+
+    // Sessions that were auto-resumed (have live ptys, not the architect)
+    const resumedSessions = allSessions
+      .filter((s) =>
+        livePtyIds.includes(s.id) &&
         s.id !== resumedArchitectSession?.id,
       )
       .map((s) => ({
@@ -466,9 +488,10 @@ ipcMain.handle('get-resume-data', () => {
           }
         : null,
       orphanedSessions: orphaned,
+      resumedSessions,
     };
   } catch {
-    return { architectSession: null, orphanedSessions: [] };
+    return { architectSession: null, orphanedSessions: [], resumedSessions: [] };
   }
 });
 
@@ -647,6 +670,9 @@ async function handleSocketRequest(msg: unknown): Promise<Record<string, unknown
         cwd: req.cwd || projectCwd,
         parentId: req.parentId ?? null,
         napkinSlug: req.napkinSlug || undefined,
+        role: req.role || undefined,
+        homeDir: req.homeDir || undefined,
+        isClaude: req.isClaude,
       });
       const ptyCommand = session.ccSessionUuid
         ? injectSessionId(req.command, session.ccSessionUuid)
@@ -669,14 +695,20 @@ async function handleSocketRequest(msg: unknown): Promise<Record<string, unknown
 
     case 'ps': {
       const sessions = getAllSessions();
+      const livePtyIds = [...ptys.keys()];
       const list = sessions.map((s) => ({
         id: s.id,
         name: s.name,
         status: s.status,
-        ccSessionUuid: s.ccSessionUuid,
+        ccSessionUuid: s.ccSessionUuid ?? null,
+        parentId: s.parentId ?? null,
         parent: s.parentId ? getSession(s.parentId)?.name ?? '-' : '-',
         cwd: s.cwd,
         uptime: formatUptime(s.createdAt),
+        role: s.role ?? null,
+        napkinSlug: s.napkinSlug ?? null,
+        pid: livePtyIds.includes(s.id) ? (ptys.get(s.id)?.process.pid ?? null) : null,
+        resumable: !!s.ccSessionUuid && s.status !== 'exited',
       }));
       return { id: req.id, ok: true, sessions: list };
     }
@@ -881,20 +913,36 @@ app.whenReady().then(async () => {
       console.warn('[architect] Failed to launch architect — falling back to shell');
     }
   } else {
-    // Auto-resume: resume existing architect session
+    // Auto-resume: resume ALL sessions with ccSessionUuid where status != 'exited'
     try {
+      const resumable = getResumableSessions();
       const savedState = loadUiState();
-      if (savedState?.activeNepicId) {
-        const architect = getArchitectForNepic(savedState.activeNepicId);
-        if (architect) {
-          resumedArchitectSession = architect;
-          const uuid = architect.ccSessionUuid;
-          const command = uuid ? `claude --verbose --resume ${uuid}` : 'claude --verbose';
-          architectResumeId = uuid ? architect.id : null;
+
+      // Find the architect (most recent with role='architect' for active nepic)
+      const architect = savedState?.activeNepicId
+        ? resumable.find((s) => s.role === 'architect' && s.nepicId === savedState.activeNepicId)
+          ?? resumable.find((s) => s.role === 'architect')
+        : resumable.find((s) => s.role === 'architect');
+
+      if (architect) {
+        resumedArchitectSession = architect;
+      }
+
+      for (const session of resumable) {
+        const uuid = session.ccSessionUuid;
+        if (!uuid) continue;
+
+        const command = `claude --verbose --resume ${uuid}`;
+        incrementSessionLaunch(session.id);
+
+        // For architect, set up fallback mechanism
+        if (session.id === architect?.id) {
+          architectResumeId = session.id;
           architectResumeTime = Date.now();
-          architectResumeCwd = architect.cwd;
-          createPtyProcess(architect.id, { command, cwd: architect.cwd });
+          architectResumeCwd = session.cwd;
         }
+
+        createPtyProcess(session.id, { command, cwd: session.cwd });
       }
     } catch {
       // Resume is best-effort — proceed without it
@@ -928,6 +976,8 @@ app.whenReady().then(async () => {
       getNepicById,
       getNapkinStatusesForNepic,
       handleNepicCreate,
+      incrementSessionLaunch,
+      getResumableSessions,
       killAllPtys,
       /** Dispose ALL handlers (data+exit) then kill — safe for immediate app.quit() */
       teardownPtys: () => {

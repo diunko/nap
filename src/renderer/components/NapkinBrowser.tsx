@@ -25,6 +25,7 @@ interface ArchitectData {
   label: string;
   terminalId: string;
   isOrphaned?: boolean;
+  entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[];
 }
 
 interface NapkinAgent {
@@ -48,18 +49,26 @@ interface NapkinCardData {
 
 // ── Derive architects from terminal data ──
 
-function deriveArchitects(terminals: TerminalMeta[]): ArchitectData[] {
+function deriveArchitects(
+  terminals: TerminalMeta[],
+  architectSnapshots: { slug: string; entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[] }[],
+): ArchitectData[] {
   return terminals
     .filter((t) => t.role === 'architect')
     .sort((a, b) => a.createdAt - b.createdAt)
-    .map((t) => ({
-      slug: t.id,
-      name: t.name,
-      status: terminalStatusToAgent(t.status, t.isOrphaned),
-      label: t.isOrphaned ? 'orphaned' : t.status === 'running' ? 'acting' : t.status === 'done' ? 'done' : 'exited',
-      terminalId: t.id,
-      isOrphaned: t.isOrphaned,
-    }));
+    .map((t) => {
+      // Match terminal name to architect snapshot slug (e.g. "001-architect")
+      const snapshot = architectSnapshots.find((s) => s.slug === t.name);
+      return {
+        slug: t.id,
+        name: t.name,
+        status: terminalStatusToAgent(t.status, t.isOrphaned),
+        label: t.isOrphaned ? 'orphaned' : t.status === 'running' ? 'acting' : t.status === 'done' ? 'done' : 'exited',
+        terminalId: t.id,
+        isOrphaned: t.isOrphaned,
+        entries: snapshot?.entries || [],
+      };
+    });
 }
 
 // ── Derive napkin cards from store data ──
@@ -247,6 +256,10 @@ function ArchitectCard({
         ? '#3b82f6'
         : '#6b7280';
 
+  const showExtended = isFocused && viewMode === 'extended';
+  const fileEntries = architect.entries.filter((e): e is NapkinFileEntry => e.type === 'file');
+  const dirEntries = architect.entries.filter((e): e is NapkinDirEntry => e.type === 'dir');
+
   return (
     <div
       style={{
@@ -293,6 +306,51 @@ function ArchitectCard({
           {architect.label}
         </span>
       </div>
+
+      {/* Body — focused/extended view (homeDir file tree) */}
+      {isFocused && architect.entries.length > 0 && (
+        <div style={{ padding: '0 0 4px 0' }}>
+          {/* [terminal] entry */}
+          <div
+            style={{
+              padding: '1px 0 1px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
+            <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
+              [terminal]
+            </span>
+          </div>
+
+          {/* Files */}
+          {fileEntries.map((file, i) => (
+            <FileRow key={`f-${i}`} file={file} indent={16} showControls={showExtended} />
+          ))}
+
+          {/* Subdirs (extended only) */}
+          {showExtended && dirEntries.map((dir, i) => (
+            <div key={`d-${i}`}>
+              <div
+                style={{
+                  padding: '1px 0 1px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <span style={{ color: '#6b7280', flexShrink: 0, width: 10, textAlign: 'center', fontSize: 12 }}>*</span>
+                <span style={{ color: '#cccccc' }}>{dir.name}/</span>
+              </div>
+              {dir.files.map((file, fi) => (
+                <FileRow key={`df-${fi}`} file={file} indent={32} showControls={true} />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -505,6 +563,7 @@ export function NapkinBrowser() {
   const resumeOrphanedTerminal = useTerminalStore((s) => s.resumeOrphanedTerminal);
   const napkins = useTerminalStore((s) => s.napkins);
   const terminals = useTerminalStore((s) => s.terminals);
+  const architectSnapshots = useTerminalStore((s) => s.architectSnapshots);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
   // Cmd+K handler
@@ -537,7 +596,7 @@ export function NapkinBrowser() {
   }, [extendCard]);
 
   // Derive view data from store
-  const architects = deriveArchitects(terminals);
+  const architects = deriveArchitects(terminals, architectSnapshots);
   const napkinCards = deriveNapkinCards(napkins, terminals);
 
   const filteredNapkins = browserFilterText

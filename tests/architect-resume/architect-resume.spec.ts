@@ -346,8 +346,9 @@ base.describe.serial('T-0800-04: expired CC session falls back to fresh', () => 
 
 // =========================================================================
 // T-0800-05: orphaned session detection — status=running, no live pty
+// 1600: all claude sessions now auto-resume (phase 4), this session would be resumed not orphaned
 // =========================================================================
-base.describe.serial('T-0800-05: orphaned session detection', () => {
+base.describe.serial.skip('T-0800-05: orphaned session detection', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-0800-05-'));
   const orphanId = 'orphan-0800-05';
 
@@ -409,8 +410,9 @@ base.describe.serial('T-0800-05: orphaned session detection', () => {
 
 // =========================================================================
 // T-0800-07: multiple architects — resume the active one
+// 1600: all claude sessions now auto-resume (phase 4), done architect also resumes
 // =========================================================================
-base.describe.serial('T-0800-07: multiple architects — resume the active one', () => {
+base.describe.serial.skip('T-0800-07: multiple architects — resume the active one', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-0800-07-'));
   const doneArchId = 'arch-done-07';
   const runningArchId = 'arch-running-07';
@@ -529,8 +531,9 @@ base.describe.serial('T-0800-08: resumed architect becomes active terminal', () 
 
 // =========================================================================
 // T-0800-09: orphaned agent click to resume
+// 1600: all claude sessions now auto-resume (phase 4), this session would already be resumed
 // =========================================================================
-base.describe.serial('T-0800-09: orphaned agent click to resume', () => {
+base.describe.serial.skip('T-0800-09: orphaned agent click to resume', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-0800-09-'));
   const orphanId = 'orphan-0800-09';
   const orphanUuid = 'uuid-orphan-resume-09';
@@ -602,8 +605,9 @@ base.describe.serial('T-0800-09: orphaned agent click to resume', () => {
 
 // =========================================================================
 // T-0800-10: non-architect agents are NOT auto-resumed
+// 1600: all claude sessions now auto-resume (phase 4), this test inverts
 // =========================================================================
-base.describe.serial('T-0800-10: non-architect agents are NOT auto-resumed', () => {
+base.describe.serial.skip('T-0800-10: non-architect agents are NOT auto-resumed', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-0800-10-'));
   const architectId = 'arch-0800-10';
   const fsEngId = 'fseng-0800-10';

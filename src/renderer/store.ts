@@ -100,6 +100,7 @@ interface TerminalStore {
 
   // Napkin data (live-wired)
   napkins: NapkinEntry[];
+  architectSnapshots: { slug: string; absPath: string; entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[] }[];
   kanbanVisible: boolean;
 
   createTerminal: (name: string, parentId?: string, command?: string) => string;
@@ -130,6 +131,7 @@ interface TerminalStore {
 
   // Napkin actions
   setNapkinData: (data: { slug: string; absPath: string; entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[]; napkinBullets: string[] } | { slug: string; absPath: string; entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[]; napkinBullets: string[] }[]) => void;
+  setArchitectData: (data: { slug: string; absPath: string; entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[] } | { slug: string; absPath: string; entries: (NapkinFileEntry | NapkinAgentEntry | NapkinDirEntry)[] }[]) => void;
   mergeNapkinStatus: (slug: string, status: string) => void;
   toggleKanban: () => void;
 }
@@ -152,6 +154,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   // Napkin data
   napkins: [],
+  architectSnapshots: [],
   kanbanVisible: false,
 
   createTerminal: (name: string, parentId?: string, command?: string) => {
@@ -440,6 +443,24 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           });
         }
         return { napkins };
+      });
+    }
+  },
+
+  setArchitectData: (data) => {
+    if (Array.isArray(data)) {
+      set({ architectSnapshots: data.map((item) => ({ slug: item.slug, absPath: item.absPath, entries: item.entries })) });
+    } else {
+      set((state) => {
+        const snapshots = [...state.architectSnapshots];
+        const idx = snapshots.findIndex((s) => s.slug === data.slug);
+        const entry = { slug: data.slug, absPath: data.absPath, entries: data.entries };
+        if (idx >= 0) {
+          snapshots[idx] = entry;
+        } else {
+          snapshots.push(entry);
+        }
+        return { architectSnapshots: snapshots };
       });
     }
   },
