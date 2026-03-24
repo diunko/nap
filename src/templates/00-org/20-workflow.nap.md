@@ -99,7 +99,8 @@ Each agent gets a directory inside the napkin:
 Architect launches via NAP CLI:
 
 ```bash
-nap start 'claude --verbose "read .nap/.../001-test-arch-feature/prompt.md and follow its instructions"' --name 001-test-arch-feature
+nap start claude "read .nap/.../001-test-arch-feature/prompt.md and follow its instructions" \
+  --name 001-test-arch-feature --napkin 0100-feature --role test-arch
 ```
 
 Architect waits:

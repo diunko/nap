@@ -416,8 +416,8 @@ async function main(): Promise<void> {
 INSERT INTO nepics (id, name, slug, created_at, is_active)
   VALUES ('${nepicId}', 'v1', '01-v1', ${now}, 1);
 
-INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created_at)
-  VALUES ('${sessionId}', '${nepicId}', '001-architect', 'architect', 'new', '${ccSessionUuid}', ${now});
+INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created_at, home_dir)
+  VALUES ('${sessionId}', '${nepicId}', '001-architect', 'architect', 'new', '${ccSessionUuid}', ${now}, '20-architects/001-architect');
 `;
 
       const dbPath = path.join(napDir, 'nap.db');
@@ -506,11 +506,20 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
         process.exit(1);
       }
 
-      const isClaude = args[0] === 'claude';
+      const isClaudeKeyword = args[0] === 'claude';
+      const isClaudeCommand = args[0].startsWith('claude ') || args[0] === 'claude';
+      const isClaude = isClaudeKeyword || isClaudeCommand;
       let command: string;
-      if (isClaude) {
+      if (isClaudeKeyword && args.length > 1) {
+        // New form: nap start claude "read prompt.md" --napkin ...
         const prompt = args.slice(1).join(' ');
-        command = prompt ? `claude --verbose "${prompt}"` : 'claude --verbose';
+        command = `claude --verbose "${prompt}"`;
+      } else if (isClaudeKeyword) {
+        // New form, no prompt: nap start claude
+        command = 'claude --verbose';
+      } else if (isClaudeCommand) {
+        // Old form: nap start 'claude --verbose "read prompt.md"'
+        command = args[0];
       } else {
         command = args[0];
       }

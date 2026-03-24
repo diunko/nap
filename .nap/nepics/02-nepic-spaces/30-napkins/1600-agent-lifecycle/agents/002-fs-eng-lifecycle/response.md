@@ -2,7 +2,7 @@
 
 ## What was built
 
-All 4 phases implemented. Zero type errors (`tsc --noEmit` passes).
+All 4 phases implemented + followup fixes. Zero type errors (`tsc --noEmit` passes).
 
 ### Phase 1: Foundation (~120 lines)
 - **Schema**: added `home_dir TEXT`, `exit_code INTEGER`, `launches INTEGER DEFAULT 1`, `last_resumed_at INTEGER` to sessions table in both `database.ts` and `nap.ts` SCHEMA_SQL
@@ -49,8 +49,19 @@ All 4 phases implemented. Zero type errors (`tsc --noEmit` passes).
 3. **Architect snapshot matching**: uses terminal name → snapshot slug match (e.g. terminal "001-architect" → architect dir "001-architect")
 4. **Separate IPC channel for architects**: `architect:update` keeps architect filesystem data separate from napkin data in the store, avoiding slug collisions
 
+## Followup fixes
+
+1. **Old nap start form supported**: `nap start 'claude --verbose "prompt"'` (single string) still works — CLI detects `args[0].startsWith('claude ')` and passes through as-is with `isClaude: true`
+2. **nap init**: architect session now includes `home_dir = '20-architects/001-architect'`
+3. **nap open --architect**: switched from `getArchitectForNepicLaunch` (narrow) to `getArchitectForNepic` (broadened `status != 'exited'`). Now calls `incrementSessionLaunch`
+4. **handleNepicCreate**: architect session now includes `homeDir: '20-architects/001-architect'`
+5. **Template docs updated**: `src/templates/00-org/20-workflow.nap.md` — new `nap start claude` pattern with `--napkin`, `--role` flags
+6. **Live docs updated**: `.nap/00-org/20-workflow.nap.md` — same updates
+7. **Template skills**: confirmed complete (232 + 170 lines) — not stubs
+
 ## For architect review
 
 - The `nap start claude` command construction wraps the prompt in double quotes: `claude --verbose "prompt"`. If prompts contain double quotes, this could break — may need shell escaping
 - The architect fallback mechanism (expired session → fresh spawn) is preserved but only applies to the architect identified in the resume loop, not all sessions
 - Free-floating agents without homeDir (spec item 3.5) are handled implicitly — the card renders with no file entries, just the status dot and label. A `[terminal] + command text` rendering could be added but seemed like UI polish beyond the data model work
+- The architect-resume tests (T-0800-03, 05, 07, 09, 10) were rewritten by linter/reviewer to match new auto-resume-all behavior instead of being skipped

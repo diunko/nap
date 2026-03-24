@@ -119,8 +119,16 @@ Each agent gets a directory inside the napkin:
 Architect launches via NAP CLI:
 
 ```bash
-nap start 'claude --verbose "read .nap/.../001-test-arch-feature/prompt.md and write your response to .nap/.../001-test-arch-feature/response.md"' --name 001-test-arch-feature
+nap start claude "read .nap/.../001-test-arch-feature/prompt.md and follow its instructions" \
+  --name 001-test-arch-feature --napkin 0100-feature --role test-arch
 ```
+
+Flags:
+- `claude` as first arg → Claude session (auto-injects --verbose --session-id, resumable)
+- `--name` → display name in sidebar
+- `--napkin <slug>` → ties agent to napkin, sets homeDir to `agents/<name>/`
+- `--role <role>` → metadata (architect, test-arch, fs-eng, test-eng)
+- `--dir <path>` → explicit home directory (overrides convention)
 
 This spawns a real Claude Code session in a real terminal. The agent appears in the sidebar with a green dot. The human can click it and watch it think.
 

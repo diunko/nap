@@ -564,6 +564,7 @@ function handleNepicCreate(name: string): {
     cwd: nepicDir,
     role: 'architect',
     nepicId,
+    homeDir: '20-architects/001-architect',
   });
 
   // 6. Spawn architect pty
@@ -883,7 +884,7 @@ app.whenReady().then(async () => {
     try {
       const activeNepicId = getActiveNepicId();
       if (activeNepicId) {
-        const architect = getArchitectForNepicLaunch(activeNepicId);
+        const architect = getArchitectForNepic(activeNepicId);
         const nepic = getNepicById(activeNepicId);
         if (architect && nepic) {
           const promptPath = `.nap/nepics/${nepic.slug}/20-architects/001-architect/prompt.md`;
@@ -891,8 +892,9 @@ app.whenReady().then(async () => {
             ? `[Architect] ${initialTerminalName}`
             : '[Architect]';
 
-          // Update session status to running
+          // Update session status to running + increment launch counter
           setSessionStatus(architect.id, 'running');
+          incrementSessionLaunch(architect.id);
 
           // Build command
           const baseCommand = `claude --verbose "read ${promptPath} and follow its instructions"`;
