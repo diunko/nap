@@ -599,6 +599,14 @@ export function NapkinBrowser() {
   const architects = deriveArchitects(terminals, architectSnapshots);
   const napkinCards = deriveNapkinCards(napkins, terminals);
 
+  // Free-floating terminals: not architect, not napkin-linked, not the default shell
+  const napkinTerminalIds = new Set(
+    napkinCards.flatMap((n) => n.agents.map((a) => a.terminalId).filter(Boolean)),
+  );
+  const freeFloating = terminals.filter(
+    (t) => t.role !== 'architect' && !t.napkinSlug && !napkinTerminalIds.has(t.id),
+  );
+
   const filteredNapkins = browserFilterText
     ? napkinCards.filter((n) =>
         n.name.toLowerCase().includes(browserFilterText.toLowerCase()),
@@ -706,6 +714,80 @@ export function NapkinBrowser() {
             onClickAgent={handleClickAgent}
           />
         ))}
+
+        {/* Free-floating sessions (no napkin, no architect role) */}
+        {freeFloating.length > 0 && filteredNapkins.length > 0 && (
+          <div style={{ height: 1, background: '#3c3c3c', margin: '6px 12px' }} />
+        )}
+        {freeFloating.map((t) => {
+          const status = terminalStatusToAgent(t.status, t.isOrphaned);
+          const isFocused = focusedCardSlug === t.id;
+          return (
+            <div
+              key={t.id}
+              style={{
+                padding: '0 12px 0 9px',
+                cursor: 'pointer',
+                background: isFocused ? '#37373d' : 'transparent',
+                borderLeft: isFocused ? '3px solid #007acc' : '3px solid transparent',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                if (!isFocused) e.currentTarget.style.background = '#2a2d2e';
+              }}
+              onMouseLeave={(e) => {
+                if (!isFocused) e.currentTarget.style.background = 'transparent';
+              }}
+              onClick={() => {
+                if (t.isOrphaned) {
+                  resumeOrphanedTerminal(t.id);
+                }
+                setActive(t.id);
+                expandCard(t.id);
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '3px 0',
+                  gap: 6,
+                  userSelect: 'none',
+                }}
+              >
+                <span style={{ flexShrink: 0, width: 10, display: 'flex', justifyContent: 'center' }}>
+                  <StatusDot status={status} />
+                </span>
+                <span
+                  style={{
+                    flex: 1,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    color: isFocused ? '#e5e5e5' : '#cccccc',
+                  }}
+                >
+                  {t.name}
+                </span>
+              </div>
+              {isFocused && (
+                <div style={{ padding: '0 0 4px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ color: '#6b7280', fontSize: 12 }}>*</span>
+                    <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
+                      [terminal]
+                    </span>
+                  </div>
+                  {t.cwd && (
+                    <div style={{ color: '#6b7280', fontSize: 11, padding: '1px 0 0 16px' }}>
+                      {t.cwd}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

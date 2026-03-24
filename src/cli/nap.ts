@@ -265,6 +265,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ── Claude command construction ──
+
+/**
+ * Shell-escape a string for use inside single quotes.
+ * The only character that needs escaping is ' itself: end quote, escaped literal, reopen.
+ */
+export function shellEscape(s: string): string {
+  return s.replace(/'/g, "'\\''");
+}
+
+/**
+ * Build the pty command for a claude session from the new-form prompt.
+ * Uses single quotes to prevent all shell expansion.
+ */
+export function buildClaudeCommand(prompt: string): string {
+  if (!prompt) return 'claude --verbose';
+  return `claude --verbose '${shellEscape(prompt)}'`;
+}
+
 // --- Template helpers ---
 
 function findTemplatesDir(): string {
@@ -513,7 +532,7 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
       if (isClaudeKeyword && args.length > 1) {
         // New form: nap start claude "read prompt.md" --napkin ...
         const prompt = args.slice(1).join(' ');
-        command = `claude --verbose "${prompt}"`;
+        command = buildClaudeCommand(prompt);
       } else if (isClaudeKeyword) {
         // New form, no prompt: nap start claude
         command = 'claude --verbose';
