@@ -24,10 +24,24 @@
   * does it set homeDir?
   * does it use template prompt (1400 fix) still working?
 
-* workflow docs
-  * `.nap/00-org/20-workflow.nap.md` shows old nap start pattern
-  * `src/templates/00-org/20-workflow.nap.md` also needs updating
-  * role docs may reference old pattern
+* src/templates/ — the nap init templates
+  * ALL templates need updating for the new nap start pattern
+  * `src/templates/00-org/20-workflow.nap.md`
+    * shows old form: `nap start 'claude --verbose "read prompt.md"'`
+    * needs new form: `nap start claude "read prompt.md" --napkin <slug> --name <name>`
+    * the IMPORTANT section about Explore vs nap start — update examples
+  * `src/templates/00-org/40-roles/architect.md`
+    * launch examples use old pattern
+    * add: `--role`, `--napkin`, `--dir` flag documentation
+  * `src/templates/00-org/40-roles/fullstack-eng.md`, `test-architect.md`, `test-eng.md`
+    * if they reference nap start pattern, update
+  * `src/templates/nepic/20-architects/001-architect/prompt.md`
+    * is this still correct for the new lifecycle?
+
+* live docs (this project's .nap/00-org/)
+  * `.nap/00-org/20-workflow.nap.md` — same updates as template
+  * `.nap/00-org/40-roles/architect.md` — same updates
+  * these are the docs that current agents read
 
 * nap ls
   * napkinned but never built
