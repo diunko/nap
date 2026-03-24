@@ -93,6 +93,12 @@ Each bullet is a "what if." Not a todo. Not a spec. An idea with energy — some
   * maybe: poke changes status from done back to running?
   * or: poke works regardless of status, status is just a signal to the architect
   * the agent's CC session has full context — wasting it by locking them out
+  * what if you could assign a new task to a done agent?
+    * drop a file in their dir (like followup-prompt.md)
+    * mark them somehow — status goes to "has-task" or a badge appears
+    * the agent sees the new file, picks it up
+    * or: poke them with "read followup-prompt.md in your dir"
+    * reuses their full context — no re-onboarding
 
 * What if `nap init` was agentic?
   * right now: scaffolds templates, static files, done
