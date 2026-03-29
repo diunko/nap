@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>NAP Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1e1e1e; color: #cccccc; font-family: Menlo, Monaco, monospace; font-size: 12px; padding: 40px; }
+
+  .container { position: relative; width: 1200px; height: 800px; margin: 0 auto; }
+
+  .box {
+    position: absolute;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    padding: 10px;
+    background: #252526;
+  }
+  .box .title {
+    color: #9cdcfe;
+    font-weight: bold;
+    font-size: 13px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #3c3c3c;
+    padding-bottom: 4px;
+  }
+  .box .item { color: #808080; padding: 1px 0; }
+  .box .item.highlight { color: #cccccc; }
+
+  .actor-group {
+    position: absolute;
+    border: 1px dashed #3c3c3c;
+    border-radius: 6px;
+    padding: 8px;
+  }
+  .actor-group .group-title {
+    color: #6b7280;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .terminal-slot {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid #3c3c3c;
+    border-radius: 3px;
+    padding: 3px 6px;
+    margin: 2px;
+    background: #1e1e1e;
+    font-size: 10px;
+  }
+  .terminal-slot .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    display: inline-block;
+  }
+  .dot.green { background: #22c55e; }
+  .dot.blue { background: #3b82f6; }
+  .dot.gray { background: #6b7280; }
+
+  .arrow {
+    position: absolute;
+    background: none;
+    pointer-events: none;
+  }
+
+  .label {
+    position: absolute;
+    color: #6b7280;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .label.channel {
+    background: #1e1e1e;
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: #e5c07b;
+  }
+
+  svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  svg line { stroke: #4a4a4a; stroke-width: 1; }
+  svg line.data { stroke: #22c55e; stroke-dasharray: 4,3; stroke-width: 1; }
+  svg line.socket { stroke: #e5c07b; stroke-width: 1; }
+  svg line.ipc { stroke: #3b82f6; stroke-width: 1; }
+  svg line.fs { stroke: #c678dd; stroke-width: 1; stroke-dasharray: 2,2; }
+  svg marker { fill: #4a4a4a; }
+
+  h1 { color: #e5e5e5; font-size: 16px; margin-bottom: 20px; text-align: center; }
+
+  .legend {
+    position: absolute;
+    bottom: 0; right: 0;
+    font-size: 10px;
+    color: #6b7280;
+  }
+  .legend div { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  .legend .swatch { width: 20px; height: 2px; display: inline-block; }
+  .swatch.s-data { background: #22c55e; }
+  .swatch.s-socket { background: #e5c07b; }
+  .swatch.s-ipc { background: #3b82f6; }
+  .swatch.s-fs { background: #c678dd; }
+</style>
+</head>
+<body>
+
+<h1>NAP Architecture — actors & communication</h1>
+
+<div class="container">
+
+  <!-- SVG arrows -->
+  <svg>
+    <defs>
+      <marker id="arrow" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+        <polygon points="0 0, 6 2, 0 4" fill="#4a4a4a"/>
+      </marker>
+      <marker id="arrow-green" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+        <polygon points="0 0, 6 2, 0 4" fill="#22c55e"/>
+      </marker>
+      <marker id="arrow-yellow" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+        <polygon points="0 0, 6 2, 0 4" fill="#e5c07b"/>
+      </marker>
+      <marker id="arrow-blue" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+        <polygon points="0 0, 6 2, 0 4" fill="#3b82f6"/>
+      </marker>
+      <marker id="arrow-purple" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+        <polygon points="0 0, 6 2, 0 4" fill="#c678dd"/>
+      </marker>
+    </defs>
+
+    <!-- CLI → Main (socket) -->
+    <line x1="120" y1="200" x2="370" y2="200" class="socket" marker-end="url(#arrow-yellow)"/>
+    <line x1="370" y1="210" x2="120" y2="210" class="socket" marker-end="url(#arrow-yellow)"/>
+
+    <!-- Main → Renderer (IPC) -->
+    <line x1="680" y1="180" x2="790" y2="180" class="ipc" marker-end="url(#arrow-blue)"/>
+    <line x1="790" y1="195" x2="680" y2="195" class="ipc" marker-end="url(#arrow-blue)"/>
+
+    <!-- Main → Filesystem -->
+    <line x1="520" y1="80" x2="520" y2="130" class="fs" marker-end="url(#arrow-purple)"/>
+    <line x1="530" y1="130" x2="530" y2="80" class="fs" marker-end="url(#arrow-purple)"/>
+
+    <!-- Main → PTY slots -->
+    <line x1="450" y1="310" x2="250" y2="400" class="data" marker-end="url(#arrow-green)"/>
+    <line x1="255" y1="395" x2="455" y2="305" class="data" marker-end="url(#arrow-green)"/>
+
+    <line x1="500" y1="310" x2="450" y2="400" class="data" marker-end="url(#arrow-green)"/>
+    <line x1="455" y1="395" x2="505" y2="305" class="data" marker-end="url(#arrow-green)"/>
+
+    <line x1="560" y1="310" x2="650" y2="400" class="data" marker-end="url(#arrow-green)"/>
+    <line x1="655" y1="395" x2="565" y2="305" class="data" marker-end="url(#arrow-green)"/>
+
+    <!-- Agent → Main (socket, bypassing pty) -->
+    <line x1="300" y1="480" x2="380" y2="310" class="socket" marker-end="url(#arrow-yellow)"/>
+    <line x1="500" y1="480" x2="500" y2="310" class="socket" marker-end="url(#arrow-yellow)"/>
+    <line x1="700" y1="480" x2="620" y2="310" class="socket" marker-end="url(#arrow-yellow)"/>
+
+    <!-- Renderer → xterm slots -->
+    <line x1="860" y1="310" x2="260" y2="590" class="data"/>
+    <line x1="900" y1="310" x2="460" y2="590" class="data"/>
+    <line x1="940" y1="310" x2="660" y2="590" class="data"/>
+
+  </svg>
+
+  <!-- FILESYSTEM -->
+  <div class="box" style="top: 10px; left: 380px; width: 280px;">
+    <div class="title">FILESYSTEM</div>
+    <div class="item highlight">.nap/nap.db (SQLite)</div>
+    <div class="item highlight">.nap/nepics/*/30-napkins/ (dirs, marker files)</div>
+    <div class="item highlight">.nap/nepics/*/20-architects/ (dirs, marker files)</div>
+    <div class="item">artifacts: .nap.md, .spec.md, prompt.md, ...</div>
+    <div class="item">state.json (UI state)</div>
+  </div>
+
+  <!-- CLI -->
+  <div class="box" style="top: 170px; left: 10px; width: 110px;">
+    <div class="title">nap CLI</div>
+    <div class="item">human runs</div>
+    <div class="item">in a terminal</div>
+    <div class="item" style="margin-top: 4px; color: #e5c07b;">→ socket</div>
+  </div>
+
+  <!-- MAIN PROCESS -->
+  <div class="box" style="top: 130px; left: 370px; width: 310px; height: 180px;">
+    <div class="title">ELECTRON MAIN</div>
+    <div class="item highlight">socket server (.nap/sock)</div>
+    <div class="item highlight">pty manager (spawn, kill, route)</div>
+    <div class="item highlight">session store (SQLite wrapper)</div>
+    <div class="item highlight">napkin watcher (fs.watch)</div>
+    <div class="item highlight">IPC hub (relay to renderer)</div>
+    <div class="item" style="margin-top: 6px; color: #6b7280; font-size: 10px;">← the hub. everything goes through here.</div>
+  </div>
+
+  <!-- RENDERER -->
+  <div class="box" style="top: 130px; left: 790px; width: 200px; height: 180px;">
+    <div class="title">ELECTRON RENDERER</div>
+    <div class="item highlight">React tree</div>
+    <div class="item" style="padding-left: 10px;">Gutter</div>
+    <div class="item" style="padding-left: 10px;">NapkinBrowser</div>
+    <div class="item" style="padding-left: 10px;">Terminal (wrapper)</div>
+    <div class="item" style="padding-left: 10px;">KanbanOverlay</div>
+    <div class="item highlight" style="margin-top: 4px;">zustand store</div>
+    <div class="item highlight">terminal registry (Map)</div>
+  </div>
+
+  <!-- PTY / AGENT slots -->
+  <div class="actor-group" style="top: 380px; left: 170px; width: 600px; height: 140px;">
+    <div class="group-title">pty child processes (agents)</div>
+
+    <div style="display: flex; gap: 30px; margin-top: 8px;">
+
+      <!-- Agent 1: Architect -->
+      <div style="flex: 1; border: 1px solid #3c3c3c; border-radius: 4px; padding: 8px; background: #1e1e1e;">
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+          <span class="dot green"></span>
+          <span style="color: #9cdcfe; font-size: 11px;">[Architect] Kai</span>
+        </div>
+        <div class="item">claude --verbose --resume &lt;uuid&gt;</div>
+        <div class="item" style="color: #e5c07b; margin-top: 2px;">↑ stdout/stdin (pty)</div>
+        <div class="item" style="color: #e5c07b;">↑ socket (nap done, nap start)</div>
+      </div>
+
+      <!-- Agent 2: test-arch -->
+      <div style="flex: 1; border: 1px solid #3c3c3c; border-radius: 4px; padding: 8px; background: #1e1e1e;">
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+          <span class="dot green"></span>
+          <span style="color: #cccccc; font-size: 11px;">001-test-arch</span>
+        </div>
+        <div class="item">claude --verbose --session-id &lt;uuid&gt;</div>
+        <div class="item" style="color: #e5c07b; margin-top: 2px;">↑ stdout/stdin (pty)</div>
+        <div class="item" style="color: #e5c07b;">↑ socket (nap done)</div>
+      </div>
+
+      <!-- Agent 3: fs-eng -->
+      <div style="flex: 1; border: 1px solid #3c3c3c; border-radius: 4px; padding: 8px; background: #1e1e1e;">
+        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+          <span class="dot blue"></span>
+          <span style="color: #cccccc; font-size: 11px;">002-fs-eng</span>
+        </div>
+        <div class="item">claude --verbose --session-id &lt;uuid&gt;</div>
+        <div class="item" style="color: #6b7280; margin-top: 2px;">done — pty idle</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- XTERM slots -->
+  <div class="actor-group" style="top: 570px; left: 170px; width: 600px; height: 80px;">
+    <div class="group-title">xterm.js instances (renderer, outside React)</div>
+    <div style="display: flex; gap: 30px; margin-top: 8px;">
+      <div class="terminal-slot"><span class="dot green"></span> xterm #kai <span style="color: #6b7280;">← active</span></div>
+      <div class="terminal-slot"><span class="dot green"></span> xterm #test-arch</div>
+      <div class="terminal-slot"><span class="dot blue"></span> xterm #fs-eng</div>
+    </div>
+    <div style="margin-top: 6px; color: #6b7280; font-size: 10px;">
+      each xterm ↔ one pty (via IPC: pty:data / pty:write) · Canvas rendering · 100k scrollback
+    </div>
+  </div>
+
+  <!-- Channel labels -->
+  <span class="label channel" style="top: 188px; left: 200px;">socket (ndjson)</span>
+  <span class="label channel" style="top: 172px; left: 710px;">IPC</span>
+  <span class="label channel" style="top: 95px; left: 545px;">fs.watch + r/w</span>
+  <span class="label channel" style="top: 350px; left: 300px;">pty stdin/stdout</span>
+  <span class="label channel" style="top: 460px; left: 380px; color: #e5c07b;">socket (nap done, nap start)</span>
+  <span class="label" style="top: 555px; left: 500px; color: #22c55e;">xterm.write / onData</span>
+
+  <!-- Note: agent has TWO channels -->
+  <div style="position: absolute; top: 690px; left: 170px; width: 600px; color: #6b7280; font-size: 11px; border-top: 1px solid #3c3c3c; padding-top: 8px;">
+    <strong style="color: #cccccc;">Key:</strong> each agent talks to main via <strong style="color: #22c55e;">two channels</strong>:
+    (1) <span style="color: #22c55e;">pty stdin/stdout</span> — terminal I/O, what you see;
+    (2) <span style="color: #e5c07b;">socket</span> — structured commands (nap done, nap start, nap poke).
+    These are independent — agent can write output while sending a socket command.
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div><span class="swatch s-data"></span> pty data (stdin/stdout)</div>
+    <div><span class="swatch s-socket"></span> socket (ndjson)</div>
+    <div><span class="swatch s-ipc"></span> Electron IPC</div>
+    <div><span class="swatch s-fs"></span> filesystem (watch/read/write)</div>
+  </div>
+
+</div>
+
+</body>
+</html>
