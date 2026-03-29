@@ -487,9 +487,10 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
         }
       }
 
-      // Find electron binary
-      const napAppPath =
-        process.env['NAP_APP_PATH'] || path.join(os.homedir(), 'nap-app');
+      // Find electron binary — resolve relative to own package root
+      // CLI is at out/cli/cli/nap.js, so package root is 3 levels up from __dirname
+      const packageRoot = path.resolve(__dirname, '..', '..', '..');
+      const napAppPath = process.env['NAP_APP_PATH'] || packageRoot;
       const electronBin = path.join(napAppPath, 'node_modules', '.bin', 'electron');
       const mainScript = path.join(napAppPath, 'out', 'main', 'main.js');
 

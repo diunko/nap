@@ -1,0 +1,46 @@
+{
+  "name": "nap-v2",
+  "version": "0.1.0",
+  "description": "NAP — Napkin Agent Protocol",
+  "main": "out/main/main.js",
+  "bin": {
+    "nap2": "out/cli/cli/nap.js"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
+    "build:cli": "tsc -p tsconfig.cli.json",
+    "test:small": "vitest run",
+    "test:medium": "npm run build && npm run build:cli && NAP_TEST=1 npx playwright test",
+    "test:medium:headed": "npm run build && NAP_TEST=1 HEADED=1 npx playwright test",
+    "test": "npm run test:small && npm run test:medium",
+    "postinstall": "electron-rebuild"
+  },
+  "dependencies": {
+    "@xterm/addon-canvas": "^0.7.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-webgl": "^0.18.0",
+    "@xterm/xterm": "^5.0.0",
+    "better-sqlite3": "^12.8.0",
+    "node-pty": "^1.0.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "@playwright/test": "^1.58.2",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^33.0.0",
+    "electron-vite": "^5.0.0",
+    "jsdom": "^29.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0"
+  }
+}
