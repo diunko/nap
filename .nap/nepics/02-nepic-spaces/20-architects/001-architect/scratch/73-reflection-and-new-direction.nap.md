@@ -3,16 +3,30 @@
 * the key idea: s→r transition as a mapping
   * source state: files on disk (marker files, dirs, state.json)
   * target state: in-memory model (what the app shows, what ptys to spawn)
+    * // in this transition, is it that fs never changes? or do we fix inconsistencies
+      * // e.g. mark S_STOPPED:A_RUNNING to S_RUNNING:A_RUNNING or smth like that
+        * // S_STOPPED:A_RUNNING -> S_RUNNING:A_STARTING ??
   * the transition IS the function under test
+    * // is it a function? or is it a process?
+      * // starting an agent is smth that can fail
+      * // if it's a function, how do we know what to do 
+        * // to transition current system to something that s->r mapping returned?
   * not necessarily pure — may do side effects (spawn ptys, create xterm instances)
   * but the DECISION of what to do is derivable from the source state
     * "given these files, what sessions should exist?" — pure
+      * // right, but what do we do with this info? 
+      * // is it introducing a sep layer that interprets the outputs?
+        * // this begins to look complicated? should strive for smth simple
+          * // idk have to think what'd be that s->r architecture / layers / composition to
+            * // to be testable simple and clear mental model
     * "spawn the pty" — side effect, happens after the decision
 
 * separating decision from execution
   * decision function (testable, pure-ish):
     * input: filesystem snapshot (dirs, marker files, state.json)
     * output: plan — what to resume, what to show, what's active
+      * // plan? so we should have interpreter of plan then?
+        * // is it the only way, the price we have to pay for having s->r pure?
     * ```
       filesOnDisk → {
         sessionsToResume: [{ uuid, name, role, command }],
@@ -21,6 +35,10 @@
       }
       ```
   * execution (side effects, not pure):
+    * // question about plan layer. not trying to be terraform here =) (yet, at least =)
+      * // what can be a stupid simple version of this? and even simpler? 
+      * // i mean, i need to restore a bunch of terminals, come on
+        * // completely new processes, effectively from clean state (only state is uuids!)
     * take the plan, spawn ptys, build store, render
     * this part is hard to unit test — but it's SIMPLE
     * the complexity lives in the decision, not the execution
@@ -53,6 +71,11 @@
     * "0100-explore should show 1 agent dot"
   * no Electron, no Playwright, no filesystem, no pty
   * vitest, milliseconds
+
+* // this is going nice and meticulous 
+  * // before diving in wanted to discuss abstractions and layers that we're thinking about
+  * // in simpler world, is there a way to achieve same level of testability?
+  * // constraint: we should be able to build fully working and straightforward system within next nepic
 
 * fixture composition for journey testing
   * a journey = sequence of state transitions
