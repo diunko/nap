@@ -38,16 +38,21 @@
         * read .agent.nap.json → get uuid, role, name, exited flag
     * for each architect dir in 20-architects/:
       * read .agent.nap.json → get uuid, role, name
-  * 3. for each agent/architect with uuid AND NOT exited:
-    * spawn pty: `claude --verbose --resume <uuid>`
-    * agent is now RUNNING (pty exists)
-  * 4. for each agent with uuid AND exited:
-    * do NOT spawn pty
-    * agent shows as EXITED in sidebar (gray dot, hollow)
-    * user can click [terminal] to clear exited and resume later
-  * 5. for agents WITHOUT uuid (e.g. just created by nap init, never started):
-    * do NOT spawn pty
-    * these are NEW — will be started when architect launches them
+  * 3. three cases for each agent/architect:
+    * case A — has UUID, NOT exited: resume
+      * spawn pty: `claude --verbose --resume <uuid>`
+      * agent is now RUNNING (pty exists)
+    * case B — has UUID, exited: skip
+      * do NOT spawn pty
+      * agent shows as EXITED in sidebar (gray dot, hollow)
+      * user can click [terminal] to clear exited flag and resume on next start
+    * case C — NO UUID: fresh start (this is how nap init → nap open works)
+      * assign new UUID (crypto.randomUUID)
+      * write UUID back to .agent.nap.json marker
+      * if architect: spawn pty: `claude --verbose --session-id <uuid> "read prompt.md and follow its instructions"`
+      * if napkin agent with prompt.md: spawn pty with prompt
+      * if no prompt context: don't spawn yet (agent dir exists but not ready to run)
+      * this covers: nap init creates architect stub → nap open assigns UUID and starts it
   * 6. push model state to renderer via bridge
   * 7. renderer builds zustand store, renders sidebar, wires xterm instances to ptys
   * 8. restore active terminal from ui-state.json
