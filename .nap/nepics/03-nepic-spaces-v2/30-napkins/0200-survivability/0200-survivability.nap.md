@@ -156,6 +156,21 @@
   * exited flag in marker file instead of SQLite status column
   * bridge pushes terminal lifecycle events (created, exited, data) alongside model snapshots
 
+* design carry-over from v2 — CRITICAL
+  * the visual design is proven. the designer's screenshots + voiceover are the north star.
+  * do NOT redesign. do NOT "clean up" styles. copy them literally.
+  * v2 uses inline style={{}} objects — colors, spacing, fonts are all there
+  * key design tokens (carry these exactly):
+    * background: #1e1e1e (terminal), #252526 (sidebar), #37373d (focused card)
+    * text: #cccccc (normal), #e5e5e5 (focused), #6b7280 (dim), #9cdcfe (file names)
+    * accent: #007acc (focus border, active indicator)
+    * font: 'Menlo', 'Monaco', 'Consolas', monospace — 13px, line-height 1.55
+    * dots: #22c55e (running), #3b82f6 (done), #f59e0b (nap), #6b7280 (exited)
+    * bullet: * prefix on every line, same visual language as napkin format
+    * pulse animation: 2s ease-in-out infinite on running dots
+  * when porting a component, copy the style objects from v2 source file verbatim
+  * the spec will list exact source paths for each component to port
+
 * testing
   * pipeline: TA → fs-eng → TE
   * small tests (vitest, model + fakes):
