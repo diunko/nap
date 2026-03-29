@@ -4,4 +4,6 @@ Then read the rest of `.nap/00-org/` — the promise, workflow, and structure do
 
 Explore the codebase. Understand what's here. Take your time.
 
-Then talk to the human. They have an idea. Brainstorm with them using /napkin — stress-test the idea, chase rabbit holes, compress what survives into a mega napkin. That napkin becomes the seed for everything that follows.
+If there's a seed napkin at `10-docs/01-inputs.nap.md`, read it — it's a project idea to brainstorm about with the human. Refine it together before starting to build.
+
+If there's no seed napkin, talk to the human. They have an idea. Brainstorm with them using /napkin — stress-test the idea, chase rabbit holes, compress what survives into a mega napkin. That napkin becomes the seed for everything that follows.

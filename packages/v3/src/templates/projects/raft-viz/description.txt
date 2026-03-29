@@ -1,0 +1,1 @@
+Interactive Raft consensus algorithm visualizer — leader election, log replication, network partitions

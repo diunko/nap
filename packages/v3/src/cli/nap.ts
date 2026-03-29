@@ -35,14 +35,17 @@ Flags:
 `;
 
 const COMMAND_HELP: Record<string, string> = {
-  init: `Usage: nap3 init [--name <name>] [--add-skills [--user]]
+  init: `Usage: nap3 init [--name <name>] [--template <name>] [--add-skills [--user]]
 
 Bootstrap a project for agent collaboration.
 
-  --name <name>     Project name (default: cwd basename)
-  --add-skills      Copy napkin skills to .claude/skills/
-  --user            With --add-skills: install to ~/.claude/skills/ instead
-  --help            Show this help
+  --name <name>       Project name (default: cwd basename)
+  --template <name>   Use a project template (copies seed mega-napkin)
+  --template random   Pick a random template
+  --list-templates    List available project templates
+  --add-skills        Copy napkin skills to .claude/skills/
+  --user              With --add-skills: install to ~/.claude/skills/ instead
+  --help              Show this help
 `,
   open: `Usage: nap3 open
 
@@ -292,6 +295,28 @@ async function main(): Promise<void> {
     }
 
     case 'init': {
+      const templatesDir = findTemplatesDir();
+
+      // Handle --list-templates before anything else
+      if (flags['list-templates']) {
+        const projectsDir = path.join(templatesDir, 'projects');
+        if (!fs.existsSync(projectsDir)) {
+          process.stderr.write('No project templates found.\n');
+          process.exit(1);
+        }
+        const templates = fs.readdirSync(projectsDir, { withFileTypes: true })
+          .filter((d) => d.isDirectory())
+          .sort((a, b) => a.name.localeCompare(b.name));
+        for (const t of templates) {
+          const descPath = path.join(projectsDir, t.name, 'description.txt');
+          const desc = fs.existsSync(descPath)
+            ? fs.readFileSync(descPath, 'utf-8').trim()
+            : '';
+          process.stdout.write(`  ${t.name.padEnd(20)} ${desc}\n`);
+        }
+        process.exit(0);
+      }
+
       const cwd = process.cwd();
       const napDir = path.join(cwd, '.nap');
 
@@ -299,8 +324,6 @@ async function main(): Promise<void> {
         process.stderr.write('Project already initialized. Run `nap3 open` to launch.\n');
         process.exit(1);
       }
-
-      const templatesDir = findTemplatesDir();
 
       // Create .nap/ directory
       fs.mkdirSync(napDir, { recursive: true });
@@ -387,6 +410,38 @@ async function main(): Promise<void> {
             path.join(skillsSrc, 'napkin-format'),
             path.join(skillsDest, 'napkin-format'),
           );
+        }
+      }
+
+      // Handle --template: copy seed mega-napkin into the project
+      if (flags['template'] && typeof flags['template'] === 'string') {
+        const projectsDir = path.join(templatesDir, 'projects');
+        let templateName = flags['template'] as string;
+
+        if (templateName === 'random') {
+          const available = fs.readdirSync(projectsDir, { withFileTypes: true })
+            .filter((d) => d.isDirectory())
+            .map((d) => d.name);
+          if (available.length === 0) {
+            process.stderr.write('No project templates found.\n');
+            process.exit(1);
+          }
+          templateName = available[Math.floor(Math.random() * available.length)];
+          process.stdout.write(`Picked template: ${templateName}\n`);
+        }
+
+        const templateDir = path.join(projectsDir, templateName);
+        if (!fs.existsSync(templateDir)) {
+          process.stderr.write(`Unknown template: ${templateName}\nRun nap3 init --list-templates to see available templates.\n`);
+          // Clean up the .nap/ we just created
+          fs.rmSync(napDir, { recursive: true, force: true });
+          process.exit(1);
+        }
+
+        const seedPath = path.join(templateDir, 'seed.nap.md');
+        if (fs.existsSync(seedPath)) {
+          const destPath = path.join(napDir, 'nepics', '01-v1', '10-docs', '01-inputs.nap.md');
+          fs.copyFileSync(seedPath, destPath);
         }
       }
 
