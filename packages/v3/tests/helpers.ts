@@ -74,6 +74,9 @@ export const F1_FIXTURE: Record<string, object | null> = {
   },
 };
 
+// F6: lifecycle fixture (same data as F1 — used for write/watch medium tests)
+export const F6_FIXTURE: Record<string, object | null> = F1_FIXTURE;
+
 // F2-like fixture with 2 agents on one napkin
 export const F2_FIXTURE: Record<string, object | null> = {
   'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'done' },
