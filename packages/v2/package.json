@@ -15,8 +15,7 @@
     "test:small": "vitest run",
     "test:medium": "npm run build && npm run build:cli && NAP_TEST=1 npx playwright test",
     "test:medium:headed": "npm run build && NAP_TEST=1 HEADED=1 npx playwright test",
-    "test": "npm run test:small && npm run test:medium",
-    "postinstall": "electron-rebuild"
+    "test": "npm run test:small && npm run test:medium"
   },
   "dependencies": {
     "@xterm/addon-canvas": "^0.7.0",
