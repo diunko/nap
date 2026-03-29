@@ -34,6 +34,7 @@
     * role files: architect.md, test-arch.md, fullstack-eng.md, test-eng.md
     * no SQLite. no sqlite3 dependency. JSON marker files only.
     * flags: --name <name>, --add-skills [--user]
+      * // what these flags do? need explanation
 
   * nap open
     * no path arg — walks up from cwd to find .nap/, like git
@@ -54,6 +55,7 @@
     * separate command — architects live in 20-architects/, not under napkins
     * socket → model creates 20-architects/<name>/ + .agent.nap.json
     * --nepic defaults to active nepic
+      * // fails when nepic doesn't exist
     * architect then populates: onboarding package, prompt.md
     * outputs JSON: { id, name, role, dir, nepic }
     * used for: architect succession (002-nova), manual architect creation
@@ -72,6 +74,7 @@
     * used by: human (from terminal), architect (setting up next version)
 
   * nap start <name> [prompt] [--nepic <slug>]
+    * // what if two same names in diff napkins/nepics? 
     * starts an already-created agent or architect by name
     * resolves name to existing entity in model
     * [prompt] — optional first message to Claude
@@ -96,8 +99,10 @@
     * removed from v2: PID, SESSION, RESUMABLE (internal details, not actionable)
 
   * nap status <napkin-slug> <phase>
+    * // should be: set-status
     * renamed second arg from "status" to "phase" to reduce confusion
     * `nap status` with no args: could show project overview (TBD, not v3)
+      * // nap status w some flags should allow to inspect any entity?
     * phases: backlog, todo, doing, review, done
     * socket → model.setNapkinStatus → writes .napkin.nap.json
     * no symlinks — v2's 40-board/ is dead
@@ -117,6 +122,7 @@
 
   * nap log <name>
     * socket → renderer → xterm buffer → stdout
+    * // future TODO: clean-up output; often claude output lines are real messy
 
   * nap stop <name>
     * stops pty + writes exited: true to marker

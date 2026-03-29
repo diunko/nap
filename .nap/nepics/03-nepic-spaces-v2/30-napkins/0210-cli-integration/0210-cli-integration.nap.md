@@ -1,142 +1,116 @@
 * 0210 — CLI integration
-  * all entity management goes through the running app
-  * CLI → socket → model → marker writes
-  * one writer (the model), one exception (nap init)
+  * wire the CLI to the model through the socket server
+  * approved CLI design: agents/001-cli-design/03-cli-design.nap.md — that's the spec for command syntax, flags, output format
+  * this napkin is about the plumbing: socket server, model methods, CLI handlers, nap init
 
-* the rule
-  * the model owns all marker file writes while the app is running
-  * the CLI never writes markers directly (except nap init)
-  * all CLI commands require a running app (socket at .nap/sock)
-  * this means: no creating napkins, agents, or changing status outside the app
+* what exists in v3 today
+  * model: loads markers, creates agents, sets status, watches filesystem, pushes snapshots
+  * bridge: typed IPC, main→renderer snapshots, renderer→main intents
+  * pty: NodePtySpawner, coordinators (startAgents, stopApp)
+  * CLI: copied from v2, not yet adapted for v3 model
+  * socket server: NOT yet ported — this is the main gap
 
-* nap init (the exception)
-  * runs WITHOUT the app — creates the project from scratch
-  * writes: .nap/ dir, 00-org/, nepic dirs, marker files, ui-state.json
-  * creates architect stub: .agent.nap.json with UUID, started: false
-  * creates first napkin dir structure if needed
-  * does NOT start the app — user runs `nap open` after
-  * v2 used sqlite3 CLI to create the db — v3 just writes JSON files
+* the wiring: CLI → socket → model → marker + snapshot
 
-* nap open
-  * launches the Electron app with --cwd
-  * STOP→RUN transition reads everything nap init wrote
-  * architect gets started (case C: not started → --session-id)
+  * socket server (port from v2, adapt for model)
+    * source: packages/v2/src/main/socket-server.ts
+    * ndjson protocol over unix socket at .nap/sock — same as v2
+    * each handler calls model methods instead of SQLite
+    * start in main.ts before creating window — same as v2
 
-* commands that go through socket → model (app must be running)
+  * socket handlers (one per CLI command):
+    * create-napkin → model.createNapkin(slug, status, nepicId)
+    * create-agent → model.createAgentStub(napkinSlug, name, role, nepicId)
+    * create-architect → model.createArchitectStub(name, nepicId)
+    * create-nepic → model.createNepic(slug, displayName) — scaffolds dirs, creates architect stub
+    * start → model starts pre-created agent by name, spawns pty
+    * done → model.setAgentDone(sessionId) — in-memory only
+    * ps → model.getAllAgents() — returns tree
+    * set-status → model.setNapkinStatus(slug, phase)
+    * status → model.getStatus(query) — read-only inspect
+    * nap (wait) → poll agent status until done/exited
+    * poke → find pty, three-step delivery
+    * peek → IPC to renderer: focus terminal
+    * log → IPC to renderer: read xterm buffer
+    * stop → kill pty + model.setAgentExited
 
-  * nap start <command> [--name, --napkin, --role]
-    * socket → model.createAgent() → writes .agent.nap.json
-    * model assigns UUID, sets started: false
-    * model spawns pty → sets started: true, running: true
-    * pushes snapshot → renderer shows new agent with green dot
-    * returns { id, name } to CLI
+  * new model methods needed:
+    * createNapkin(slug, status?, nepicId?) — creates dir + .napkin.nap.json
+    * createAgentStub(napkinSlug, name, role, nepicId?) — creates dir + marker, no pty
+    * createArchitectStub(name, nepicId?) — creates dir in 20-architects/ + marker
+    * createNepic(slug, displayName) — scaffolds full nepic structure + architect stub
+    * getStatus(query) — read-only inspect for status command
+    * startAgentByName(name, prompt?, nepicId?) — finds agent, spawns pty, sets started+running
+    * getAllAgentsTree() — returns agents grouped by parent for ps tree view
 
-  * nap done
-    * agent calls this from inside its pty (reads NAP_SESSION_ID env)
-    * socket → model.setAgentDone(id) → in-memory only (done is ephemeral)
-    * pushes snapshot → dot turns blue
-    * pty stays alive — done is a signal, not an exit
+  * name resolution (port from v2, adapt)
+    * source: packages/v2/src/main/name-resolver.ts
+    * exact match within active nepic (or specified --nepic)
+    * names unique within nepic — enforced at create time
+    * on failure: return candidates for "did you mean" suggestions
 
-  * nap ps
-    * socket → model.getAllAgents() → returns full agent list
-    * includes: name, role, status (running/done/exited), napkin, parent, uuid
-    * tree view: group by parentId
-    * no SQLite — reads from model's in-memory state
+  * message queue for poke (port from v2)
+    * source: packages/v2/src/main/message-queue.ts
+    * three-step delivery: text → Escape → CR
+    * copy as-is, wire to ptySpawner
 
-  * nap status <napkin-slug> <status>
-    * socket → model.setNapkinStatus(slug, status)
-    * writes .napkin.nap.json
-    * pushes snapshot → phase label changes in sidebar/kanban
+* nap init rewrite
+  * v2 uses sqlite3 CLI binary — v3 writes JSON marker files
+  * creates: .nap/, 00-org/ (from templates), nepics/01-v1/ structure
+  * architect stub: .agent.nap.json with UUID + started: false
+  * prompt.md from template
+  * ui-state.json with activeNepicId
+  * .gitignore: sock, ui-state.json
+  * NO 40-board/ — status in markers only
+  * NO SQLite — no nap.db, no sqlite3 dependency
 
-  * nap nap <name> [--timeout]
-    * polls socket for agent status until done or exited
-    * same as v2 — poll loop with sleep
+* nap open changes
+  * drop path arg — walk up from cwd to find .nap/ (like git)
+  * drop --architect, --name, --command flags
+  * just: find project root, launch Electron with --cwd
 
-  * nap poke <name> <message>
-    * socket → find agent's pty → three-step delivery (text → Escape → CR)
-    * port from v2 — message-queue.ts
-
-  * nap peek <name>
-    * socket → tell renderer to focus that terminal
-    * IPC to renderer: setActive(id)
-
-  * nap kill <name>
-    * socket → model.setAgentExited + ptySpawner.kill
-    * writes exited: true to marker
-
-  * nap log <name>
-    * socket → renderer → read xterm buffer → return lines
-    * same round-trip as v2
-
-  * nap close <name>
-    * kill + remove from model (but marker stays on disk — agent existed)
-
-  * nap create napkin <slug> [--status backlog]
-    * NEW command (not in v2)
-    * socket → model creates napkin dir + .napkin.nap.json
-    * pushes snapshot → new napkin appears in sidebar
-
-  * nap create agent <napkin-slug> <name> [--role]
-    * NEW command — creates agent dir + marker WITHOUT spawning pty
-    * useful for: architect sets up agent dir, writes prompt.md, then calls nap start separately
-    * or: combined into nap start (which creates + spawns in one step)
-    * open question: do we need this separate from nap start?
-
-* socket protocol changes
-  * v2 protocol types in shared/protocol.ts — extend, don't break
-  * add: create-napkin request/response
-  * add: create-agent request/response (if we keep it separate from start)
-  * nap start already exists — add napkin/nepic/parent fields to StartRequest
-  * nap done already exists — works via NAP_SESSION_ID env
-  * all requests carry an id for correlation — same pattern as v2
+* CLI rewrite
+  * rewrite packages/v3/src/cli/nap.ts to match approved CLI design
+  * new commands: create (napkin, agent, architect, nepic), set-status, status (inspect)
+  * renamed: kill → stop
+  * removed: close
+  * simplified: open (no flags), done (no args), ps (4 columns)
+  * all create commands output JSON to stdout
+  * error messages: clear, helpful, "did you mean" on name miss
 
 * what to port from v2
-  * socket server: packages/v2/src/main/socket-server.ts
-    * ndjson protocol over unix socket — copy the server
-    * adapt handlers: call model methods instead of SQLite
-  * CLI: packages/v2/src/cli/nap.ts
-    * already copied into v3 during 0010 — update handlers to match new protocol
-  * message queue (poke): packages/v2/src/main/message-queue.ts
-    * three-step delivery pattern — copy as-is
-  * name resolver: packages/v2/src/main/name-resolver.ts
-    * fuzzy matching for agent names — copy, adapt to use model instead of SQLite
-
-* nap init specifics for v3
-  * v2's nap init:
-    * calls sqlite3 CLI to create db with schema + initial rows
-    * copies templates (00-org, nepic structure)
-    * hardcodes SQL with string interpolation
-  * v3's nap init:
-    * NO sqlite — writes JSON marker files instead
-    * creates: .nap/00-org/ (from templates), .nap/nepics/01-v1/ structure
-    * writes: .agent.nap.json for architect (uuid assigned, started: false)
-    * writes: ui-state.json (activeNepicId pointing to first nepic)
-    * writes: .napkin.nap.json for any initial napkins (if template includes them)
-    * copies templates for 00-org, skills if --add-skills
+  * socket server: packages/v2/src/main/socket-server.ts — ndjson over unix socket
+  * name resolver: packages/v2/src/main/name-resolver.ts — adapt for model
+  * message queue: packages/v2/src/main/message-queue.ts — three-step poke
+  * constants: socket path resolution, walk-up discovery — packages/v2/src/shared/constants.ts
+  * nap init template copying logic — packages/v2/src/cli/nap.ts lines 384-466
 
 * testing
+  * pipeline: TA → fs-eng → TE
   * small tests (vitest, model + fakes):
-    * socket request → model method → correct state change + marker write
-    * nap start flow: createAgent + spawn + started flag
-    * nap done: agent marked done, not persisted
-    * nap status: napkin marker updated
-    * nap kill: agent marked exited
-    * resume decisions still correct after CLI-initiated state changes
+    * socket handler unit tests: request in → model method called → correct response
+    * name resolution: exact match, collision error, "did you mean" suggestions
+    * create flows: createNapkin, createAgentStub, createArchitectStub, createNepic
+    * startAgentByName: finds agent, spawns pty, sets flags
+    * nap init: writes correct files to fake filesystem
   * medium tests (Playwright):
-    * launch app → nap start via socket → agent appears in sidebar
-    * nap done → dot turns blue
-    * nap status → phase label changes
-    * nap ps returns correct tree
+    * launch app → nap start via real socket → agent appears in sidebar
+    * nap done via real socket → dot turns blue
+    * nap set-status via real socket → phase label changes
+    * nap ps via real socket → returns correct tree
+    * nap create napkin via real socket → napkin appears in sidebar
     * nap init → nap open → architect starts → sidebar shows it
+    * nap stop → agent stops, doesn't resume on next start
 
 * done criteria
-  * nap init creates a valid v3 project (marker files, no SQLite)
-  * nap open → app starts → architect runs
-  * nap start creates agent, spawns pty, sidebar updates
-  * nap done turns dot blue
-  * nap ps shows agent tree from model
-  * nap status updates napkin phase
-  * nap poke delivers message to agent
-  * nap nap blocks until agent completes
-  * all commands work through socket → model path
-  * all existing tests still pass
+  * socket server running, all CLI commands work through it
+  * nap init creates a valid v3 project (markers, no SQLite)
+  * nap open finds project root, launches app, architect starts
+  * nap create {napkin, agent, architect, nepic} all work, output JSON
+  * nap start spawns pre-created agents
+  * nap done / nap ps / nap set-status / nap stop all work
+  * nap poke delivers messages
+  * nap nap blocks until completion
+  * name resolution with helpful error messages
+  * small + medium tests cover all commands
+  * all existing 0100/0150/0200 tests still pass
