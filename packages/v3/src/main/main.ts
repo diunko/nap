@@ -2,7 +2,11 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'path';
 import { createModel } from './model';
 import { NodeFileSystem } from './filesystem';
+import { NodePtySpawner } from './node-pty-spawner';
+import { startAgents } from './coordinators';
 import type { AppSnapshot } from '../shared/bridge-types';
+
+let ptySpawner: NodePtySpawner | null = null;
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -27,6 +31,7 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(async () => {
   const win = createWindow();
+  const isTest = process.env['NAP_TEST'] === '1';
 
   // Resolve nepic dir — look for .nap/nepics/ in project cwd
   const projectCwd = process.env['NAP_CWD'] || process.cwd();
@@ -34,7 +39,7 @@ app.whenReady().then(async () => {
   const model = createModel(fs);
 
   // Expose model for medium tests
-  if (process.env['NAP_TEST'] === '1') {
+  if (isTest) {
     (global as any).__napModel__ = model;
   }
 
@@ -45,7 +50,6 @@ app.whenReady().then(async () => {
 
   const nepicDirs = await fs.readdir(nepicsBase);
   if (nepicDirs.length > 0) {
-    // Use the first nepic (or the one from env/args — for now, first)
     activeNepicId = nepicDirs[nepicDirs.length - 1];
     activeNepicDir = join(nepicsBase, activeNepicId);
   }
@@ -64,17 +68,57 @@ app.whenReady().then(async () => {
   // Wire renderer intents → main
   ipcMain.on('app:intent', (_event, intent) => {
     if (intent?.type === 'setActiveTerminal') {
-      // Will be wired to terminal management in later napkins
+      // Terminal management
     }
   });
+
+  // ── PTY management ──
+
+  ptySpawner = new NodePtySpawner(isTest);
+
+  // Route pty data → renderer
+  ptySpawner.setDataHandler((id, data) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('pty:data', id, data);
+    }
+  });
+
+  // Route pty exits → renderer
+  ptySpawner.setExitNotifier((id, exitCode) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('pty:exit', id, exitCode);
+    }
+  });
+
+  // Wire pty IPC from renderer → main
+  ipcMain.on('pty:write', (_event, id: string, data: string) => {
+    ptySpawner?.write(id, data);
+  });
+
+  ipcMain.on('pty:resize', (_event, id: string, cols: number, rows: number) => {
+    ptySpawner?.resize(id, cols, rows);
+  });
+
+  ipcMain.on('pty:ready', (_event, id: string) => {
+    ptySpawner?.markReady(id);
+  });
+
+  // Expose pty manager for medium tests
+  if (isTest) {
+    (global as any).__napPtyManager__ = ptySpawner;
+  }
 
   // Load model from filesystem (triggers onChange → pushes snapshot to renderer)
   if (activeNepicDir) {
     await model.loadFromFilesystem(activeNepicDir);
+
+    // Start agents — spawns ptys, updates running flags
+    await startAgents(model, ptySpawner);
+
     model.startWatching(activeNepicDir);
   }
 
-  // Also push snapshot when renderer signals it's ready (handles race condition)
+  // Push snapshot when renderer signals it's ready (handles race condition)
   win.webContents.on('did-finish-load', () => {
     if (activeNepicDir) {
       const snapshot: AppSnapshot = {
@@ -85,6 +129,15 @@ app.whenReady().then(async () => {
       win.webContents.send('app:state', snapshot);
     }
   });
+});
+
+// ── Quit handling ──
+
+app.on('before-quit', () => {
+  if (ptySpawner) {
+    ptySpawner.clearExitHandlers();
+    ptySpawner.killAll();
+  }
 });
 
 app.on('window-all-closed', () => {
