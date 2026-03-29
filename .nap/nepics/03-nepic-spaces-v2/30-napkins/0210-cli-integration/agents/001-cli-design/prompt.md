@@ -19,6 +19,7 @@ Your job is NOT to implement — it's to think through what the CLI should look 
 7. **The v3 model** (what entities look like now): `packages/v3/src/shared/bridge-types.ts` and `packages/v3/src/main/model.ts`
 8. **The marker file shape**: read the 0200 napkin for the full .agent.nap.json shape: `.nap/nepics/03-nepic-spaces-v2/30-napkins/0200-survivability/0200-survivability.nap.md`
 9. **Mega napkin** (the full vision): `.nap/nepics/03-nepic-spaces-v2/10-docs/01-inputs.nap.md`
+10. **Design screenshots + voiceover** (what the app looks like — essential for understanding the product): `.nap/nepics/02-nepic-spaces/30-napkins/0100-design-sprint/agents/003-ux-design-review/screenshots/` — read ALL images (01.png through 04.png) and the voiceover.nap.md. This shows the three-column layout, sidebar with napkin cards and agent dots, kanban overlay, and how agents appear in the UI. The CLI creates the entities that populate this UI.
 
 ## What to think about
 
