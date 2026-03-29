@@ -9,10 +9,15 @@
 
 * persistent state (marker files — survives stop)
   * per agent: .agent.nap.json
-    * cc_session_uuid — for resume (assigned on creation, never changes)
+    * cc_session_uuid — agent identity (assigned on creation, never changes)
     * role — architect, test-arch, fs-eng, test-eng
     * name — display name
+    * napkin — napkin slug this agent belongs to (null for architects)
+    * nepic — nepic slug (disambiguates napkins across nepics)
+    * parent — parent agent name (null for root agents like architects)
+    * parent_id — parent agent UUID (reliable linking)
     * created_at — timestamp
+    * started — true once pty has run with this UUID (distinguishes fresh from resumable)
     * exited — true if agent died on its own (NOT set on app quit)
   * per napkin: .napkin.nap.json
     * status — backlog / todo / doing / review / done
@@ -38,21 +43,18 @@
         * read .agent.nap.json → get uuid, role, name, exited flag
     * for each architect dir in 20-architects/:
       * read .agent.nap.json → get uuid, role, name
-  * 3. three cases for each agent/architect:
-    * case A — has UUID, NOT exited: resume
+  * 3. three cases for each agent/architect (all agents have UUIDs — assigned at creation):
+    * case A — started + NOT exited: resume
       * spawn pty: `claude --verbose --resume <uuid>`
       * agent is now RUNNING (pty exists)
-    * case B — has UUID, exited: skip
+    * case B — exited: skip
       * do NOT spawn pty
       * agent shows as EXITED in sidebar (gray dot, hollow)
       * user can click [terminal] to clear exited flag and resume on next start
-    * case C — NO UUID: fresh start (this is how nap init → nap open works)
-      * assign new UUID (crypto.randomUUID)
-      * write UUID back to .agent.nap.json marker
-      * if architect: spawn pty: `claude --verbose --session-id <uuid> "read prompt.md and follow its instructions"`
-      * if napkin agent with prompt.md: spawn pty with prompt
-      * if no prompt context: don't spawn yet (agent dir exists but not ready to run)
-      * this covers: nap init creates architect stub → nap open assigns UUID and starts it
+    * case C — NOT started: first run (this is how nap init → nap open works)
+      * spawn pty: `claude --verbose --session-id <uuid> "read prompt.md..."`
+      * write started: true to marker after pty spawns
+      * this covers: nap init creates architect stub with UUID → nap open starts it for the first time
   * 6. push model state to renderer via bridge
   * 7. renderer builds zustand store, renders sidebar, wires xterm instances to ptys
   * 8. restore active terminal from ui-state.json
