@@ -61,6 +61,16 @@ All code in `packages/v3/`.
 - **Store exposes `__napStore__` globally** for Playwright test access — same pattern as v2's `useTerminalStore`.
 - **zustand added to v3 dependencies** — was only hoisted from v2 before.
 
+### For future agents
+
+- **Do not modify v2 code.** Nothing in `packages/v2/` was changed and nothing should be.
+- **Do not run v2 tests routinely.** They take ~60s (medium) and are unrelated to v3 work. Only run them if you suspect a cross-workspace regression (e.g. root package.json changes). Use them as a reference, not a gate.
+- **v3 test commands** (always from repo root):
+  - `npm run test:v3:small` — vitest, ~100ms
+  - `npm run test:v3:medium` — playwright + electron, ~2s
+  - `npm run typecheck:v3` — tsc --noEmit
+  - `npm run build:v3` — electron-vite build (required before medium tests)
+
 ### For the TE
 
 The test infrastructure is ready. All fixtures from the TA's `.test.md` are implemented. To write a new test:
