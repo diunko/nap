@@ -109,4 +109,37 @@ export function createEdgeCaseFixture(): MemoryFileSystem {
   });
 }
 
+// ── F6: lifecycle fixture (for write/watch testing — same data as F1) ──
+export function createLifecycleFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0100-explore/agents/001-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-ta',
+      role: 'test-arch',
+      name: '001-test-arch',
+      created_at: 1711700000000,
+    },
+    'nepic/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-arch',
+      role: 'architect',
+      name: '001-architect',
+      created_at: 1711600000000,
+    },
+  });
+}
+
+// ── F7: multi-napkin lifecycle (concurrent operations + debounce) ──
+export function createMultiNapkinLifecycleFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0100-explore/agents/001-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-1',
+      role: 'test-arch',
+      name: '001-test-arch',
+      created_at: 1711700000000,
+    },
+    'nepic/30-napkins/0200-build/.napkin.nap.json': { status: 'backlog' },
+  });
+}
+
 export const NEPIC_DIR = 'nepic';
