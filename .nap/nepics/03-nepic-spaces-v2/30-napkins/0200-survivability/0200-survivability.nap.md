@@ -7,29 +7,58 @@
   * STOPPED: app not running. marker files on disk. nothing in memory.
   * RUNNING: app running. ptys alive. model in memory. renderer showing state.
 
-* persistent state (marker files — survives stop)
-  * per agent: .agent.nap.json
-    * cc_session_uuid — agent identity (assigned on creation, never changes)
-    * role — architect, test-arch, fs-eng, test-eng
+* model entity shapes — the full picture
+  * every entity is self-contained: carries its own identity + parent container IDs
+  * React components access fields directly: napkin.status, agent.role, etc.
+  * the bridge pushes these shapes as-is — no transformation needed in renderer
+
+  * NepicState
+    * id — slug (e.g. "03-nepic-spaces-v2"), serves as unique ID
+    * slug — same as id, the directory name
     * name — display name
-    * napkin — napkin slug this agent belongs to (null for architects)
-    * nepic — nepic slug (disambiguates napkins across nepics)
-    * parent — parent agent name (null for root agents like architects)
-    * parent_id — parent agent UUID (reliable linking)
-    * created_at — timestamp
-    * started — true once pty has run with this UUID (distinguishes fresh from resumable)
-    * exited — true if agent died on its own (NOT set on app quit)
-  * per napkin: .napkin.nap.json
+    * path — absolute path to nepic dir
+    * architects — AgentState[] (this nepic's architects)
+
+  * NapkinState
+    * id — slug (unique within nepic, e.g. "0100-explore")
+    * slug — directory name
+    * nepicId — containing nepic's id (navigate up)
     * status — backlog / todo / doing / review / done
+    * path — absolute path to napkin dir
+    * agents — AgentState[] (nested, complete)
+    * bullets — string[] (extracted from .nap.md, for kanban expanded view — later)
+
+  * AgentState
+    * id — cc_session_uuid (THE identity, assigned on creation, never changes)
+    * name — display name (e.g. "001-test-arch")
+    * role — architect, test-arch, fs-eng, test-eng
+    * nepicId — containing nepic's id (navigate up)
+    * napkinId — containing napkin's slug (null for architects)
+    * parentName — parent agent name (null for root agents)
+    * parentId — parent agent UUID (reliable linking, null for root)
+    * createdAt — timestamp
+    * started — true once pty has run with this UUID
+    * exited — true if agent died on its own (NOT set on app quit)
+    * running — pty currently alive (ephemeral, derived from pty existence)
+    * done — called nap done (ephemeral, in-memory only)
+    * homePath — absolute path to agent's home dir
+
+* marker files — what's persisted to disk
+  * per agent: .agent.nap.json
+    * cc_session_uuid, role, name, napkin, nepic
+    * parent, parent_id
+    * created_at, started, exited
+    * (running and done are NOT persisted — they're ephemeral)
+  * per napkin: .napkin.nap.json
+    * status, nepic
   * global: ui-state.json
-    * activeNepicId
-    * activeTerminalId
-    * sidebarVisible
+    * activeNepicId, activeTerminalId, sidebarVisible
 
 * ephemeral state (in-memory — dies on stop)
   * pty handles (node-pty process objects)
   * xterm instances (renderer terminal buffers)
-  * "is this agent currently running" — derived from pty existence, not stored
+  * agent.running — derived from pty existence, not stored
+  * agent.done — set when nap done called, not persisted (agent resumes on next start)
   * zustand store — rebuilt from model on STOP→RUN
   * socket server — recreated on start
   * watcher — recreated on start
