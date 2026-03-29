@@ -1,177 +1,177 @@
-* thinking exercises — product debt + state principles
+* thinking exercises — product debt + state model
 
-* exercise 1: product debt and journey verification
+* exercise 1: journey testing — how it plays with current TA process
 
-  * the tension
-    * agents build great components — give them a spec, they deliver
-    * agents can't USE the product — can't click, can't feel, can't see
-    * only the human can experience the product
-    * so: how do we get journey-level verification into an agent-driven process?
+  * the question: how do you test journeys before anything exists?
+    * not: write Playwright tests with selectors that break
+    * more: what's the right framing that works with our existing TA process?
 
-  * approach 1: journey tests as acceptance criteria
-    * PM writes user story
-    * architect translates to Playwright test — BEFORE implementation
-    * test fails initially — that's the point
-    * implementation is done when the journey test passes
-    * the test IS the user, automated
-    * shift from component tests to journey tests as the primary quality gate
-    * example:
-      ```
-      test('init → open → architect has claude', async () => {
-        // nap init in tmpdir
-        // launch app with --architect
-        // assert first terminal name contains 'Architect'
-        // assert pty command contains 'claude'
-      });
-      ```
-    * the test-architect's job shifts: design journey tests, not seam tests
-      * seam tests still valuable — but journey tests come FIRST
-    * the pipeline becomes: story → journey test (fails) → spec → agents build → journey test (passes)
+  * what TA already does well
+    * strategic tests on integration seams — contracts, APIs
+    * "does the socket round-trip work?" "does SQLite persist correctly?"
+    * these survive refactors because they test interfaces, not implementations
 
-  * approach 2: manual journey review every 3-4 napkins
-    * the human spends 10 minutes using the app
-    * finds wiring bugs before building more on top
-    * happened organically at end of nepic 02 — but after 16 napkins, not after 4
-    * if done earlier: catch breaks before accumulating
-    * the cost: human time
-    * the value: 10 minutes of clicking > 10 hours of component tests that miss the real issues
+  * what's missing: wiring tests
+    * TA tests verify each API works
+    * nobody tests: are the APIs CALLED in the right order with the right data?
+    * a component can pass its contract test but never get called during startup
+    * that's the gap — the wiring between tested components
 
-  * approach 3: product witness agent
-    * reads code paths, doesn't run the app
-    * traces: "when user clicks (+) → what function? → what SQL? → what IPC? → what renders?"
-    * flags: "this code path assumes X, but upstream never sets X"
-    * cheaper than Playwright journey tests
-    * catches logic bugs, misses timing/rendering bugs
-    * good for FIRST pass — before any code
-    * for nepic 03: have Kai trace existing code for each journey before writing new code
+  * journey tests = wiring tests, not UI tests
+    * no selectors — same `page.evaluate` / `app.evaluate` pattern
+    * "architect terminal exists and runs claude" =
+      * `app.evaluate(() => ptys.size > 0 && firstPty.command.includes('claude'))`
+    * "napkin cards appear in sidebar" =
+      * `page.evaluate(() => store.getState().napkins.length > 0)`
+    * tests verify the COMPOSITION, not the components
 
-  * recommendation: 1 + 2 combined
-    * write 5-8 journey tests as Playwright scripts before implementation
-    * after every 3-4 features, human tests manually for 10 minutes
-    * journey tests catch regression
-    * human catches "it just feels wrong"
+  * how it fits in the process
+    * TA does TWO passes:
+      * 1. integration seams (existing — contracts, APIs, component boundaries)
+      * 2. journey wiring (new — "does init → open → architect actually work?")
+    * journey tests are STABLE — they test "does the user see X?"
+      * if components get refactored but the journey still works → test passes
+      * if journey breaks because wiring changed → test catches it
+    * integration tests are PRECISE — they test "does this API return Y?"
+      * if API changes → test updates
+      * if internal refactor but API same → test passes
+    * both survive refactors for different reasons
+      * journey: tests outcome, not mechanism
+      * integration: tests contract, not implementation
 
-  * process change for nepic 03
-    * before: napkin → spec → agents build → tests verify component
-    * after: story → journey test (fails) → napkin → agents build → journey test (passes)
-    * the unit of done is the journey, not the component
+  * what about before first implementation?
+    * TA writes journey test specs as .test.md (as now)
+    * TE implements them — they FAIL (nothing built yet)
+    * FS-eng builds — journey tests start PASSING
+    * the test is the acceptance criteria
+    * no different from current flow — just the test SCOPE changes (journey vs component)
 
 
-* exercise 2: state principles — what we followed, where they collided
+* exercise 2: the 2-state model
 
-  * the principles we had (from scratch/41)
-    * P1: filesystem defines what exists (structure + content)
-    * P2: SQLite annotates what exists (statuses, UUIDs, timestamps)
-    * P3: reconciliation is additive, never destructive
-    * P4: "what exists?" → filesystem. "what's the status?" → SQLite
-    * P5: they never compete on the same question
+  * insight from your comments: we modeled 4 statuses for what is fundamentally 2 states
 
-  * what we actually did on each write operation
-    * create agent
-      * mkdir agent dir (filesystem)
-      * INSERT session row (SQLite)
-      * P1 + P2 both written — if mkdir succeeds but INSERT fails: dir exists, no status
-      * if INSERT succeeds but mkdir fails: SQLite row exists, no dir → orphan
-      * no transactional guarantee between them
-    * change napkin status
-      * UPDATE napkins table (SQLite)
-      * mv symlink in 40-board/ (filesystem)
-      * if UPDATE succeeds but mv fails: SQLite says "doing", symlink says "backlog"
-      * the spec said "SQLite is authoritative" — but the symlink is what the human sees in their editor
-    * agent calls nap done
-      * UPDATE session status to 'done' (SQLite)
-      * no filesystem write — the status only lives in SQLite
-      * on restart: SQLite knows it's 'done', but no meta file on disk says so
-      * if SQLite is lost (deleted nap.db): done status lost, agent looks new
-    * app closes
-      * pty onExit fires for each pty
-      * if appIsClosing=false: UPDATE status to 'exited' (SQLite)
-      * if appIsClosing=true: skip update
-      * no filesystem write either way
-      * the "is this agent resumable?" answer lives ONLY in SQLite
-    * app opens — resume
-      * read SQLite: find sessions with uuid where status != 'exited'
-      * spawn `claude --resume <uuid>`
-      * but: does the agent dir still exist? (filesystem not checked)
-      * if dir was deleted (git clean, branch switch): SQLite says resume, but there's nothing to resume INTO
+  * the two states
+    * STOPPED — app not running. data on disk. nothing in memory.
+    * RUNNING — app running. ptys alive. in-memory state exists.
 
-  * where P5 ("they never compete") broke
-    * P5 is true for READS — you ask one system, not both
-    * P5 is false for WRITES — every write touches both systems
-    * the collision: a write to SQLite without a corresponding filesystem write creates drift
-    * example: `nap done` updates SQLite but writes nothing to disk
-      * after restart: SQLite knows the agent is done
-      * but the filesystem has no record of this — if SQLite is lost, the done status is lost
-    * example: `nap start` creates an agent dir AND a SQLite row
-      * but the SQLite row has fields (status, uuid) that don't exist as files in the dir
-      * the dir is the existence, the row is the metadata — but they're not linked except by name matching
+  * the two transitions
+    * s→r (start): read persistent state → create ephemeral state
+    * r→s (stop): ephemeral state dies. persistent state unchanged.
 
-  * what the state principles didn't address
-    * write ordering and atomicity
-      * which system gets written first?
-      * what happens if the second write fails?
-      * we never decided — each feature made its own choice
-    * state transitions across restart
-      * P1-P5 describe a running system
-      * they say nothing about: "app closes, all ptys die, what happens to status?"
-      * the appIsClosing flag was invented to fill this gap — but it's not a principle, it's a patch
-    * ephemeral vs persistent state
-      * which state should survive restart? which should die?
-      * we never explicitly decided
-      * "running" status persisted across restart — but the process is dead
-      * "done" status persisted — but the agent could be resumed
-      * "exited" was supposed to be terminal — but the CC session still exists on disk
-    * agent identity across systems
-      * in SQLite: session ID (uuid) + name
-      * in filesystem: directory name
-      * matching: by name string comparison
-      * if names drift (rename dir, double invocation with same name): identity breaks
+  * what is persistent? (survives stop)
+    * agent identity: who am I? (dir + marker file: .agent.nap.json)
+      * cc_session_uuid — for resume
+      * role — architect, test-arch, fs-eng, test-eng
+      * name — display name
+      * created_at
+    * napkin identity: what feature? (dir + .napkin.nap.json or similar)
+      * status — backlog, todo, doing, review, done
+    * nepic identity: what era? (dir structure)
+    * artifacts: napkin files, specs, prompts, responses (already filesystem)
+    * UI state: which nepic was active, which terminal focused, sidebar visible
+      * could be: state.json at nepic level, or meta file in .nap/
 
-  * how state principles collided with product journeys
+  * what is ephemeral? (dies on stop)
+    * PIDs — which processes are alive
+    * pty objects — the actual terminal processes
+    * xterm instances — the renderer terminal objects
+    * which agents are "running" vs "idle" — this is runtime, not persistent
+    * zustand store state — rebuilt from persistent layer on s→r
+    * socket server — recreated on start
 
-    * journey: "close app, reopen, everything is there"
-      * requires: all session state survives restart
-      * state reality: status is in SQLite, process is dead, pty doesn't exist
-      * collision: SQLite says "running" but the process isn't running
-      * the appIsClosing flag "fixes" this by not updating status on quit
-      * but it's a hack on top of a model that doesn't account for restart
+  * the s→r transition (app starts)
+    * walk filesystem: find nepics, napkins, agents by marker files
+    * read each marker file → get UUIDs, roles, statuses
+    * for each agent with UUID → spawn `claude --verbose --resume <uuid>`
+    * build in-memory model: zustand store, pty map
+    * render UI from in-memory model
+    * that's it. no SQLite read, no reconciliation.
 
-    * journey: "click (+), new nepic with architect"
-      * requires: SQLite row + agent dir + pty + terminal in renderer
-      * state reality: handleNepicCreate writes SQLite row and creates dir
-        * but the architect prompt comes from a template that may not be found
-        * the pty spawn command needs the UUID from SQLite
-        * the renderer needs an IPC message to show the terminal
-        * four writes across three systems (SQLite, filesystem, pty, IPC) — any can fail
-      * collision: the journey is atomic (user clicks, architect appears) but the implementation is 4 separate writes
+  * the r→s transition (app stops)
+    * kill all ptys (they're ephemeral)
+    * save UI state to disk (state.json)
+    * in-memory state dies naturally
+    * persistent state (marker files) was already written during runtime
+    * nothing to "flush" or "reconcile"
 
-    * journey: "agent finishes, dot turns blue"
-      * requires: nap done → status update → IPC → renderer re-renders dot
-      * state reality: nap done → socket → main process → SQLite update → IPC → renderer
-      * collision: if IPC doesn't fire (main window destroyed, race condition): SQLite says done, renderer shows running
-      * the dot color is derived from in-memory store, not from SQLite
-      * restart "fixes" it (rebuilds from SQLite) but during the session it's wrong
+  * what about "agent exited while running"?
+    * agent dies on its own (not app closing). what happens?
+    * in-memory: remove from pty map, update store (dot turns gray)
+    * persistent: write `exited: true` to marker file
+    * your model: "has uuid = auto-resume, exited cleanly = manual action needed"
+      * marker file gains an `exited` field
+      * s→r checks: has UUID AND NOT exited → auto-resume
+      * user clicks [terminal] → clears exited flag → next restart auto-resumes
 
-    * journey: "switch nepics, only that nepic's agents show"
-      * requires: sidebar filters by active nepic
-      * state reality: store has all sessions, renderer filters by nepicId
-      * collision: sessions created via old nap start (before --napkin flag) have no nepicId
-      * they show up in EVERY nepic because they're unfiltered
-      * the bug isn't in the filter — it's in the data: agents without nepic association
+  * what about SQLite?
+    * your comment: "central persistent queryable source for ephemeral is kinda nice"
+    * kanban board needs to query "all napkins by status"
+    * proposal: SQLite as CACHE
+      * on s→r: walk filesystem → build SQLite from marker files
+      * while running: SQLite is the fast query layer
+      * on r→s: SQLite can be WIPED or left stale
+        * next s→r rebuilds it anyway
+      * no sync bugs: SQLite is DERIVED, not truth
+      * no reconciliation: if wrong, just rebuild
+    * `nap status 0100 doing`:
+      * writes to marker file (persistent — this is the truth)
+      * updates SQLite (ephemeral — for in-session queries)
+      * only the marker write matters for persistence
 
-  * what simpler state principles might look like
-    * candidate rules:
-      * R1: all persistent state lives in filesystem (meta.json files)
-      * R2: all ephemeral state lives in memory (zustand store, pty map)
-      * R3: app restart destroys ephemeral state — rebuilt from persistent layer
-      * R4: every write to persistent state is a single file write (atomic at OS level)
-      * R5: agent identity = directory path (not a name match across systems)
-    * what these eliminate:
-      * no SQLite for session state → no dual-truth
-      * no reconciliation → persistent state is always consistent with filesystem
-      * no appIsClosing → ephemeral state just dies, persistent state was never touched by pty exit
-      * no name matching → agent IS its directory
-    * what these require:
-      * walking dirs on startup instead of SQLite query (fast enough for 100s of agents)
-      * writing meta.json on every status change (one file write vs one SQLite UPDATE)
-      * UI state persistence: either meta.json at nepic level or accept loss on restart
+  * what about `nap start`?
+    * `nap start claude "prompt" --napkin 0100 --name 001-test-arch`
+    * CLI → socket → main process
+    * main creates dir: `30-napkins/0100/agents/001-test-arch/`
+    * main writes: `.agent.nap.json` with UUID, role, name
+    * main spawns pty: `claude --verbose --session-id <uuid>`
+    * main updates in-memory: pty map, store, SQLite cache
+    * IPC → renderer: new agent card appears
+    * PID in-memory only — not in marker file
+    * on restart: marker says "I exist, UUID is X" → resume
+
+  * "app in-memory as source of truth with API"
+    * this IS the current model at runtime
+      * zustand store + pty map = truth while running
+      * socket API + IPC = how consumers talk to it
+    * 2-state model clarifies: what happens when this truth DIES?
+      * persistent layer (marker files) preserves what matters
+      * s→r rebuilds in-memory truth from persistent layer
+
+  * walking journeys through the 2-state model
+    * J1: init → open → architect
+      * `nap init`: creates dirs + marker files (all persistent, all filesystem)
+      * `nap open`: s→r → read markers → find architect UUID → resume → terminal
+      * works? yes — no SQLite dependency, no reconciliation
+    * J4: close → reopen → everything there
+      * close: r→s → ptys die, in-memory dies, markers unchanged
+      * reopen: s→r → read markers → resume all with UUIDs
+      * works? yes — markers untouched by stop
+    * agent exits while running
+      * in-memory: update store (gray dot)
+      * persistent: write `exited: true` to marker
+      * close + reopen: s→r → marker says exited → skip auto-resume
+      * works? yes — one flag, one file write
+    * switch nepics
+      * in-memory: swap displayed data
+      * persistent: save active nepic to state.json
+      * works? yes — just UI state, rebuilt on s→r
+
+  * what this eliminates
+    * 4-status state machine → 1 persistent flag (exited: true/false)
+    * appIsClosing flag → unnecessary (ephemeral just dies)
+    * reconciliation → unnecessary (rebuild from filesystem)
+    * dual-truth sync → unnecessary (one truth: filesystem)
+    * stale SQLite rows → impossible (SQLite rebuilt, not preserved)
+
+  * open questions
+    * kanban status changes: marker file writes commit-friendly?
+      * 20 napkins backlog → todo = 20 file writes + git commit
+      * vs SQLite: 20 UPDATEs, fast, not readable on disk
+      * board symlinks as status? (already filesystem-native)
+    * UI state granularity: what goes in state.json?
+      * active nepic, active terminal, sidebar visible — yes
+      * scroll positions, expanded cards, filter text — maybe overkill
+    * fs watcher + marker file writes: infinite loop?
+      * app writes .agent.nap.json → watcher fires → update → loop?
+      * need: ignore own writes, or debounce, or separate mechanism
