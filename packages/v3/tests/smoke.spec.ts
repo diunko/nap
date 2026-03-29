@@ -1,7 +1,7 @@
 import { test, expect, _electron as electron } from '@playwright/test';
 import * as path from 'path';
 
-const APP_DIR = path.join(__dirname, '..', '..');
+const APP_DIR = path.join(__dirname, '..');
 
 test('app launches and window exists', async () => {
   const app = await electron.launch({
