@@ -1,72 +1,81 @@
 import * as fs from 'fs';
+import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 
-// ── Injectable filesystem interface ──
+// ── Injectable filesystem interface (v2: async + write + watch) ──
 
-export interface FileSystemReader {
-  readdir(dir: string): string[];
-  readJSON(filePath: string): unknown | null;
-  isDirectory(filePath: string): boolean;
+export interface FileSystem {
+  readdir(dir: string): Promise<string[]>;
+  readJSON(filePath: string): Promise<unknown | null>;
+  isDirectory(filePath: string): Promise<boolean>;
+  writeJSON(filePath: string, data: unknown): Promise<void>;
+  watch(dir: string, callback: (event: string, filename: string) => void): () => void;
 }
+
+// Backward compat alias
+export type FileSystemReader = FileSystem;
 
 // ── Production implementation — wraps real fs ──
 
-export class NodeFileSystem implements FileSystemReader {
-  readdir(dir: string): string[] {
+export class NodeFileSystem implements FileSystem {
+  async readdir(dir: string): Promise<string[]> {
     try {
-      return fs.readdirSync(dir);
+      return await fsPromises.readdir(dir);
     } catch {
       return [];
     }
   }
 
-  readJSON(filePath: string): unknown | null {
+  async readJSON(filePath: string): Promise<unknown | null> {
     try {
-      const content = fs.readFileSync(filePath, 'utf-8');
+      const content = await fsPromises.readFile(filePath, 'utf-8');
       return JSON.parse(content);
     } catch {
       return null;
     }
   }
 
-  isDirectory(filePath: string): boolean {
+  async isDirectory(filePath: string): Promise<boolean> {
     try {
-      return fs.statSync(filePath).isDirectory();
+      const stat = await fsPromises.stat(filePath);
+      return stat.isDirectory();
     } catch {
       return false;
     }
   }
-}
 
-// ── In-memory implementation for tests ──
-
-export class MemoryFileSystem implements FileSystemReader {
-  private files: Record<string, object | null>;
-
-  constructor(files: Record<string, object | null>) {
-    this.files = files;
+  async writeJSON(filePath: string, data: unknown): Promise<void> {
+    await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+    await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2));
   }
 
-  readdir(dir: string): string[] {
+  watch(dir: string, callback: (event: string, filename: string) => void): () => void {
+    const watcher = fs.watch(dir, { recursive: true }, (event, filename) => {
+      if (filename) callback(event, filename);
+    });
+    return () => watcher.close();
+  }
+}
+
+// ── In-memory implementation for tests (v2: async + write + watch) ──
+
+export class MemoryFileSystem implements FileSystem {
+  private files: Record<string, object | null>;
+  private watchers: Map<string, Set<(event: string, filename: string) => void>> = new Map();
+
+  constructor(files: Record<string, object | null>) {
+    this.files = { ...files };
+  }
+
+  async readdir(dir: string): Promise<string[]> {
     const normalized = dir.endsWith('/') ? dir : dir + '/';
     const entries = new Set<string>();
 
     for (const key of Object.keys(this.files)) {
       if (!key.startsWith(normalized)) continue;
       const rest = key.slice(normalized.length);
-      const firstSegment = rest.split('/')[0];
-      if (firstSegment) {
-        entries.add(firstSegment);
-      }
-    }
-
-    // Also check for directory-only entries (paths that are prefixes of other paths)
-    for (const key of Object.keys(this.files)) {
-      // Check if any key looks like it's inside a subdir of `dir`
-      if (!key.startsWith(normalized)) continue;
-      const rest = key.slice(normalized.length);
       const parts = rest.split('/');
-      if (parts.length > 1 && parts[0]) {
+      if (parts[0]) {
         entries.add(parts[0]);
       }
     }
@@ -74,22 +83,67 @@ export class MemoryFileSystem implements FileSystemReader {
     return Array.from(entries).sort();
   }
 
-  readJSON(filePath: string): unknown | null {
+  async readJSON(filePath: string): Promise<unknown | null> {
     const value = this.files[filePath];
     return value !== undefined ? value : null;
   }
 
-  isDirectory(dirPath: string): boolean {
+  async isDirectory(dirPath: string): Promise<boolean> {
     const normalized = dirPath.endsWith('/') ? dirPath : dirPath + '/';
-    // A path is a directory if any key starts with it
     for (const key of Object.keys(this.files)) {
       if (key.startsWith(normalized)) return true;
     }
-    // Also check exact match for directory markers (keys ending with /)
     if (this.files[dirPath] !== undefined && this.files[dirPath] === null) {
-      // null value = directory marker
       return true;
     }
     return false;
+  }
+
+  async writeJSON(filePath: string, data: unknown): Promise<void> {
+    this.files[filePath] = data as object;
+    this._triggerWatch(filePath);
+  }
+
+  watch(dir: string, callback: (event: string, filename: string) => void): () => void {
+    if (!this.watchers.has(dir)) {
+      this.watchers.set(dir, new Set());
+    }
+    this.watchers.get(dir)!.add(callback);
+    return () => {
+      const set = this.watchers.get(dir);
+      if (set) {
+        set.delete(callback);
+        if (set.size === 0) this.watchers.delete(dir);
+      }
+    };
+  }
+
+  /** Manually trigger watch callbacks (for external-change tests) */
+  simulateChange(filePath: string): void {
+    this._triggerWatch(filePath);
+  }
+
+  /** Update a file WITHOUT triggering watch (set up state before simulateChange) */
+  updateFile(filePath: string, data: object): void {
+    this.files[filePath] = data;
+  }
+
+  /** Add a new file WITHOUT triggering watch */
+  addFile(filePath: string, data: object): void {
+    this.files[filePath] = data;
+  }
+
+  private _triggerWatch(filePath: string): void {
+    for (const [dir, callbacks] of this.watchers) {
+      const normalized = dir.endsWith('/') ? dir : dir + '/';
+      if (filePath.startsWith(normalized) || filePath === dir) {
+        const relative = filePath.startsWith(normalized)
+          ? filePath.slice(normalized.length)
+          : filePath;
+        for (const cb of callbacks) {
+          cb('change', relative);
+        }
+      }
+    }
   }
 }

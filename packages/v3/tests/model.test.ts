@@ -11,10 +11,10 @@ import {
 
 describe('NapModel', () => {
   // T-0100-01
-  it('loads minimal project correctly', () => {
+  it('loads minimal project correctly', async () => {
     const fs = createMinimalFixture();
     const model = createModel(fs);
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     const napkins = model.getNapkins();
     expect(napkins).toHaveLength(1);
@@ -32,10 +32,10 @@ describe('NapModel', () => {
   });
 
   // T-0100-02
-  it('loads rich project — multiple napkins, mixed statuses, multiple agents', () => {
+  it('loads rich project — multiple napkins, mixed statuses, multiple agents', async () => {
     const fs = createRichFixture();
     const model = createModel(fs);
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     const napkins = model.getNapkins();
     expect(napkins).toHaveLength(3);
@@ -60,10 +60,10 @@ describe('NapModel', () => {
   });
 
   // T-0100-03
-  it('handles missing marker files — dirs exist, no JSON', () => {
+  it('handles missing marker files — dirs exist, no JSON', async () => {
     const fs = createEmptyFixture();
     const model = createModel(fs);
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     const napkins = model.getNapkins();
     expect(napkins).toHaveLength(1);
@@ -81,10 +81,10 @@ describe('NapModel', () => {
   });
 
   // T-0100-04
-  it('handles exited agent', () => {
+  it('handles exited agent', async () => {
     const fs = createExitedAgentFixture();
     const model = createModel(fs);
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     const napkins = model.getNapkins();
     expect(napkins).toHaveLength(1);
@@ -94,45 +94,45 @@ describe('NapModel', () => {
   });
 
   // T-0100-05
-  it('model with no architects', () => {
+  it('model with no architects', async () => {
     const fs = createNoArchitectsFixture();
     const model = createModel(fs);
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     expect(model.getArchitects()).toEqual([]);
     expect(model.getNapkins()).toHaveLength(1);
   });
 
   // T-0100-06
-  it('emits change notification on load', () => {
+  it('emits change notification on load', async () => {
     const fs = createMinimalFixture();
     const model = createModel(fs);
     const spy = vi.fn();
 
     model.onChange(spy);
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     expect(spy).toHaveBeenCalled();
   });
 
   // T-0100-07
-  it('onChange unsubscribe works', () => {
+  it('onChange unsubscribe works', async () => {
     const fs = createMinimalFixture();
     const model = createModel(fs);
     const spy = vi.fn();
 
     const unsub = model.onChange(spy);
     unsub();
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     expect(spy).not.toHaveBeenCalled();
   });
 
   // T-0100-08
-  it('napkin slug derived from directory name', () => {
+  it('napkin slug derived from directory name', async () => {
     const fs = createMinimalFixture();
     const model = createModel(fs);
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     expect(model.getNapkins()[0].slug).toBe('0100-explore');
   });

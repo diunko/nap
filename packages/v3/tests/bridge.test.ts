@@ -5,7 +5,7 @@ import { createMinimalFixture, createRichFixture, NEPIC_DIR } from './fixtures';
 
 describe('Bridge', () => {
   // T-0100-10
-  it('delivers snapshot on model change', () => {
+  it('delivers snapshot on model change', async () => {
     const fs = createMinimalFixture();
     const model = createModel(fs);
     const bridge = new FakeBridge();
@@ -14,7 +14,7 @@ describe('Bridge', () => {
     const spy = vi.fn();
     bridge.onSnapshot(spy);
 
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     expect(spy).toHaveBeenCalledOnce();
     const snapshot = spy.mock.calls[0][0];
@@ -24,7 +24,7 @@ describe('Bridge', () => {
   });
 
   // T-0100-11
-  it('snapshot contains full state, not delta', () => {
+  it('snapshot contains full state, not delta', async () => {
     const fs = createRichFixture();
     const model = createModel(fs);
     const bridge = new FakeBridge();
@@ -33,7 +33,7 @@ describe('Bridge', () => {
     const spy = vi.fn();
     bridge.onSnapshot(spy);
 
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     const snapshot = spy.mock.calls[0][0];
     expect(snapshot.napkins).toHaveLength(3);
@@ -52,7 +52,7 @@ describe('Bridge', () => {
   });
 
   // T-0100-13
-  it('delivers snapshot to multiple listeners', () => {
+  it('delivers snapshot to multiple listeners', async () => {
     const fs = createMinimalFixture();
     const model = createModel(fs);
     const bridge = new FakeBridge();
@@ -63,7 +63,7 @@ describe('Bridge', () => {
     bridge.onSnapshot(spy1);
     bridge.onSnapshot(spy2);
 
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     expect(spy1).toHaveBeenCalledOnce();
     expect(spy2).toHaveBeenCalledOnce();

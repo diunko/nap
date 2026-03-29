@@ -25,7 +25,7 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const win = createWindow();
 
   // Resolve nepic dir — look for .nap/nepics/ in project cwd
@@ -33,12 +33,17 @@ app.whenReady().then(() => {
   const fs = new NodeFileSystem();
   const model = createModel(fs);
 
+  // Expose model for medium tests
+  if (process.env['NAP_TEST'] === '1') {
+    (global as any).__napModel__ = model;
+  }
+
   // Find the active nepic directory
   const nepicsBase = join(projectCwd, '.nap', 'nepics');
   let activeNepicId = '';
   let activeNepicDir = '';
 
-  const nepicDirs = fs.readdir(nepicsBase);
+  const nepicDirs = await fs.readdir(nepicsBase);
   if (nepicDirs.length > 0) {
     // Use the first nepic (or the one from env/args — for now, first)
     activeNepicId = nepicDirs[nepicDirs.length - 1];
@@ -58,7 +63,6 @@ app.whenReady().then(() => {
 
   // Wire renderer intents → main
   ipcMain.on('app:intent', (_event, intent) => {
-    // For 0100: only setActiveTerminal — placeholder
     if (intent?.type === 'setActiveTerminal') {
       // Will be wired to terminal management in later napkins
     }
@@ -66,7 +70,8 @@ app.whenReady().then(() => {
 
   // Load model from filesystem (triggers onChange → pushes snapshot to renderer)
   if (activeNepicDir) {
-    model.loadFromFilesystem(activeNepicDir);
+    await model.loadFromFilesystem(activeNepicDir);
+    model.startWatching(activeNepicDir);
   }
 
   // Also push snapshot when renderer signals it's ready (handles race condition)

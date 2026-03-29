@@ -11,7 +11,7 @@ import {
 
 describe('Journey — full round-trip in vitest', () => {
   // T-0100-20
-  it('model loads, bridge delivers, renderer store populated', () => {
+  it('model loads, bridge delivers, renderer store populated', async () => {
     const fs = createMinimalFixture();
     const model = createModel(fs);
     const bridge = new FakeBridge();
@@ -23,7 +23,7 @@ describe('Journey — full round-trip in vitest', () => {
       storeState = snapshot;
     });
 
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     expect(storeState).not.toBeNull();
     expect(storeState!.napkins[0].slug).toBe('0100-explore');
@@ -32,7 +32,7 @@ describe('Journey — full round-trip in vitest', () => {
   });
 
   // T-0100-21
-  it('rich project state arrives at renderer correctly', () => {
+  it('rich project state arrives at renderer correctly', async () => {
     const fs = createRichFixture();
     const model = createModel(fs);
     const bridge = new FakeBridge();
@@ -43,7 +43,7 @@ describe('Journey — full round-trip in vitest', () => {
       storeState = snapshot;
     });
 
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     expect(storeState).not.toBeNull();
     expect(storeState!.napkins).toHaveLength(3);
@@ -63,7 +63,7 @@ describe('Journey — full round-trip in vitest', () => {
   });
 
   // T-0100-22
-  it('edge case project (missing markers + exited) arrives at renderer', () => {
+  it('edge case project (missing markers + exited) arrives at renderer', async () => {
     const fs = createEdgeCaseFixture();
     const model = createModel(fs);
     const bridge = new FakeBridge();
@@ -74,7 +74,7 @@ describe('Journey — full round-trip in vitest', () => {
       storeState = snapshot;
     });
 
-    model.loadFromFilesystem(NEPIC_DIR);
+    await model.loadFromFilesystem(NEPIC_DIR);
 
     expect(storeState).not.toBeNull();
     expect(storeState!.napkins).toHaveLength(2);
