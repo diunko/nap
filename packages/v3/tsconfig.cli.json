@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "out/cli",
+    "rootDir": "src",
+    "noEmit": false,
+    "module": "CommonJS",
+    "declaration": false,
+    "lib": ["ES2022"]
+  },
+  "include": ["src/cli/**/*", "src/shared/**/*"]
+}
