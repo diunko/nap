@@ -27,6 +27,22 @@
         * we did the opposite: built components, tested components, assumed wiring works
         * the PM stories at the end were right instinct — 15 napkins too late
         * for nepic 03: journey tests FIRST
+          * // huh, how you practically do this? how you test before _anything_ is there?
+            * // quick thought: is it more of _draft_ tests, 
+              * // like playwrite files with comments of the intent (by TA)
+            * // and later TE adds impl?
+            * // or actually comments is just another manifestation of what we already doing
+              * // with TA's test specs?
+              * // then should it be just that TA also does a separate pass on user journeys?
+              * // what i absolutely love about current TA's scenarios is that they are
+                * // strategic to all integration surfaces
+                * // and journey-based might be too brittle with journey changes
+                * // but integration should still work as long as components are there
+                  * // and they get refactored with the components and apis
+                  * // and basically are a manifestation of contracts and apis in action
+              * // so really curious how storie-based tests would play into this?
+                * // still hate selector-based tests; do we absolutely have to use these?
+              * // what approach could we use for story/journey tests? 
   * over-engineered state management
     * SQLite as centralized source of truth
       * // doesn't seem bad idea on it's own; can we dig deeper wdyt it's bad?
@@ -36,6 +52,10 @@
         * SQLite row but no dir → orphaned or branch-switched?
         * these questions required reconciliation
         * if status lived with existence (meta.json in the dir) → nothing to reconcile
+          * // i think it's more about flawed assumptions on what the status is 
+            * // and what it should preserve, 
+            * // (basically misaligned from journeys/strories)
+              * // and thus core stories treated as edge-cases 
     * filesystem as separate source of truth for content
       * // again, if you just additively put them together, it should work, right?
       * // why this approach was flawed? what exactly made it non-straightforward?
@@ -46,6 +66,7 @@
         * ~15 such interactions, each must be consistent
         * got ~12 of 15 right — the 3 we missed broke the journeys
         * no transactional guarantees or explicit invariants per operation
+          * // curious to dig deeper into these; let's include them in thought excercise
     * reconciliation to sync them on startup
       * // i think i did a bad job at this, i had simple additive model in mind
       * // but looks like it got much more complicated than that
@@ -55,6 +76,18 @@
         * status transitions without updating both systems
         * appIsClosing adding conditional path
         * reconciliation can't fix what upstream broke — only detects mismatches
+          * // is it then that we were modelling the wrong system?
+          * // it feels like we were modelling only running, when in fact we have:
+            * // fresh
+            * // running
+            * // stop (and what survives)
+            * // re-start
+            * // and, in fact, it can be thought of just as:
+              * // stopped, and any data preserved (empty=just a special case of this)
+              * // running
+              * // and two transitions s->r and r->s
+              * // and then, on top of this, some implication / restriction on branches
+                * // that we could just impose on branching strategy to keep core 2S + 2T consistent
     * appIsClosing flag to prevent status clobbering
       * // well, you have to detect if it's children exiting because the app signaled them
       * // or is it their own exit and we shouldn't auto-resume them next time
@@ -70,6 +103,9 @@
           * [terminal] entry = resume action
           * click it = "I want this agent back"
           * meta file then says "has UUID, should resume"
+            * // has uuid, that's one
+            * // should resume = auto-resumes
+            * // has exited cleanly = exited, manual action needed to resume
           * next restart auto-resumes it too
           * user's click is the signal, not a status flag
     * four status types (running/done/exited/new)
@@ -87,6 +123,7 @@
         * //AN: yes — state machine should have been collaborative design
           * walk through: "app crashes mid-resume? two sessions same name? init but never open?"
           * these questions would have found the gaps
+          * // what process step should we add here?
         * // i think this is one of reasons what is causing reconciliation difficulties
           * // e.g. when there are a lot of stale things in sql
           * //AN: exactly — stale rows from:
@@ -101,6 +138,18 @@
               * in-memory state dies with the app
               * persistent state = only meta.json files that user/agent explicitly created
               * no stale rows because there are no rows — just files
+              * // i mean, having central persistent queryable source of truth for ephemeral is kinda nice
+                * // e.g. kanban board and side-panel can query it
+                * // i'm not really sure how to manage napkin statuses yet
+                  * // when we move things on board from backlog to todo, 
+                    * // does it look like we're doing a bunch of updates to meta files and commit them?
+                    * // or is it an update to sqlite?
+                    * // sqlite def has its advantages;
+                      * // maybe if we model app state as running|stopped
+                        * // and model transitions as r->s and s->r
+                        * // and what do we do with what set of metadata 
+                        * // maybe that's simple enough for everyone to follow?
+                        * // not sure yet tbh
     * three tiers of session (bare/claude/napkin)
       * // this is ok, and i think i have an idea how to manage them in simpler way
       * // we've came up with it closer to the end
@@ -117,6 +166,10 @@
           * app walks dirs, finds markers, renders cards
           * no registration, no creation API
           * drop a dir with a marker file → you're an agent
+            * // sounds simple, but
+              * // how can we think of it in terms of `nap start`? 
+              * // is it that `nap start` creates a directory? and what about PID?
+                * // and how that gets to ui? 
         * // one thing that is brittle and tightly coupled now is we expect certain agents to exist for napkin, and we show their statuses in minified view;
         * // but we can show statuses of all napkin agents (however order/roles/etc they are ordered)
         * //AN: right — current code tries to MATCH session names to agent dir names
@@ -133,6 +186,15 @@
           * // i'm still open to sqlite, to w/e basically; but just want to make sure we're not making it much more complex than it's needed
           * //AN: SQLite fine as CACHE, not source of truth
             * meta.json = truth, SQLite = cache rebuilt on startup
+              * // maybe, maybe
+              * // are we running into cache invalidation then? 
+              * // `nap start` and other tools: what do they update? 
+              * // it just makes me think that App in-memory is the source of truth
+                * // it has and api that everyone talks to
+                * // and app pushes updates to systems that need to be updated
+                * // if that's the case, we need well-designed api
+                  * // and cli and ui are just consumers of that
+                  * // i guess it's modeled like that already?
             * fast queries AND filesystem-first persistence
     * dual-truth model with conflict resolution rules
       * // were there a single thinking thread about how to organize resolution rules that we've reviewd together?
@@ -231,6 +293,12 @@
       * P3: reconciliation additive, never destructive
       * P4: "what exists?" → filesystem. "what's the status?" → SQLite
       * P5: filesystem changes can't corrupt SQLite. SQLite loss can't corrupt filesystem.
+      * // why it was hard and unobvious for agents to write code in such a way, that it actually restarts agents when i stop and start the app?
+        * // orphaned state, what is that? really unobvious; 
+        * // some terminals and ssessions lost;
+        * // some duplication (sessions with same names); 
+        * // it looks as restart is causing a lllooot of unplanned for churn
+          * // not designed for: "so what happens when we restart this thing?"
     * // if we write those explicitly, was it some flaws in principles?
     * //AN: principles sound for READS
       * flaw: don't address WRITES
