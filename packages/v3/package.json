@@ -1,10 +1,10 @@
 {
-  "name": "nap",
+  "name": "nap-v3",
   "version": "0.1.0",
   "description": "NAP v3",
   "main": "out/main/main.js",
   "bin": {
-    "nap": "out/cli/cli/nap.js"
+    "nap3": "out/cli/cli/nap.js"
   },
   "scripts": {
     "dev": "electron-vite dev",

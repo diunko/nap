@@ -8,7 +8,7 @@
 - Use freely — this is like googling something
 - Example: "find all files that import database" or "how does auth work?"
 
-**Work (NAP agents via `nap start`):**
+**Work (NAP agents via `nap3 start`):**
 - Use for EVERYTHING that produces artifacts — implementation, test writing, design exploration
 - Creates a full Claude Code session in its own terminal
 - The human can watch, talk to, steer — full visibility
@@ -56,7 +56,7 @@ mv 40-board/30-todo/0100-feature 40-board/40-doing/
 mv 40-board/40-doing/0100-feature 40-board/50-review/
 ```
 
-Or via CLI: `nap status 0100-feature doing`
+Or via CLI: `nap3 status 0100-feature doing`
 
 ## The pipeline
 
@@ -99,19 +99,19 @@ Each agent gets a directory inside the napkin:
 Architect launches via NAP CLI:
 
 ```bash
-nap start claude "read .nap/.../001-test-arch-feature/prompt.md and follow its instructions" \
+nap3 start claude "read .nap/.../001-test-arch-feature/prompt.md and follow its instructions" \
   --name 001-test-arch-feature --napkin 0100-feature --role test-arch
 ```
 
 Architect waits:
 
 ```bash
-nap nap 001-test-arch-feature --timeout 300
+nap3 nap 001-test-arch-feature --timeout 300
 ```
 
 Blocks until agent signals completion. Then architect reads `response.md`.
 
-**Critical:** agents must call `nap done` when finished — with NO message argument. Just `nap done`. Done messages arrive in the architect's terminal as if the human typed them. Use `response.md` for all communication, `nap done` only as a signal.
+**Critical:** agents must call `nap3 done` when finished — with NO message argument. Just `nap3 done`. Done messages arrive in the architect's terminal as if the human typed them. Use `response.md` for all communication, `nap3 done` only as a signal.
 
 ## The prompt.md contract
 
@@ -126,16 +126,16 @@ If you handed this prompt to a stranger with access to the repo, they could do t
 **Every prompt must end with:**
 
 ```
-CRITICAL: when you are done, write your response to <path>/response.md, then run `nap done` in your terminal (no message argument — just `nap done`). The architect is blocked waiting — without this, the pipeline stalls.
+CRITICAL: when you are done, write your response to <path>/response.md, then run `nap3 done` in your terminal (no message argument — just `nap3 done`). The architect is blocked waiting — without this, the pipeline stalls.
 ```
 
 ## Agent communication
 
 - **Files:** prompt.md (architect → agent), response.md (agent → architect)
-- **`nap done`:** signal completion — the only CLI command agents use
-- **`nap nap`:** architect waits for agent completion
+- **`nap3 done`:** signal completion — the only CLI command agents use
+- **`nap3 nap`:** architect waits for agent completion
 
-**Do NOT send messages through the terminal.** Both `nap poke` and `nap done "message"` deliver text as if the human typed it — no sender identity. Use files for all communication.
+**Do NOT send messages through the terminal.** Both `nap3 poke` and `nap3 done "message"` deliver text as if the human typed it — no sender identity. Use files for all communication.
 
 ## Failure flow
 

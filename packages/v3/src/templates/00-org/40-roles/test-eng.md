@@ -32,7 +32,7 @@ Agent. Implements and runs the tests designed by the test architect.
 
 ## When done
 
-**CRITICAL: run `nap done` in your terminal when you are finished.** Write your response to `response.md` first, then `nap done`. The architect is blocked waiting — without it, the pipeline stalls.
+**CRITICAL: run `nap3 done` in your terminal when you are finished.** Write your response to `response.md` first, then `nap3 done`. The architect is blocked waiting — without it, the pipeline stalls.
 
 ## Mandatory reading
 

@@ -26,7 +26,7 @@ Agent. Reads the spec and test architecture. Writes code.
 
 ## When done
 
-**CRITICAL: run `nap done` in your terminal when you are finished.** Write your response to `response.md` first, then `nap done`. The architect is blocked waiting for this signal — without it, the entire pipeline stalls.
+**CRITICAL: run `nap3 done` in your terminal when you are finished.** Write your response to `response.md` first, then `nap3 done`. The architect is blocked waiting for this signal — without it, the entire pipeline stalls.
 
 ## Mandatory reading
 

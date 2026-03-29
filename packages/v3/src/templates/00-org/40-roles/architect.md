@@ -8,8 +8,8 @@ The orchestrator. Runs in the main conversation with the human. Owns a nepic.
 - Read napkins, write specs + developer journeys
 - Design system boundaries — what talks to what, where the seams are
 - Write agent prompts that give agents full context to work autonomously
-- Launch agents via `nap start`, wait via `nap nap`, review output
-- Move symlinks in `40-board/` to track status transitions (or use `nap status`)
+- Launch agents via `nap3 start`, wait via `nap3 nap`, review output
+- Move symlinks in `40-board/` to track status transitions (or use `nap3 status`)
 - Route failures — decide if it's a code bug, spec problem, or test issue
 - Hold the whole system shape while agents see one feature
 
@@ -17,7 +17,7 @@ The orchestrator. Runs in the main conversation with the human. Owns a nepic.
 
 **For research:** use Claude Code's internal Explore agent freely. Quick codebase questions, finding code, understanding patterns. The report comes back into your context.
 
-**For work:** ALWAYS use `nap start`. Implementation, test writing, design exploration — anything that produces files. This creates a visible agent the human can watch.
+**For work:** ALWAYS use `nap3 start`. Implementation, test writing, design exploration — anything that produces files. This creates a visible agent the human can watch.
 
 **Never** use Claude Code's internal Agent tool for implementation work. That buries the agent where the human can't see it.
 
@@ -27,7 +27,7 @@ The orchestrator. Runs in the main conversation with the human. Owns a nepic.
 - Give agents autonomy. State what needs to exist, not how to build it.
 - When feature 0200 conflicts with 0100's design, catch it. Agents can't see across features.
 - Flag risks to the human before they become problems.
-- Every agent prompt must end with the `nap done` instruction.
+- Every agent prompt must end with the `nap3 done` instruction.
 - When context runs out, write a handoff and create a successor.
 
 ## The architect doesn't write code

@@ -11,9 +11,9 @@ import { findSocketPath, findProjectRoot, isSocketAlive } from '../shared/consta
 
 // --- Help text ---
 
-const HELP_TEXT = `nap — Napkin Agent Protocol
+const HELP_TEXT = `nap3 — Napkin Agent Protocol
 
-Usage: nap <command> [options]
+Usage: nap3 <command> [options]
 
 Commands:
   init                          Bootstrap a project for agent collaboration
@@ -35,7 +35,7 @@ Flags:
 `;
 
 const COMMAND_HELP: Record<string, string> = {
-  init: `Usage: nap init [--name <name>] [--add-skills [--user]]
+  init: `Usage: nap3 init [--name <name>] [--add-skills [--user]]
 
 Bootstrap a project for agent collaboration.
 
@@ -44,22 +44,22 @@ Bootstrap a project for agent collaboration.
   --user            With --add-skills: install to ~/.claude/skills/ instead
   --help            Show this help
 `,
-  open: `Usage: nap open
+  open: `Usage: nap3 open
 
 Launch Nap.app. Walks up from cwd to find .nap/, like git.
 
   --help            Show this help
 `,
-  create: `Usage: nap create <type> <name> [options]
+  create: `Usage: nap3 create <type> <name> [options]
 
-  nap create napkin <slug> [--status backlog] [--nepic <slug>]
-  nap create agent <name> --napkin <slug> --role <role> [--nepic <slug>]
-  nap create architect <name> [--nepic <slug>]
-  nap create nepic <slug> --name <display-name>
+  nap3 create napkin <slug> [--status backlog] [--nepic <slug>]
+  nap3 create agent <name> --napkin <slug> --role <role> [--nepic <slug>]
+  nap3 create architect <name> [--nepic <slug>]
+  nap3 create nepic <slug> --name <display-name>
 
 All create commands output JSON to stdout.
 `,
-  start: `Usage: nap start <name> [prompt] [--nepic <slug>]
+  start: `Usage: nap3 start <name> [prompt] [--nepic <slug>]
 
 Start a pre-created agent by name.
 
@@ -68,21 +68,21 @@ Start a pre-created agent by name.
   --nepic <slug>    Disambiguate across nepics
   --help            Show this help
 `,
-  ps: `Usage: nap ps [--json]
+  ps: `Usage: nap3 ps [--json]
 
 List all agents in a tree view.
 
   --json            Output raw JSON
   --help            Show this help
 `,
-  'set-status': `Usage: nap set-status <napkin-slug> <phase>
+  'set-status': `Usage: nap3 set-status <napkin-slug> <phase>
 
 Set napkin phase.
 
   phase             One of: backlog, todo, doing, review, done
   --help            Show this help
 `,
-  status: `Usage: nap status [--napkin <slug>] [--agent <name>] [--nepic <slug>] [--json]
+  status: `Usage: nap3 status [--napkin <slug>] [--agent <name>] [--nepic <slug>] [--json]
 
 Inspect any entity. No flags = project overview.
 
@@ -92,13 +92,13 @@ Inspect any entity. No flags = project overview.
   --json            Output JSON
   --help            Show this help
 `,
-  done: `Usage: nap done
+  done: `Usage: nap3 done
 
 Mark current session as done. Reads NAP_SESSION_ID from env.
 
   --help            Show this help
 `,
-  nap: `Usage: nap nap <name> [--timeout <seconds>]
+  nap: `Usage: nap3 nap <name> [--timeout <seconds>]
 
 Wait for a session to complete.
 
@@ -106,7 +106,7 @@ Wait for a session to complete.
   --timeout <secs>  Max wait time (default: 600)
   --help            Show this help
 `,
-  poke: `Usage: nap poke <name> <message>
+  poke: `Usage: nap3 poke <name> <message>
 
 Send input to a running agent's terminal.
 
@@ -114,21 +114,21 @@ Send input to a running agent's terminal.
   message           Text to send
   --help            Show this help
 `,
-  peek: `Usage: nap peek <name>
+  peek: `Usage: nap3 peek <name>
 
 Focus an agent's terminal in the UI.
 
   name              Agent name
   --help            Show this help
 `,
-  log: `Usage: nap log <name>
+  log: `Usage: nap3 log <name>
 
 Dump terminal scrollback to stdout.
 
   name              Agent name
   --help            Show this help
 `,
-  stop: `Usage: nap stop <name>
+  stop: `Usage: nap3 stop <name>
 
 Stop an agent's process.
 
@@ -182,7 +182,7 @@ function send(
 
     conn.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'ENOENT' || err.code === 'ECONNREFUSED') {
-        process.stderr.write('nap is not running (run nap open)\n');
+        process.stderr.write('nap3 is not running (run nap3 open)\n');
         process.exit(1);
       }
       reject(err);
@@ -205,7 +205,7 @@ function resolveSocketOrDie(): string {
 
   const found = findSocketPath(process.cwd());
   if (!found) {
-    process.stderr.write('nap is not running (run nap open)\n');
+    process.stderr.write('nap3 is not running (run nap3 open)\n');
     process.exit(1);
   }
   return found;
@@ -296,7 +296,7 @@ async function main(): Promise<void> {
       const napDir = path.join(cwd, '.nap');
 
       if (fs.existsSync(napDir)) {
-        process.stderr.write('Project already initialized. Run `nap open` to launch.\n');
+        process.stderr.write('Project already initialized. Run `nap3 open` to launch.\n');
         process.exit(1);
       }
 
@@ -398,7 +398,7 @@ async function main(): Promise<void> {
       // Walk up from cwd to find .nap/
       const projectRoot = findProjectRoot(process.cwd());
       if (!projectRoot) {
-        process.stderr.write('not a nap project (run nap init)\n');
+        process.stderr.write('not a nap project (run nap3 init)\n');
         process.exit(1);
       }
 
@@ -407,7 +407,7 @@ async function main(): Promise<void> {
       if (fs.existsSync(candidateSocket)) {
         const alive = await isSocketAlive(candidateSocket);
         if (alive) {
-          process.stderr.write('nap is already running in this project\n');
+          process.stderr.write('nap3 is already running in this project\n');
           process.exit(1);
         }
       }
@@ -462,7 +462,7 @@ async function main(): Promise<void> {
       switch (subcommand) {
         case 'napkin': {
           if (!args[1]) {
-            process.stderr.write('Usage: nap create napkin <slug> [--status backlog] [--nepic <slug>]\n');
+            process.stderr.write('Usage: nap3 create napkin <slug> [--status backlog] [--nepic <slug>]\n');
             process.exit(1);
           }
           const res = await send(sock, {
@@ -482,7 +482,7 @@ async function main(): Promise<void> {
 
         case 'agent': {
           if (!args[1]) {
-            process.stderr.write('Usage: nap create agent <name> --napkin <slug> --role <role> [--nepic <slug>]\n');
+            process.stderr.write('Usage: nap3 create agent <name> --napkin <slug> --role <role> [--nepic <slug>]\n');
             process.exit(1);
           }
           if (!flags['napkin'] || !flags['role']) {
@@ -507,7 +507,7 @@ async function main(): Promise<void> {
 
         case 'architect': {
           if (!args[1]) {
-            process.stderr.write('Usage: nap create architect <name> [--nepic <slug>]\n');
+            process.stderr.write('Usage: nap3 create architect <name> [--nepic <slug>]\n');
             process.exit(1);
           }
           const res = await send(sock, {
@@ -526,7 +526,7 @@ async function main(): Promise<void> {
 
         case 'nepic': {
           if (!args[1]) {
-            process.stderr.write('Usage: nap create nepic <slug> --name <display-name>\n');
+            process.stderr.write('Usage: nap3 create nepic <slug> --name <display-name>\n');
             process.exit(1);
           }
           if (!flags['name']) {
@@ -557,7 +557,7 @@ async function main(): Promise<void> {
 
     case 'start': {
       if (!args[0]) {
-        process.stderr.write('Usage: nap start <name> [prompt] [--nepic <slug>]\n');
+        process.stderr.write('Usage: nap3 start <name> [prompt] [--nepic <slug>]\n');
         process.exit(1);
       }
       const name = args[0];
@@ -624,7 +624,7 @@ async function main(): Promise<void> {
 
     case 'set-status': {
       if (!args[0] || !args[1]) {
-        process.stderr.write('Usage: nap set-status <napkin-slug> <phase>\n');
+        process.stderr.write('Usage: nap3 set-status <napkin-slug> <phase>\n');
         process.exit(1);
       }
       const sock = resolveSocketOrDie();
@@ -681,7 +681,7 @@ async function main(): Promise<void> {
     case 'done': {
       const sessionId = process.env['NAP_SESSION_ID'];
       if (!sessionId) {
-        process.stderr.write('not running inside nap\n');
+        process.stderr.write('not running inside nap3\n');
         process.exit(1);
       }
       const sock = resolveSocketOrDie();
@@ -699,7 +699,7 @@ async function main(): Promise<void> {
 
     case 'nap': {
       if (!args[0]) {
-        process.stderr.write('Usage: nap nap <name> [--timeout <seconds>]\n');
+        process.stderr.write('Usage: nap3 nap <name> [--timeout <seconds>]\n');
         process.exit(1);
       }
       const sock = resolveSocketOrDie();
@@ -731,7 +731,7 @@ async function main(): Promise<void> {
 
     case 'poke': {
       if (!args[0] || !args[1]) {
-        process.stderr.write('Usage: nap poke <name> <message>\n');
+        process.stderr.write('Usage: nap3 poke <name> <message>\n');
         process.exit(1);
       }
       const sock = resolveSocketOrDie();
@@ -750,7 +750,7 @@ async function main(): Promise<void> {
 
     case 'peek': {
       if (!args[0]) {
-        process.stderr.write('Usage: nap peek <name>\n');
+        process.stderr.write('Usage: nap3 peek <name>\n');
         process.exit(1);
       }
       const sock = resolveSocketOrDie();
@@ -764,7 +764,7 @@ async function main(): Promise<void> {
 
     case 'log': {
       if (!args[0]) {
-        process.stderr.write('Usage: nap log <name>\n');
+        process.stderr.write('Usage: nap3 log <name>\n');
         process.exit(1);
       }
       const sock = resolveSocketOrDie();
@@ -782,7 +782,7 @@ async function main(): Promise<void> {
 
     case 'stop': {
       if (!args[0]) {
-        process.stderr.write('Usage: nap stop <name>\n');
+        process.stderr.write('Usage: nap3 stop <name>\n');
         process.exit(1);
       }
       const sock = resolveSocketOrDie();
