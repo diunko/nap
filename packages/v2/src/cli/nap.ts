@@ -490,12 +490,28 @@ INSERT INTO sessions (id, nepic_id, name, role, status, cc_session_uuid, created
       // Find electron binary — resolve relative to own package root
       // CLI is at out/cli/cli/nap.js, so package root is 3 levels up from __dirname
       const packageRoot = path.resolve(__dirname, '..', '..', '..');
-      const napAppPath = process.env['NAP_APP_PATH'] || packageRoot;
-      const electronBin = path.join(napAppPath, 'node_modules', '.bin', 'electron');
-      const mainScript = path.join(napAppPath, 'out', 'main', 'main.js');
+      const mainScript = path.join(
+        process.env['NAP_APP_PATH'] || packageRoot,
+        'out', 'main', 'main.js',
+      );
 
-      if (!fs.existsSync(electronBin)) {
-        process.stderr.write(`electron not found at ${electronBin}\n`);
+      // Walk up from startDir to find electron (may be hoisted by workspaces)
+      function findElectronBin(startDir: string): string | null {
+        let dir = startDir;
+        while (true) {
+          const candidate = path.join(dir, 'node_modules', '.bin', 'electron');
+          if (fs.existsSync(candidate)) return candidate;
+          const parent = path.dirname(dir);
+          if (parent === dir) return null;
+          dir = parent;
+        }
+      }
+
+      const appRoot = process.env['NAP_APP_PATH'] || packageRoot;
+      const electronBin = findElectronBin(appRoot);
+
+      if (!electronBin) {
+        process.stderr.write('electron not found\n');
         process.stderr.write('set NAP_APP_PATH to your nap-app directory\n');
         process.exit(1);
       }
