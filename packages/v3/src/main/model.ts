@@ -1,5 +1,78 @@
 import type { FileSystem } from './filesystem';
 import type { NapkinState, AgentState, NapkinStatus } from '../shared/bridge-types';
+import type { PtySpawner } from './pty-spawner';
+import { resolveByName } from './name-resolver';
+import * as crypto from 'crypto';
+
+// ── Return types for new model methods ──
+
+export interface CreateNapkinResult {
+  slug: string;
+  status: NapkinStatus;
+  dir: string;
+  nepic: string;
+}
+
+export interface CreateAgentResult {
+  id: string;
+  name: string;
+  role: string;
+  dir: string;
+  napkin: string;
+  nepic: string;
+}
+
+export interface CreateArchitectResult {
+  id: string;
+  name: string;
+  role: string;
+  dir: string;
+  nepic: string;
+}
+
+export interface CreateNepicResult {
+  slug: string;
+  name: string;
+  dir: string;
+  architectId: string;
+  architectDir: string;
+}
+
+export interface StartAgentResult {
+  id: string;
+  name: string;
+  pid: number | null;
+}
+
+export interface StatusResult {
+  // napkin query
+  phase?: NapkinStatus;
+  agentCount?: number;
+  agents?: Array<{ name: string; role: string; running: boolean; done: boolean; exited: boolean }>;
+  // agent query
+  running?: boolean;
+  done?: boolean;
+  exited?: boolean;
+  started?: boolean;
+  role?: string;
+  napkin?: string | null;
+  sessionId?: string;
+  // overview (no query)
+  napkinsByPhase?: Record<string, number>;
+  runningAgentsCount?: number;
+  // nepic query
+  napkinCount?: number;
+  architectStatus?: string;
+}
+
+export interface AgentTreeNode {
+  name: string;
+  status: string;
+  napkin: string | null;
+  role: string;
+  id: string;
+  children: AgentTreeNode[];
+}
 
 // ── NapModel — owns the app's business state ──
 
@@ -19,6 +92,16 @@ export interface NapModel {
   setAgentStarted(agentId: string): Promise<void>;
   setNapkinStatus(slug: string, status: string): Promise<void>;
   saveUiState(state: unknown): Promise<void>;
+
+  // ── New methods for 0210 ──
+  createNapkin(slug: string, status?: NapkinStatus, nepicId?: string): Promise<CreateNapkinResult>;
+  createAgentStub(napkinSlug: string, name: string, role: string, nepicId?: string): Promise<CreateAgentResult>;
+  createArchitectStub(name: string, nepicId?: string): Promise<CreateArchitectResult>;
+  createNepic(slug: string, displayName: string): Promise<CreateNepicResult>;
+  startAgentByName(name: string, prompt: string | null, ptySpawner: PtySpawner, nepicId?: string): Promise<StartAgentResult>;
+  getStatus(query: { napkin?: string; agent?: string; nepic?: string }): StatusResult;
+  getAllAgentsTree(): AgentTreeNode[];
+  getNepicDir(): string;
 }
 
 const DEBOUNCE_MS = 200;
@@ -365,6 +448,329 @@ export function createModel(fs: FileSystem): NapModel {
     return all;
   }
 
+  // ── New methods for 0210 ──
+
+  async function createNapkin(
+    slug: string,
+    status: NapkinStatus = 'backlog',
+    _nepicId?: string,
+  ): Promise<CreateNapkinResult> {
+    const currentNepicId = _nepicId ?? getNepicSlug();
+    const napkinPath = nepicDir + '/30-napkins/' + slug;
+    const markerPath = napkinPath + '/.napkin.nap.json';
+
+    const markerData = { status, nepic: currentNepicId };
+    hasPendingWrite = true;
+    await fs.writeJSON(markerPath, markerData);
+
+    // Create agents subdir marker so isDirectory works in MemoryFileSystem
+    const agentsDirMarker = napkinPath + '/agents/.placeholder';
+    await fs.writeJSON(agentsDirMarker, null as unknown as object);
+
+    const newNapkin: NapkinState = {
+      id: slug,
+      slug,
+      nepicId: currentNepicId,
+      status,
+      path: napkinPath,
+      agents: [],
+    };
+    napkins.push(newNapkin);
+    notify();
+
+    return { slug, status, dir: napkinPath, nepic: currentNepicId };
+  }
+
+  async function createAgentStub(
+    napkinSlug: string,
+    name: string,
+    role: string,
+    _nepicId?: string,
+  ): Promise<CreateAgentResult> {
+    const currentNepicId = _nepicId ?? getNepicSlug();
+
+    // Check uniqueness within napkin
+    const napkin = napkins.find((n) => n.slug === napkinSlug);
+    if (napkin) {
+      const existing = napkin.agents.find((a) => a.name === name);
+      if (existing) {
+        throw new Error(`agent '${name}' already exists in napkin ${napkinSlug}`);
+      }
+    } else {
+      throw new Error(`napkin '${napkinSlug}' not found`);
+    }
+
+    const agentHomePath = nepicDir + '/30-napkins/' + napkinSlug + '/agents/' + name;
+    const markerPath = agentHomePath + '/.agent.nap.json';
+    const id = crypto.randomUUID();
+    const now = Date.now();
+
+    // Get parent info from NAP_SESSION_ID if available
+    const markerData = {
+      cc_session_uuid: id,
+      role,
+      name,
+      napkin: napkinSlug,
+      nepic: currentNepicId,
+      parent: null as string | null,
+      parent_id: null as string | null,
+      created_at: now,
+      started: false,
+      exited: false,
+    };
+
+    hasPendingWrite = true;
+    await fs.writeJSON(markerPath, markerData);
+
+    const agentState: AgentState = {
+      id,
+      name,
+      role,
+      nepicId: currentNepicId,
+      napkinId: napkinSlug,
+      parentName: null,
+      parentId: null,
+      createdAt: now,
+      started: false,
+      exited: false,
+      running: false,
+      done: false,
+      homePath: agentHomePath,
+    };
+    napkin.agents.push(agentState);
+    notify();
+
+    return { id, name, role, dir: agentHomePath, napkin: napkinSlug, nepic: currentNepicId };
+  }
+
+  async function createArchitectStub(
+    name: string,
+    _nepicId?: string,
+  ): Promise<CreateArchitectResult> {
+    const currentNepicId = _nepicId ?? getNepicSlug();
+    const archPath = nepicDir + '/20-architects/' + name;
+    const markerPath = archPath + '/.agent.nap.json';
+    const id = crypto.randomUUID();
+    const now = Date.now();
+
+    const markerData = {
+      cc_session_uuid: id,
+      role: 'architect',
+      name,
+      nepic: currentNepicId,
+      parent: null,
+      parent_id: null,
+      created_at: now,
+      started: false,
+      exited: false,
+    };
+
+    hasPendingWrite = true;
+    await fs.writeJSON(markerPath, markerData);
+
+    const agentState: AgentState = {
+      id,
+      name,
+      role: 'architect',
+      nepicId: currentNepicId,
+      napkinId: null,
+      parentName: null,
+      parentId: null,
+      createdAt: now,
+      started: false,
+      exited: false,
+      running: false,
+      done: false,
+      homePath: archPath,
+    };
+    architects.push(agentState);
+    notify();
+
+    return { id, name, role: 'architect', dir: archPath, nepic: currentNepicId };
+  }
+
+  async function createNepicFn(
+    slug: string,
+    displayName: string,
+  ): Promise<CreateNepicResult> {
+    // nepicDir points to current nepic, go up to nepics/ base
+    const nepicsBase = nepicDir.replace(/\/[^/]+$/, '');
+    const newNepicDir = nepicsBase + '/' + slug;
+
+    // Scaffold directory structure using placeholder files
+    await fs.writeJSON(newNepicDir + '/10-docs/.placeholder', null as unknown as object);
+    await fs.writeJSON(newNepicDir + '/30-napkins/.placeholder', null as unknown as object);
+
+    // Create architect stub
+    const archName = '001-architect';
+    const archPath = newNepicDir + '/20-architects/' + archName;
+    const archId = crypto.randomUUID();
+    const now = Date.now();
+
+    const archMarker = {
+      cc_session_uuid: archId,
+      role: 'architect',
+      name: archName,
+      nepic: slug,
+      parent: null,
+      parent_id: null,
+      created_at: now,
+      started: false,
+      exited: false,
+    };
+
+    hasPendingWrite = true;
+    await fs.writeJSON(archPath + '/.agent.nap.json', archMarker);
+    notify();
+
+    return {
+      slug,
+      name: displayName,
+      dir: newNepicDir,
+      architectId: archId,
+      architectDir: archPath,
+    };
+  }
+
+  async function startAgentByName(
+    name: string,
+    prompt: string | null,
+    ptySpawner: PtySpawner,
+    _nepicId?: string,
+  ): Promise<StartAgentResult> {
+    const allAgents = getAllAgents();
+    const result = resolveByName(allAgents, name);
+
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+
+    const agent = result.agent;
+
+    if (agent.running) {
+      throw new Error(`agent '${name}' is already running`);
+    }
+
+    // Build command
+    let command = `claude --verbose --session-id ${agent.id}`;
+    if (prompt) {
+      command += ` '${prompt.replace(/'/g, "'\\''")}'`;
+    }
+
+    ptySpawner.spawn({
+      id: agent.id,
+      command,
+      cwd: '',
+    });
+
+    ptySpawner.onExit(agent.id, () => {
+      return setAgentExitedById(agent.id);
+    });
+
+    agent.started = true;
+    agent.running = true;
+
+    // Write started=true to marker
+    const markerPath = agent.homePath + '/.agent.nap.json';
+    const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
+    const updated = { ...existing, started: true };
+    hasPendingWrite = true;
+    await fs.writeJSON(markerPath, updated);
+
+    notify();
+
+    return { id: agent.id, name: agent.name, pid: null };
+  }
+
+  function getStatus(query: { napkin?: string; agent?: string; nepic?: string }): StatusResult {
+    if (query.napkin) {
+      const napkin = napkins.find((n) => n.slug === query.napkin);
+      if (!napkin) {
+        return {};
+      }
+      return {
+        phase: napkin.status,
+        agentCount: napkin.agents.length,
+        agents: napkin.agents.map((a) => ({
+          name: a.name,
+          role: a.role,
+          running: a.running,
+          done: a.done,
+          exited: a.exited,
+        })),
+      };
+    }
+
+    if (query.agent) {
+      const allAgents = getAllAgents();
+      const agent = allAgents.find((a) => a.name === query.agent);
+      if (!agent) {
+        return {};
+      }
+      return {
+        running: agent.running,
+        done: agent.done,
+        exited: agent.exited,
+        started: agent.started,
+        role: agent.role,
+        napkin: agent.napkinId,
+        sessionId: agent.id,
+      };
+    }
+
+    // Overview — no query
+    const byPhase: Record<string, number> = {};
+    for (const n of napkins) {
+      byPhase[n.status] = (byPhase[n.status] || 0) + 1;
+    }
+    const running = getAllAgents().filter((a) => a.running).length;
+
+    return {
+      napkinsByPhase: byPhase,
+      runningAgentsCount: running,
+    };
+  }
+
+  function getAllAgentsTree(): AgentTreeNode[] {
+    const allAgents = getAllAgents();
+
+    function agentStatus(a: AgentState): string {
+      if (a.exited) return 'exited';
+      if (a.done) return 'done';
+      if (a.running) return 'running';
+      if (a.started) return 'started';
+      return 'created';
+    }
+
+    // Build tree by parentId
+    const byParent = new Map<string | null, AgentState[]>();
+    for (const a of allAgents) {
+      const key = a.parentId ?? null;
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key)!.push(a);
+    }
+
+    function buildNode(agent: AgentState): AgentTreeNode {
+      const children = (byParent.get(agent.id) || []).map(buildNode);
+      return {
+        name: agent.name,
+        status: agentStatus(agent),
+        napkin: agent.napkinId,
+        role: agent.role,
+        id: agent.id,
+        children,
+      };
+    }
+
+    // Root nodes: agents with no parent or parent not in the set
+    const allIds = new Set(allAgents.map((a) => a.id));
+    const roots = allAgents.filter(
+      (a) => a.parentId === null || !allIds.has(a.parentId),
+    );
+
+    return roots.map(buildNode);
+  }
+
   return {
     loadFromFilesystem,
     getNapkins: () => napkins,
@@ -386,6 +792,14 @@ export function createModel(fs: FileSystem): NapModel {
     setAgentStarted,
     setNapkinStatus,
     saveUiState,
+    createNapkin,
+    createAgentStub,
+    createArchitectStub,
+    createNepic: createNepicFn,
+    startAgentByName,
+    getStatus,
+    getAllAgentsTree,
+    getNepicDir: () => nepicDir,
   };
 }
 

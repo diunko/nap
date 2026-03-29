@@ -43,6 +43,24 @@ export function isSocketAlive(socketPath: string): Promise<boolean> {
   });
 }
 
+/**
+ * Walk up from `startDir` looking for a `.nap/` directory.
+ * Returns the project root (parent of .nap/) if found, null otherwise.
+ */
+export function findProjectRoot(startDir: string): string | null {
+  let dir = path.resolve(startDir);
+  while (true) {
+    const candidate = path.join(dir, '.nap');
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // filesystem root
+    dir = parent;
+  }
+  return null;
+}
+
 // Legacy compat — used by tests that set NAP_SOCKET env var
 export const SOCKET_PATH =
   process.env['NAP_SOCKET'] || path.join(os.homedir(), '.nap', 'sock');

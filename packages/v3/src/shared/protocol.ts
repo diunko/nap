@@ -1,19 +1,15 @@
 export interface StartRequest {
   type: 'start';
   id: number;
-  command: string;
-  name?: string;
-  cwd?: string;
-  parentId?: string | null;
-  napkinSlug?: string;
-  role?: string;
-  homeDir?: string;
-  isClaude?: boolean;
+  name: string;
+  prompt?: string;
+  nepicId?: string;
 }
 
 export interface PsRequest {
   type: 'ps';
   id: number;
+  json?: boolean;
 }
 
 export interface PeekRequest {
@@ -22,14 +18,8 @@ export interface PeekRequest {
   name: string;
 }
 
-export interface KillRequest {
-  type: 'kill';
-  id: number;
-  name: string;
-}
-
-export interface CloseRequest {
-  type: 'close';
+export interface StopRequest {
+  type: 'stop';
   id: number;
   name: string;
 }
@@ -41,17 +31,10 @@ export interface PokeRequest {
   message: string;
 }
 
-export interface StatusRequest {
-  type: 'status';
-  id: number;
-  name: string;
-}
-
 export interface DoneRequest {
   type: 'done';
   id: number;
   sessionId: string;
-  message: string;
 }
 
 export interface LogRequest {
@@ -60,21 +43,68 @@ export interface LogRequest {
   name: string;
 }
 
-export interface NapkinStatusRequest {
-  type: 'napkin-status';
+export interface CreateNapkinRequest {
+  type: 'create-napkin';
+  id: number;
+  slug: string;
+  status?: string;
+  nepicId?: string;
+}
+
+export interface CreateAgentRequest {
+  type: 'create-agent';
+  id: number;
+  napkinSlug: string;
+  name: string;
+  role: string;
+  nepicId?: string;
+}
+
+export interface CreateArchitectRequest {
+  type: 'create-architect';
+  id: number;
+  name: string;
+  nepicId?: string;
+}
+
+export interface CreateNepicRequest {
+  type: 'create-nepic';
+  id: number;
+  slug: string;
+  displayName: string;
+}
+
+export interface SetStatusRequest {
+  type: 'set-status';
   id: number;
   napkinSlug: string;
   status: string;
+}
+
+export interface StatusInspectRequest {
+  type: 'status';
+  id: number;
+  query: { napkin?: string; agent?: string; nepic?: string };
+}
+
+export interface NapWaitRequest {
+  type: 'nap-wait';
+  id: number;
+  name: string;
 }
 
 export type SocketRequest =
   | StartRequest
   | PsRequest
   | PeekRequest
-  | KillRequest
-  | CloseRequest
+  | StopRequest
   | PokeRequest
-  | StatusRequest
   | DoneRequest
   | LogRequest
-  | NapkinStatusRequest;
+  | CreateNapkinRequest
+  | CreateAgentRequest
+  | CreateArchitectRequest
+  | CreateNepicRequest
+  | SetStatusRequest
+  | StatusInspectRequest
+  | NapWaitRequest;

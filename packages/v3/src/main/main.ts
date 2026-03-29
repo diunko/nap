@@ -4,6 +4,10 @@ import { createModel } from './model';
 import { NodeFileSystem } from './filesystem';
 import { NodePtySpawner } from './node-pty-spawner';
 import { startAgents } from './coordinators';
+import { startSocketServer, stopSocketServer } from './socket-server';
+import { createRequestHandler } from './socket-handler';
+import { setWriter } from './message-queue';
+import { getServerSocketPath } from '../shared/constants';
 import type { AppSnapshot } from '../shared/bridge-types';
 
 let ptySpawner: NodePtySpawner | null = null;
@@ -30,13 +34,25 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
-  const win = createWindow();
   const isTest = process.env['NAP_TEST'] === '1';
 
   // Resolve nepic dir — look for .nap/nepics/ in project cwd
   const projectCwd = process.env['NAP_CWD'] || process.cwd();
   const fs = new NodeFileSystem();
   const model = createModel(fs);
+
+  // ── Start socket server BEFORE window creation ──
+  const socketPath = getServerSocketPath(projectCwd);
+  ptySpawner = new NodePtySpawner(isTest);
+  const handler = createRequestHandler(model, ptySpawner);
+  await startSocketServer(handler, socketPath);
+
+  // Wire message queue to pty writer
+  setWriter((id, data) => {
+    ptySpawner?.write(id, data);
+  });
+
+  const win = createWindow();
 
   // Expose model for medium tests
   if (isTest) {
@@ -73,8 +89,6 @@ app.whenReady().then(async () => {
   });
 
   // ── PTY management ──
-
-  ptySpawner = new NodePtySpawner(isTest);
 
   // Route pty data → renderer
   ptySpawner.setDataHandler((id, data) => {
@@ -134,6 +148,7 @@ app.whenReady().then(async () => {
 // ── Quit handling ──
 
 app.on('before-quit', () => {
+  stopSocketServer();
   if (ptySpawner) {
     ptySpawner.clearExitHandlers();
     ptySpawner.killAll();
