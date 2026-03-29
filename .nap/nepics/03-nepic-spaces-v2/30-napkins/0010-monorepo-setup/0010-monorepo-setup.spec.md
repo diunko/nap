@@ -1,5 +1,7 @@
 ## 0010 — monorepo setup: spec
 
+This spec gives you direction and constraints. It is NOT a complete implementation guide. Before writing any code, do your own thorough research: read the existing configs (package.json, tsconfig files, electron.vite.config.ts, vitest/playwright configs), trace how the build chain works, understand how imports resolve, check how tests find their entry points. The spec tells you what to achieve and what constraints to respect — you figure out how by understanding the actual codebase.
+
 Constraints the implementer can't derive from the napkin alone.
 
 ### File moves (v2)
