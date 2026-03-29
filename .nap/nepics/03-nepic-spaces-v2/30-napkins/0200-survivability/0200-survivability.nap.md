@@ -25,11 +25,11 @@
   * pty handles (node-pty process objects)
   * xterm instances (renderer terminal buffers)
   * "is this agent currently running" — derived from pty existence, not stored
-  * zustand store — rebuilt from model on s→r
+  * zustand store — rebuilt from model on STOP→RUN
   * socket server — recreated on start
   * watcher — recreated on start
 
-* s→r transition (app starts) — step by step
+* STOP→RUN transition (app starts) — step by step
   * 1. read ui-state.json → know which nepic was active, which terminal focused
   * 2. walk nepic dir → read marker files → build model
     * for each napkin dir in 30-napkins/:
@@ -53,7 +53,7 @@
   * 8. restore active terminal from ui-state.json
   * that's it. no SQLite. no reconciliation. no appIsClosing flag.
 
-* r→s transition (app stops) — step by step
+* RUN→STOP transition (app stops) — step by step
   * 1. save ui-state.json (active nepic, active terminal, sidebar visible)
   * 2. stop watcher
   * 3. stop socket server
@@ -80,7 +80,7 @@
     * model.setAgentExited() → writes exited: true to marker
     * pty handle removed from memory
     * push snapshot → gray dot
-    * on next s→r: this agent will NOT auto-resume
+    * on next STOP→RUN: this agent will NOT auto-resume
   * app kills agent (user closes terminal):
     * same as agent dies — write exited: true, clean up pty
   * napkin status change:
@@ -123,13 +123,13 @@
 * testing
   * pipeline: TA → fs-eng → TE
   * small tests (vitest, model + fakes):
-    * s→r: fake filesystem with markers → model loads → correct resume decisions
-    * r→s: model state → save ui-state → new model loads → same persistent state
+    * STOP→RUN: fake filesystem with markers → model loads → correct resume decisions
+    * RUN→STOP: model state → save ui-state → new model loads → same persistent state
     * agent created → marker written → model updated
     * agent exits → exited flag written → model updated
-    * agent exits → next s→r → agent NOT resumed
+    * agent exits → next STOP→RUN → agent NOT resumed
     * app quit → NO exited flags written (the key difference from v2)
-    * done signal → in-memory only → not persisted → next s→r resumes agent
+    * done signal → in-memory only → not persisted → next STOP→RUN resumes agent
   * medium tests (Playwright, real Electron):
     * launch app with fixture → agents resume (real ptys) → sidebar shows running dots
     * launch → quit → reopen → sidebar shows same agents
