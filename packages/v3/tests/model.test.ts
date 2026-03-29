@@ -23,12 +23,12 @@ describe('NapModel', () => {
     expect(napkins[0].agents).toHaveLength(1);
     expect(napkins[0].agents[0].name).toBe('001-test-arch');
     expect(napkins[0].agents[0].role).toBe('test-arch');
-    expect(napkins[0].agents[0].ccSessionUuid).toBe('uuid-ta');
+    expect(napkins[0].agents[0].id).toBe('uuid-ta');
 
     const architects = model.getArchitects();
     expect(architects).toHaveLength(1);
     expect(architects[0].name).toBe('001-architect');
-    expect(architects[0].ccSessionUuid).toBe('uuid-arch');
+    expect(architects[0].id).toBe('uuid-arch');
   });
 
   // T-0100-02
@@ -74,7 +74,7 @@ describe('NapModel', () => {
     expect(napkins[0].agents).toHaveLength(1);
     expect(napkins[0].agents[0].name).toBe('001-test-arch');
     expect(napkins[0].agents[0].role).toBe('');
-    expect(napkins[0].agents[0].ccSessionUuid).toBeUndefined();
+    expect(napkins[0].agents[0].id).toBe('');
 
     // 20-architects/ empty → no architects
     expect(model.getArchitects()).toEqual([]);
@@ -90,7 +90,7 @@ describe('NapModel', () => {
     expect(napkins).toHaveLength(1);
     expect(napkins[0].agents).toHaveLength(1);
     expect(napkins[0].agents[0].exited).toBe(true);
-    expect(napkins[0].agents[0].ccSessionUuid).toBe('uuid-exited');
+    expect(napkins[0].agents[0].id).toBe('uuid-exited');
   });
 
   // T-0100-05
