@@ -17,10 +17,10 @@ export function resolveByName(
     };
   }
 
-  // Not found — check for close matches (Levenshtein ≤ 2)
+  // Not found — check for close matches (substring or Levenshtein ≤ 3)
   const suggestions = agents
     .map((a) => a.name)
-    .filter((n) => levenshtein(n, name) <= 2);
+    .filter((n) => n.includes(name) || name.includes(n) || levenshtein(n, name) <= 3);
 
   if (suggestions.length > 0) {
     const list = suggestions.map((s) => `  ${s}`).join('\n');
