@@ -362,13 +362,14 @@ async function main(): Promise<void> {
         JSON.stringify(architectMarker, null, 2),
       );
 
-      // Copy architect prompt.md from template
+      // Copy architect prompt.md — use template-specific version when --template is set
+      const promptFileName = flags['template'] ? 'prompt-template.md' : 'prompt.md';
       const promptTemplatePath = path.join(
         templatesDir,
         'nepic',
         '20-architects',
         '001-architect',
-        'prompt.md',
+        promptFileName,
       );
       if (fs.existsSync(promptTemplatePath)) {
         fs.copyFileSync(
