@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { join } from 'path';
 import { createModel } from './model';
 import { NodeFileSystem } from './filesystem';
@@ -115,6 +115,11 @@ app.whenReady().then(async () => {
 
   ipcMain.on('pty:ready', (_event, id: string) => {
     ptySpawner?.markReady(id);
+  });
+
+  // Open file in default editor
+  ipcMain.on('open-file-path', (_event, filePath: string) => {
+    shell.openPath(filePath);
   });
 
   // Expose pty manager for medium tests

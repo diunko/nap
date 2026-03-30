@@ -47,4 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('pty:exit', handler);
     },
   },
+
+  // ── File opener ──
+  openFilePath: (filePath: string) => ipcRenderer.send('open-file-path', filePath),
 });
