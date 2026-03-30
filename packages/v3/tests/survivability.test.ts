@@ -426,7 +426,7 @@ describe('Done signal', () => {
   });
 
   // T-0200-45
-  it('Done agent is skipped on restart (done = finished)', async () => {
+  it('Done agent is resumed on restart (done ≠ exited)', async () => {
     const fs = createSurvivabilityFixture();
     const model = createModel(fs);
     await model.loadFromFilesystem(NEPIC_DIR);
@@ -442,7 +442,8 @@ describe('Done signal', () => {
     await startAgents(model2, pty2);
 
     const call = pty2.spawned.find((s) => s.id === 'uuid-ta');
-    expect(call).toBeUndefined();
+    expect(call).toBeDefined();
+    expect(call!.command).toContain('--resume uuid-ta');
   });
 
   // T-0200-46
