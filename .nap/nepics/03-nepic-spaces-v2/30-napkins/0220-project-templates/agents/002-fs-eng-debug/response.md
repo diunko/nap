@@ -125,6 +125,25 @@ The three bugs above reveal a pattern: **the test suite validates the implementa
 
 ---
 
+### DX improvement: `nap3 dev`
+
+Added a `nap3 dev` command that launches the electron-vite dev server (with HMR) pointed at the current project directory. Before this, starting a dev session required:
+
+```bash
+cd ~/dvl/aibanana/nap && NAP_CWD=~/dvl/tmp/fun12 npm run dev:v3
+```
+
+Now from any project dir:
+
+```bash
+cd ~/dvl/tmp/fun12
+nap3 dev
+```
+
+It derives the monorepo location from where `nap3` is installed (npm-linked), sets `NAP_CWD` to the current project, and runs `npm run dev:v3` with `stdio: 'inherit'` so you see the vite output. This enables the workflow of developing the nap app while using it on a real project — fix a renderer bug, see it hot-reload, test it on live agents.
+
+---
+
 ### Known remaining issues
 
 - Dot colors based on role not status (running test-arch shows amber instead of green)
