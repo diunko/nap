@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useNapStore } from './store';
-import { getTerminal, openTerminal } from './terminal-registry';
+import { getTerminal, openTerminal, createTerminalInstance } from './terminal-registry';
 
 export function Terminal() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -9,8 +9,15 @@ export function Terminal() {
   // Reparent terminal DOM element when active terminal changes
   useEffect(() => {
     if (!activeTerminalId || !containerRef.current) return;
-    const entry = getTerminal(activeTerminalId);
-    if (!entry) return;
+    let entry = getTerminal(activeTerminalId);
+    if (!entry) {
+      // Create on demand — handles race where child effect runs before parent
+      entry = createTerminalInstance(activeTerminalId);
+      entry.terminal.onData((data) => {
+        window.electronAPI.pty.write(activeTerminalId, data);
+      });
+      window.electronAPI.pty.ready(activeTerminalId);
+    }
 
     const container = containerRef.current;
 
