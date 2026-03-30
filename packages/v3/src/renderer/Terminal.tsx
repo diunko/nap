@@ -1,10 +1,63 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNapStore } from './store';
-import { getTerminal, openTerminal, createTerminalInstance } from './terminal-registry';
+import { getTerminal, openTerminal, createTerminalInstance, toggleFollow } from './terminal-registry';
+import { createFileLinkProvider } from './file-link-provider';
+
+function useBreadcrumb() {
+  const activeTerminalId = useNapStore((s) => s.activeTerminalId);
+  const napkins = useNapStore((s) => s.napkins);
+  const architects = useNapStore((s) => s.architects);
+
+  if (!activeTerminalId) return null;
+
+  // Is it an architect?
+  const architect = architects.find((a) => a.id === activeTerminalId);
+  if (architect) {
+    const label = architect.running ? 'running' : architect.exited ? 'exited' : 'done';
+    return { agentName: architect.name, label };
+  }
+
+  // Is it a napkin agent?
+  for (const napkin of napkins) {
+    const agent = napkin.agents.find((a) => a.id === activeTerminalId);
+    if (agent) {
+      const label = agent.running ? 'running' : agent.exited ? 'exited' : agent.done ? 'done' : '';
+      return { napkinSlug: napkin.slug, agentName: agent.name, label };
+    }
+  }
+
+  return { agentName: activeTerminalId };
+}
 
 export function Terminal() {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeTerminalId = useNapStore((s) => s.activeTerminalId);
+  const breadcrumb = useBreadcrumb();
+  const [following, setFollowing] = useState(false);
+
+  // Cmd+G: toggle follow mode
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'g') {
+        e.preventDefault();
+        const id = useNapStore.getState().activeTerminalId;
+        if (id) {
+          const isFollowing = toggleFollow(id);
+          setFollowing(isFollowing);
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Sync follow state when switching terminals
+  useEffect(() => {
+    if (activeTerminalId) {
+      const entry = getTerminal(activeTerminalId);
+      setFollowing(entry?.following ?? false);
+    }
+  }, [activeTerminalId]);
 
   // Reparent terminal DOM element when active terminal changes
   useEffect(() => {
@@ -16,6 +69,13 @@ export function Terminal() {
       entry.terminal.onData((data) => {
         window.electronAPI.pty.write(activeTerminalId, data);
       });
+      entry.terminal.registerLinkProvider(
+        createFileLinkProvider(
+          entry.terminal,
+          () => '/',
+          (filePath) => window.electronAPI.openFilePath(filePath),
+        ),
+      );
       window.electronAPI.pty.ready(activeTerminalId);
     }
 
@@ -76,7 +136,7 @@ export function Terminal() {
         overflow: 'hidden',
       }}
     >
-      {/* Breadcrumb header — v2 styles copied verbatim */}
+      {/* Breadcrumb header */}
       <div
         data-testid="terminal-breadcrumb"
         style={{
@@ -91,19 +151,38 @@ export function Terminal() {
           fontSize: 13,
         }}
       >
-        <span style={{ color: '#6b7280' }}>S</span>
-        {activeTerminalId && (
+        <span style={{ color: '#6b7280', padding: '2px 0' }}>S</span>
+        {breadcrumb?.napkinSlug && (
+          <>
+            <span style={{ color: '#3c3c3c', margin: '0 8px' }}>&gt;</span>
+            <span style={{ color: '#6b7280', padding: '2px 0' }}>
+              {breadcrumb.napkinSlug}
+            </span>
+          </>
+        )}
+        {breadcrumb?.agentName && (
           <>
             <span style={{ color: '#3c3c3c', margin: '0 8px' }}>&gt;</span>
             <span style={{ color: '#e5e5e5', fontWeight: 600 }}>
-              {activeTerminalId}
+              {breadcrumb.agentName}
             </span>
           </>
+        )}
+        {breadcrumb?.label && (
+          <span style={{ color: '#6b7280', fontSize: 12, marginLeft: 12 }}>
+            {breadcrumb.label}
+          </span>
         )}
       </div>
 
       {/* Terminal container */}
-      <div style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+      <div style={{
+        flex: 1,
+        minWidth: 0,
+        minHeight: 0,
+        borderBottom: following ? '2px solid #2a5a9a' : '2px solid transparent',
+        transition: 'border-color 0.15s',
+      }}>
         <div
           ref={containerRef}
           style={{ width: '100%', height: '100%' }}
