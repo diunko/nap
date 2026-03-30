@@ -6,6 +6,8 @@ export interface TerminalEntry {
   terminal: Terminal;
   fitAddon: FitAddon;
   opened: boolean;
+  following: boolean;
+  disposeFollow?: () => void;
 }
 
 const registry = new Map<string, TerminalEntry>();
@@ -31,7 +33,7 @@ export function createTerminalInstance(id: string): TerminalEntry {
 
   // Don't call open() yet — xterm buffers writes internally.
   // Will be opened when first displayed (see openTerminal).
-  const entry: TerminalEntry = { terminal, fitAddon, opened: false };
+  const entry: TerminalEntry = { terminal, fitAddon, opened: false, following: false };
   registry.set(id, entry);
   return entry;
 }
@@ -53,6 +55,39 @@ export function openTerminal(id: string, container: HTMLElement): void {
 
 export function getTerminal(id: string): TerminalEntry | undefined {
   return registry.get(id);
+}
+
+export function toggleFollow(id: string): boolean {
+  const entry = registry.get(id);
+  if (!entry) return false;
+
+  if (entry.following) {
+    // Turn off
+    entry.following = false;
+    if (entry.disposeFollow) {
+      entry.disposeFollow();
+      entry.disposeFollow = undefined;
+    }
+    return false;
+  }
+
+  // Turn on
+  entry.following = true;
+  entry.terminal.scrollToBottom();
+
+  const d1 = entry.terminal.onWriteParsed(() => {
+    entry.terminal.scrollToBottom();
+  });
+  const d2 = entry.terminal.onScroll(() => {
+    if (entry.following) entry.terminal.scrollToBottom();
+  });
+
+  entry.disposeFollow = () => {
+    d1.dispose();
+    d2.dispose();
+  };
+
+  return true;
 }
 
 export function disposeTerminal(id: string): void {
