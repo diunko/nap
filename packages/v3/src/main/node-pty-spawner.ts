@@ -32,7 +32,7 @@ export class NodePtySpawner implements PtySpawner {
     const userShell = process.env['SHELL'] || '/bin/zsh';
     const command = this.testMode ? 'cat' : opts.command;
     const args = ['-c', command];
-    const finalCwd = opts.cwd || process.cwd();
+    const finalCwd = opts.cwd || process.env['NAP_CWD'] || process.cwd();
 
     const proc = pty.spawn(userShell, args, {
       name: 'xterm-256color',
