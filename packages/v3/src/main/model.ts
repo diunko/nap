@@ -158,6 +158,7 @@ export function createModel(fs: FileSystem): NapModel {
         created_at?: number;
         exited?: boolean;
         started?: boolean;
+        done?: boolean;
         parent?: string | null;
         parent_id?: string | null;
         napkin?: string;
@@ -176,7 +177,7 @@ export function createModel(fs: FileSystem): NapModel {
         started: marker?.started ?? false,
         exited: marker?.exited ?? false,
         running: false,
-        done: false,
+        done: marker?.done ?? false,
         homePath: agentPath,
       });
     }
@@ -241,6 +242,7 @@ export function createModel(fs: FileSystem): NapModel {
           created_at?: number;
           exited?: boolean;
           started?: boolean;
+          done?: boolean;
           parent?: string | null;
           parent_id?: string | null;
           nepic?: string;
@@ -259,7 +261,7 @@ export function createModel(fs: FileSystem): NapModel {
             started: marker.started ?? false,
             exited: marker.exited ?? false,
             running: false,
-            done: false,
+            done: marker.done ?? false,
             homePath: archPath,
           });
         }
@@ -412,13 +414,20 @@ export function createModel(fs: FileSystem): NapModel {
     }
   }
 
-  function setAgentDone(agentId: string): void {
+  async function setAgentDone(agentId: string): Promise<void> {
     doneAgents.add(agentId);
     const agent = findAgentById(agentId);
-    if (agent) {
-      agent.done = true;
-      notify();
-    }
+    if (!agent) return;
+
+    agent.done = true;
+    notify();
+
+    // Persist to disk so done survives app restart
+    const markerPath = agent.homePath + '/.agent.nap.json';
+    const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
+    const updated = { ...existing, done: true };
+    hasPendingWrite = true;
+    await fs.writeJSON(markerPath, updated);
   }
 
   async function setAgentStarted(agentId: string): Promise<void> {

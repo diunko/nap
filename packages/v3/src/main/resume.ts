@@ -9,13 +9,13 @@ export interface ResumeAction {
 /**
  * Pure function: given a list of agents, compute what to do on STOP→RUN.
  *
- * Case A (started + !exited): resume with --resume
- * Case B (exited): skip
+ * Case A (started + !exited + !done): resume with --resume
+ * Case B (exited or done): skip
  * Case C (!started): fresh start with --session-id + prompt
  */
 export function computeResumeActions(agents: AgentState[]): ResumeAction[] {
   return agents.map((agent) => {
-    if (agent.exited) {
+    if (agent.exited || agent.done) {
       return { agentId: agent.id, action: 'skip' as const };
     }
     if (agent.started) {

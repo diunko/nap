@@ -409,31 +409,31 @@ describe('Done signal', () => {
   });
 
   // T-0200-44
-  it('Done is NOT persisted → reload → done=false', async () => {
+  it('Done IS persisted → reload → done=true', async () => {
     const fs = createSurvivabilityFixture();
     const model = createModel(fs);
     await model.loadFromFilesystem(NEPIC_DIR);
     const ptySpawner = new FakePtySpawner();
 
     await startAgents(model, ptySpawner);
-    model.setAgentDone('uuid-ta');
+    await model.setAgentDone('uuid-ta');
     await stopApp(model, ptySpawner);
 
     const model2 = createModel(fs);
     await model2.loadFromFilesystem(NEPIC_DIR);
     const agent = model2.getNapkins()[0].agents.find((a) => a.id === 'uuid-ta');
-    expect(agent!.done).toBe(false);
+    expect(agent!.done).toBe(true);
   });
 
   // T-0200-45
-  it('Done agent resumes on next start (done ≠ exited)', async () => {
+  it('Done agent is skipped on restart (done = finished)', async () => {
     const fs = createSurvivabilityFixture();
     const model = createModel(fs);
     await model.loadFromFilesystem(NEPIC_DIR);
     const ptySpawner = new FakePtySpawner();
 
     await startAgents(model, ptySpawner);
-    model.setAgentDone('uuid-ta');
+    await model.setAgentDone('uuid-ta');
     await stopApp(model, ptySpawner);
 
     const model2 = createModel(fs);
@@ -442,8 +442,7 @@ describe('Done signal', () => {
     await startAgents(model2, pty2);
 
     const call = pty2.spawned.find((s) => s.id === 'uuid-ta');
-    expect(call).toBeDefined();
-    expect(call!.command).toContain('--resume uuid-ta');
+    expect(call).toBeUndefined();
   });
 
   // T-0200-46
@@ -538,7 +537,7 @@ describe('Survivability journeys', () => {
     await model1.loadFromFilesystem(NEPIC_DIR);
     const pty1 = new FakePtySpawner();
     await startAgents(model1, pty1);
-    model1.setAgentDone('uuid-ta');
+    await model1.setAgentDone('uuid-ta');
     await stopApp(model1, pty1);
 
     // Phase 2: restart with bridge
@@ -550,9 +549,9 @@ describe('Survivability journeys', () => {
 
     await model2.loadFromFilesystem(NEPIC_DIR);
 
-    // uuid-ta: done reset (ephemeral), not exited, not running yet
+    // uuid-ta: done persisted, not exited, not running
     const ta = snapshot!.napkins[0].agents.find((a) => a.id === 'uuid-ta');
-    expect(ta!.done).toBe(false);
+    expect(ta!.done).toBe(true);
     expect(ta!.exited).toBe(false);
     expect(ta!.running).toBe(false);
 
