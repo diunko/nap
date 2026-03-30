@@ -115,6 +115,10 @@ export function createModel(fs: FileSystem): NapModel {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const watchUnsubs: (() => void)[] = [];
 
+  // Ephemeral state kept separate — never wiped by filesystem reloads
+  const runningAgents = new Set<string>();
+  const doneAgents = new Set<string>();
+
   function notify(): void {
     for (const fn of listeners) {
       fn();
@@ -264,6 +268,12 @@ export function createModel(fs: FileSystem): NapModel {
 
     architects = loadedArchitects.sort((a, b) => a.createdAt - b.createdAt);
 
+    // Apply ephemeral flags from persistent sets
+    for (const agent of getAllAgents()) {
+      if (runningAgents.has(agent.id)) agent.running = true;
+      if (doneAgents.has(agent.id)) agent.done = true;
+    }
+
     notify();
   }
 
@@ -372,6 +382,10 @@ export function createModel(fs: FileSystem): NapModel {
     const agent = findAgentById(agentId);
     if (!agent) return;
 
+    // Update ephemeral sets
+    runningAgents.delete(agentId);
+    doneAgents.delete(agentId);
+
     // Update in-memory state first (sync)
     agent.exited = true;
     agent.running = false;
@@ -386,6 +400,11 @@ export function createModel(fs: FileSystem): NapModel {
   }
 
   function setAgentRunning(agentId: string, running: boolean): void {
+    if (running) {
+      runningAgents.add(agentId);
+    } else {
+      runningAgents.delete(agentId);
+    }
     const agent = findAgentById(agentId);
     if (agent) {
       agent.running = running;
@@ -394,6 +413,7 @@ export function createModel(fs: FileSystem): NapModel {
   }
 
   function setAgentDone(agentId: string): void {
+    doneAgents.add(agentId);
     const agent = findAgentById(agentId);
     if (agent) {
       agent.done = true;
@@ -669,6 +689,7 @@ export function createModel(fs: FileSystem): NapModel {
 
     agent.started = true;
     agent.running = true;
+    runningAgents.add(agent.id);
 
     // Write started=true to marker
     const markerPath = agent.homePath + '/.agent.nap.json';
