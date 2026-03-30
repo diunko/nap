@@ -1,12 +1,28 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
 
+// Buffer snapshots that arrive before the renderer registers its callback.
+// Fixes race: main sends app:state during loadFromFilesystem/startAgents,
+// but React hasn't mounted yet so the callback isn't registered.
+let pendingSnapshot: unknown = null;
+let snapshotCallback: ((snapshot: unknown) => void) | null = null;
+
+ipcRenderer.on('app:state', (_event, snapshot) => {
+  if (snapshotCallback) {
+    snapshotCallback(snapshot);
+  } else {
+    pendingSnapshot = snapshot;
+  }
+});
+
 contextBridge.exposeInMainWorld('electronAPI', {
   // ── Snapshot bridge (0100) ──
   onSnapshot: (cb: (snapshot: unknown) => void) => {
-    ipcRenderer.on('app:state', (_event, snapshot) => {
-      cb(snapshot);
-    });
+    snapshotCallback = cb;
+    if (pendingSnapshot !== null) {
+      cb(pendingSnapshot);
+      pendingSnapshot = null;
+    }
   },
   sendIntent: (intent: unknown) => {
     ipcRenderer.send('app:intent', intent);
