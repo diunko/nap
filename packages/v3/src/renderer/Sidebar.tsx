@@ -130,6 +130,7 @@ export function Sidebar() {
         backgroundColor: '#1a1a1a',
       }}
     >
+      <div style={{ padding: '4px 10px', fontSize: 10, color: '#555' }}>v11 run:{napkins.flatMap(n => n.agents).filter(a => a.running).length}+{architects.filter(a => a.running).length}</div>
       {architects.map((a) => (
         <ArchitectCard key={a.name} architect={a} />
       ))}
