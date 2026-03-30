@@ -382,21 +382,21 @@ export function createModel(fs: FileSystem): NapModel {
     const agent = findAgentById(agentId);
     if (!agent) return;
 
-    // Update ephemeral sets
+    // Update ephemeral sets — keep doneAgents (done + exited is valid)
     runningAgents.delete(agentId);
-    doneAgents.delete(agentId);
 
-    // Update in-memory state first (sync)
-    agent.exited = true;
-    agent.running = false;
-    notify();
-
-    // Then write to disk (async)
+    // Write to disk FIRST — prevents race where file watcher reload
+    // happens before the write and loses both exited and done flags
     const markerPath = agent.homePath + '/.agent.nap.json';
     const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
     const updated = { ...existing, exited: true };
     hasPendingWrite = true;
     await fs.writeJSON(markerPath, updated);
+
+    // Update in-memory state after disk write
+    agent.exited = true;
+    agent.running = false;
+    notify();
   }
 
   function setAgentRunning(agentId: string, running: boolean): void {
