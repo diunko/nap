@@ -2,8 +2,10 @@ import React, { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Sidebar } from './Sidebar';
 import { Terminal } from './Terminal';
+import { DebugPanel } from './DebugPanel';
 import { useNapStore } from './store';
 import { createTerminalInstance, getTerminal, disposeTerminal } from './terminal-registry';
+import { createFileLinkProvider } from './file-link-provider';
 import type { AppSnapshot } from '../shared/bridge-types';
 import '@xterm/xterm/css/xterm.css';
 
@@ -21,6 +23,7 @@ declare global {
         onData: (cb: (id: string, data: string) => void) => () => void;
         onExit: (cb: (id: string, exitCode: number) => void) => () => void;
       };
+      openFilePath: (filePath: string) => void;
     };
   }
 }
@@ -76,6 +79,14 @@ function App() {
         entry.terminal.onData((data) => {
           window.electronAPI?.pty?.write(agent.id, data);
         });
+        // File link provider
+        entry.terminal.registerLinkProvider(
+          createFileLinkProvider(
+            entry.terminal,
+            () => '/',
+            (filePath) => window.electronAPI?.openFilePath(filePath),
+          ),
+        );
         // Signal ready after next tick (terminal needs to be opened first)
         window.electronAPI?.pty?.ready(agent.id);
       }
@@ -102,6 +113,7 @@ function App() {
           </div>
         )}
       </div>
+      <DebugPanel />
     </div>
   );
 }
