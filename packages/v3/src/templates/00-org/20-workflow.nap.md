@@ -56,7 +56,7 @@ mv 40-board/30-todo/0100-feature 40-board/40-doing/
 mv 40-board/40-doing/0100-feature 40-board/50-review/
 ```
 
-Or via CLI: `nap3 status 0100-feature doing`
+Or via CLI: `nap3 set-status 0100-feature doing`
 
 ## The pipeline
 
@@ -85,25 +85,33 @@ Test eng reports failures → fullstack eng fixes → test eng re-runs. Loop unt
 
 ## Launching agents
 
-Every agent is a full Claude Code session in its own terminal. Not a subagent buried inside another session. The human can click on any agent, watch it work, talk to it — full Claude Code capabilities.
+Every agent is a full Claude Code session in its own terminal. The human can click on any agent, watch it work, talk to it.
 
-Each agent gets a directory inside the napkin:
+### Step by step
 
-```
-30-napkins/0100-feature/agents/
-  001-test-arch-feature/
-    prompt.md          ← architect writes
-    response.md        ← agent writes when done
-```
-
-Architect launches via NAP CLI:
+1. Create the napkin (if it doesn't exist yet):
 
 ```bash
-nap3 start claude "read .nap/.../001-test-arch-feature/prompt.md and follow its instructions" \
-  --name 001-test-arch-feature --napkin 0100-feature --role test-arch
+nap3 create napkin 0100-feature --status doing
 ```
 
-Architect waits:
+2. Create the agent stub:
+
+```bash
+nap3 create agent 001-test-arch-feature --napkin 0100-feature --role test-arch
+```
+
+This creates the agent directory and marker. The response includes `dir` — that's where you write `prompt.md`.
+
+3. Write the agent's `prompt.md` to the directory returned by `create agent`.
+
+4. Start the agent:
+
+```bash
+nap3 start 001-test-arch-feature "read .nap/nepics/01-v1/30-napkins/0100-feature/agents/001-test-arch-feature/prompt.md and follow its instructions"
+```
+
+5. Wait for completion:
 
 ```bash
 nap3 nap 001-test-arch-feature --timeout 300
