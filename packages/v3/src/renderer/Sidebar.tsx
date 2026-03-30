@@ -28,11 +28,16 @@ function dotColor(agent: AgentState): string {
 function AgentDot({ agent }: { agent: AgentState }) {
   const color = dotColor(agent);
   const hollow = agent.exited;
+  const setActiveTerminal = useNapStore((s) => s.setActiveTerminal);
 
   return (
     <span
       data-testid="agent-dot"
       title={`${agent.name} (${agent.role})`}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (agent.running) setActiveTerminal(agent.id);
+      }}
       style={{
         display: 'inline-block',
         width: 8,
@@ -41,6 +46,7 @@ function AgentDot({ agent }: { agent: AgentState }) {
         backgroundColor: hollow ? 'transparent' : color,
         border: `2px solid ${color}`,
         marginRight: 4,
+        cursor: agent.running ? 'pointer' : 'default',
       }}
     />
   );
@@ -49,12 +55,17 @@ function AgentDot({ agent }: { agent: AgentState }) {
 // ── Napkin card (collapsed) ──
 
 function NapkinCard({ napkin }: { napkin: NapkinState }) {
+  const setActiveTerminal = useNapStore((s) => s.setActiveTerminal);
+  const firstRunning = napkin.agents.find((a) => a.running);
+
   return (
     <div
       data-testid="napkin-card"
+      onClick={() => firstRunning && setActiveTerminal(firstRunning.id)}
       style={{
         padding: '6px 10px',
         borderBottom: '1px solid #333',
+        cursor: firstRunning ? 'pointer' : 'default',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -78,13 +89,17 @@ function NapkinCard({ napkin }: { napkin: NapkinState }) {
 // ── Architect card (pinned at top) ──
 
 function ArchitectCard({ architect }: { architect: AgentState }) {
+  const setActiveTerminal = useNapStore((s) => s.setActiveTerminal);
+
   return (
     <div
       data-testid="architect-card"
+      onClick={() => architect.running && setActiveTerminal(architect.id)}
       style={{
         padding: '6px 10px',
         borderBottom: '1px solid #444',
         backgroundColor: '#252525',
+        cursor: architect.running ? 'pointer' : 'default',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
