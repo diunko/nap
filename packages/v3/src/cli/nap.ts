@@ -18,6 +18,7 @@ Usage: nap3 <command> [options]
 Commands:
   init                          Bootstrap a project for agent collaboration
   open                          Launch Nap.app (walks up to find .nap/)
+  dev                           Launch in dev mode (HMR) for current project
   create napkin|agent|arch|nepic  Create an entity
   start <name> [prompt]         Start a pre-created agent
   ps [--json]                   List all agents (tree view)
@@ -447,6 +448,38 @@ async function main(): Promise<void> {
       }
 
       process.stdout.write('Initialized NAP project in .nap/\n');
+      break;
+    }
+
+    case 'dev': {
+      // Walk up from cwd to find .nap/
+      const devProjectRoot = findProjectRoot(process.cwd());
+      if (!devProjectRoot) {
+        process.stderr.write('not a nap project (run nap3 init)\n');
+        process.exit(1);
+      }
+
+      // Derive monorepo root from CLI binary location
+      // Built CLI: packages/v3/out/cli/cli/nap.js → monorepo is 5 levels up
+      const devPackageRoot = path.resolve(__dirname, '..', '..', '..');
+      const devMonorepoRoot = path.resolve(devPackageRoot, '..', '..');
+
+      // Verify it looks like the monorepo
+      const devScript = path.join(devMonorepoRoot, 'package.json');
+      if (!fs.existsSync(devScript)) {
+        process.stderr.write('cannot find nap monorepo (is nap3 npm-linked?)\n');
+        process.exit(1);
+      }
+
+      process.stdout.write(`dev mode: ${devProjectRoot}\n`);
+
+      const child = spawn('npm', ['run', 'dev:v3'], {
+        cwd: devMonorepoRoot,
+        stdio: 'inherit',
+        env: { ...process.env, NAP_CWD: devProjectRoot },
+      });
+
+      child.on('exit', (code) => process.exit(code ?? 0));
       break;
     }
 
