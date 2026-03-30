@@ -64,7 +64,7 @@ export function Terminal() {
     if (!activeTerminalId || !containerRef.current) return;
     let entry = getTerminal(activeTerminalId);
     if (!entry) {
-      // Create on demand — handles race where child effect runs before parent
+      // Create on demand — handles exited agents resumed by click
       entry = createTerminalInstance(activeTerminalId);
       entry.terminal.onData((data) => {
         window.electronAPI.pty.write(activeTerminalId, data);
@@ -76,6 +76,16 @@ export function Terminal() {
           (filePath) => window.electronAPI.openFilePath(filePath),
         ),
       );
+      // Check if this agent needs a pty resumed
+      const state = useNapStore.getState();
+      const allAgents = [
+        ...state.napkins.flatMap((n) => n.agents),
+        ...state.architects,
+      ];
+      const agent = allAgents.find((a) => a.id === activeTerminalId);
+      if (agent?.exited) {
+        window.electronAPI.pty.resume(activeTerminalId);
+      }
       window.electronAPI.pty.ready(activeTerminalId);
     }
 

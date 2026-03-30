@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resize: (id: string, cols: number, rows: number) =>
       ipcRenderer.send('pty:resize', id, cols, rows),
     ready: (id: string) => ipcRenderer.send('pty:ready', id),
+    resume: (id: string) => ipcRenderer.send('pty:resume', id),
     onData: (callback: (id: string, data: string) => void) => {
       const handler = (_event: IpcRendererEvent, id: string, data: string) =>
         callback(id, data);

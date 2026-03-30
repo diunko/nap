@@ -117,6 +117,26 @@ app.whenReady().then(async () => {
     ptySpawner?.markReady(id);
   });
 
+  // Resume an exited agent's pty on demand (user clicked it)
+  ipcMain.on('pty:resume', (_event, id: string) => {
+    if (!ptySpawner || ptySpawner.isRunning(id)) return;
+
+    const agent = model.getAllAgents().find((a) => a.id === id);
+    if (!agent) return;
+
+    ptySpawner.spawn({
+      id: agent.id,
+      command: `claude --verbose --resume ${agent.id}`,
+      cwd: '',
+    });
+
+    ptySpawner.onExit(agent.id, () => {
+      return model.setAgentExitedById(agent.id);
+    });
+
+    model.setAgentRunning(agent.id, true);
+  });
+
   // Open file in default editor
   ipcMain.on('open-file-path', (_event, filePath: string) => {
     shell.openPath(filePath);
