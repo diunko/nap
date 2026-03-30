@@ -122,17 +122,7 @@ app.whenReady().then(async () => {
     (global as any).__napPtyManager__ = ptySpawner;
   }
 
-  // Load model from filesystem (triggers onChange → pushes snapshot to renderer)
-  if (activeNepicDir) {
-    await model.loadFromFilesystem(activeNepicDir);
-
-    // Start agents — spawns ptys, updates running flags
-    await startAgents(model, ptySpawner);
-
-    model.startWatching(activeNepicDir);
-  }
-
-  // Push snapshot when renderer signals it's ready (handles race condition)
+  // Register did-finish-load BEFORE async ops so it isn't missed
   win.webContents.on('did-finish-load', () => {
     if (activeNepicDir) {
       const snapshot: AppSnapshot = {
@@ -143,6 +133,16 @@ app.whenReady().then(async () => {
       win.webContents.send('app:state', snapshot);
     }
   });
+
+  // Load model from filesystem (triggers onChange → pushes snapshot to renderer)
+  if (activeNepicDir) {
+    await model.loadFromFilesystem(activeNepicDir);
+
+    // Start agents — spawns ptys, updates running flags
+    await startAgents(model, ptySpawner);
+
+    model.startWatching(activeNepicDir);
+  }
 });
 
 // ── Quit handling ──
