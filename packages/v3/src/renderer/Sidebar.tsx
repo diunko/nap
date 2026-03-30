@@ -37,7 +37,7 @@ function AgentDot({ agent }: { agent: AgentState }) {
       title={`${agent.name} (${agent.role})`}
       onClick={(e) => {
         e.stopPropagation();
-        if (agent.running) setActiveTerminal(agent.id);
+        if (agent.started) setActiveTerminal(agent.id);
       }}
       style={{
         display: 'inline-flex',
@@ -50,7 +50,7 @@ function AgentDot({ agent }: { agent: AgentState }) {
         border: `2px ${isDone ? 'dashed' : 'solid'} ${hollow ? color : 'transparent'}`,
         marginRight: 4,
         verticalAlign: 'middle',
-        cursor: agent.running ? 'pointer' : 'default',
+        cursor: agent.started ? 'pointer' : 'default',
       }}
     >
       {isDone && (
@@ -66,15 +66,16 @@ function AgentDot({ agent }: { agent: AgentState }) {
 
 function NapkinCard({ napkin, isFocused }: { napkin: NapkinState; isFocused: boolean }) {
   const setActiveTerminal = useNapStore((s) => s.setActiveTerminal);
-  const firstRunning = napkin.agents.find((a) => a.running);
+  const clickTarget = napkin.agents.find((a) => a.running)
+    || napkin.agents.find((a) => a.started);
 
   return (
     <div
       data-testid="napkin-card"
-      onClick={() => firstRunning && setActiveTerminal(firstRunning.id)}
+      onClick={() => clickTarget && setActiveTerminal(clickTarget.id)}
       style={{
         padding: '0 12px 0 9px',
-        cursor: firstRunning ? 'pointer' : 'default',
+        cursor: clickTarget ? 'pointer' : 'default',
         background: isFocused ? '#37373d' : 'transparent',
         borderLeft: isFocused ? '3px solid #007acc' : '3px solid transparent',
         transition: 'background 0.15s',
@@ -124,10 +125,10 @@ function ArchitectCard({ architect, isFocused }: { architect: AgentState; isFocu
   return (
     <div
       data-testid="architect-card"
-      onClick={() => setActiveTerminal(architect.id)}
+      onClick={() => (architect.running || architect.started) && setActiveTerminal(architect.id)}
       style={{
         padding: '0 12px 0 9px',
-        cursor: 'pointer',
+        cursor: (architect.running || architect.started) ? 'pointer' : 'default',
         background: isFocused ? '#37373d' : 'transparent',
         borderLeft: isFocused ? '3px solid #007acc' : '3px solid transparent',
         transition: 'background 0.15s',

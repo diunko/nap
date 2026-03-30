@@ -20,6 +20,7 @@ declare global {
         write: (id: string, data: string) => void;
         resize: (id: string, cols: number, rows: number) => void;
         ready: (id: string) => void;
+        resume: (id: string) => void;
         onData: (cb: (id: string, data: string) => void) => () => void;
         onExit: (cb: (id: string, exitCode: number) => void) => () => void;
       };
@@ -73,7 +74,7 @@ function App() {
     ];
 
     for (const agent of allAgents) {
-      if (agent.running && !getTerminal(agent.id)) {
+      if (agent.started && !agent.exited && !getTerminal(agent.id)) {
         const entry = createTerminalInstance(agent.id);
         // Keyboard input → pty
         entry.terminal.onData((data) => {
