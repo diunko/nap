@@ -477,7 +477,7 @@ function ArchitectCard({
           <AgentDot agent={architect} />
         </span>
         <span style={{ color: labelColor, fontSize: 12, flexShrink: 0 }}>
-          {architect.running ? 'acting' : architect.done ? 'done' : 'exited'}
+          {architect.running ? 'lead' : architect.done ? 'done' : 'exited'}
         </span>
       </div>
 
