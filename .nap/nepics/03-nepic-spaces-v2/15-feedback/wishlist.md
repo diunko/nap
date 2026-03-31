@@ -45,3 +45,14 @@ Ideas with energy.
   * hook fires on tool use → pokes the IT agent → IT agent responds
 * the IT agent has context: reads each agent's prompt.md, knows what they're supposed to do
   * can judge "is this command reasonable for a test engineer?" vs "why is a test-eng running git push?"
+* research needed: how to send "yes" to the CC permission prompt
+  * the prompt is "Do you want to proceed? 1. Yes 2. No"
+  * it's an Ink TUI rendered in the terminal — not a simple stdin readline
+  * options to research:
+    * send "1" + Enter via pty write?
+    * send specific control codes that Ink's input handler recognizes?
+    * CC might use raw mode — arrow keys + Enter to select
+    * need to test: what keystrokes does CC actually accept for this prompt?
+    * the poke mechanism (text → Escape → CR) works for CC's main input
+      * does it work for the permission prompt too? or is that a different input mode?
+  * this is a prerequisite — without reliable "click yes", the IT agent can't function
