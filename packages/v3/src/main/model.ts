@@ -896,9 +896,12 @@ export function createModel(fs: FileSystem): NapModel {
   }
 
   async function switchNepicFn(slug: string): Promise<void> {
-    stopWatching();
     const base = nepicDir.replace(/\/[^/]+$/, '');
     const newDir = base + '/' + slug;
+    if (!(await fs.isDirectory(newDir))) {
+      throw new Error(`cannot switch to '${slug}': not a directory`);
+    }
+    stopWatching();
     await loadFromFilesystem(newDir);
     startWatching(newDir);
     // Persist activeNepicId
