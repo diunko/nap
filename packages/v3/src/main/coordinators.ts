@@ -11,6 +11,8 @@ export async function startAgents(model: NapModel, ptySpawner: PtySpawner): Prom
 
   for (const decision of decisions) {
     if (decision.action === 'skip') continue;
+    // Skip agents whose ptys are already running (e.g., after nepic switch)
+    if (ptySpawner.isRunning(decision.agentId)) continue;
 
     ptySpawner.spawn({
       id: decision.agentId,

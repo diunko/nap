@@ -172,6 +172,8 @@ app.whenReady().then(async () => {
     await model.switchNepic(nepicId);
     activeNepicId = model.getActiveNepicId();
     activeNepicDir = model.getNepicDir();
+    // Start any agents that need ptys (Case A resume, Case C fresh)
+    await startAgents(model, ptySpawner);
     return { ok: true };
   });
 
@@ -185,6 +187,8 @@ app.whenReady().then(async () => {
     await model.switchNepic(slug);
     activeNepicId = model.getActiveNepicId();
     activeNepicDir = model.getNepicDir();
+    // Auto-start the new architect (Case C — fresh)
+    await startAgents(model, ptySpawner);
     return {
       nepic: { id: slug, slug, name },
       architectId: result.architectId,
