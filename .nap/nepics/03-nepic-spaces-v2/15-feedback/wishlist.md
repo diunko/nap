@@ -56,3 +56,16 @@ Ideas with energy.
     * the poke mechanism (text → Escape → CR) works for CC's main input
       * does it work for the permission prompt too? or is that a different input mode?
   * this is a prerequisite — without reliable "click yes", the IT agent can't function
+
+## nap3 rename napkin
+
+* `nap3 rename napkin <old-slug> <new-slug>`
+* problem: typos in napkin names can't be fixed (e.g. voice transcription errors)
+* what gets renamed/updated:
+  * directory: 30-napkins/<old>/ → 30-napkins/<new>/
+  * <slug>.nap.md, <slug>.spec.md, <slug>.test.md, <slug>.journeys.md
+  * every .agent.nap.json in agents/: update `napkin` field
+  * .napkin.nap.json: update slug field if present
+* what does NOT change:
+  * agent UUIDs, agent dir names, CC session UUIDs, git history
+* CLI command only — no UI needed

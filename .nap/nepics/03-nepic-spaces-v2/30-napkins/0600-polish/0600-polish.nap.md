@@ -24,23 +24,3 @@
   * fix: copy v2 pattern. default headless. `HEADED=1` env var to show windows for debugging.
   * add `test:v3:medium:headed` script to package.json
 
-* nap3 rename napkin <old-slug> <new-slug>
-  * problem: typos in napkin names (e.g. voice transcription: "nodes" → "notes") can't be fixed
-  * napkin created through CLI, dir name is the identity, no way to rename
-  * fix: `nap3 rename napkin 0200-notes 0200-nodes`
-  * what gets renamed/updated:
-    * directory: 30-napkins/0200-notes/ → 30-napkins/0200-nodes/
-    * .napkin.nap.json: no slug field currently, but if added — update it
-    * <slug>.nap.md: 0200-notes.nap.md → 0200-nodes.nap.md
-    * <slug>.spec.md: 0200-notes.spec.md → 0200-nodes.spec.md
-    * <slug>.test.md: 0200-notes.test.md → 0200-nodes.test.md
-    * <slug>.journeys.md: same pattern — any file prefixed with old slug
-    * every .agent.nap.json in agents/ dir: update `napkin` field from old to new slug
-    * ui-state.json: if activeTerminalId references an agent under this napkin — still valid (uses UUID)
-    * model in memory: reload after rename
-  * what does NOT change:
-    * agent UUIDs — identity preserved
-    * agent dirs inside agents/ — names stay the same
-    * CC session UUIDs — sessions still valid
-    * git history — old slug in commit messages, that's fine
-  * just the CLI command — no UI needed for now
