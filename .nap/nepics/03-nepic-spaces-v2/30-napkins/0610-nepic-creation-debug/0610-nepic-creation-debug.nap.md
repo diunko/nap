@@ -37,3 +37,19 @@
   * fix: position debug panel absolute/fixed on top of terminal area
   * terminal stays constant width — no resize events, no jank
   * debug panel floats over the right side of the terminal
+
+* bug 5: watcher doesn't pick up architect marker changes
+  * problem: editing .agent.nap.json for a napkin agent → status updates live (good!)
+  * but: editing architect's .agent.nap.json → nothing changes until restart
+  * the watcher probably only watches 30-napkins/ dir, not 20-architects/
+  * fix: watcher should cover both 30-napkins/ and 20-architects/
+
+* fix: rename "acting" → "lead" in Sidebar.tsx
+  * one-line change — display string only, no model/marker changes
+  * "lead" = the architect whose terminal is default when switching to this nepic
+
+* bug 6: architect not auto-started on app open
+  * all agents with started=true + not exited should auto-resume
+  * architect should not be treated differently from other agents
+  * if architect is not resuming: check if computeResumeActions handles architects correctly
+  * same three cases (A/B/C) apply to architects
