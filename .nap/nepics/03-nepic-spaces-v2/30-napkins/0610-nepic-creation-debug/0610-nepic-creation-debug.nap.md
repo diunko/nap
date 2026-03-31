@@ -31,3 +31,9 @@
   * switching nepics should swap the sidebar view, NOT kill old ptys
   * all ptys across all nepics should stay alive simultaneously
     * (or at minimum: resume on demand when switching back)
+
+* improvement: debug panel should overlay, not resize terminal
+  * problem: toggling debug panel pushes terminal width, triggers resize events, looks junky
+  * fix: position debug panel absolute/fixed on top of terminal area
+  * terminal stays constant width — no resize events, no jank
+  * debug panel floats over the right side of the terminal
