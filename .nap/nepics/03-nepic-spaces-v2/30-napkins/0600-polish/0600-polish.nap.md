@@ -23,3 +23,13 @@
   * v2 has the fix: `show: false` + `win.once('ready-to-show', () => { if (!NAP_TEST || HEADED) win.show() })`
   * fix: copy v2 pattern. default headless. `HEADED=1` env var to show windows for debugging.
   * add `test:v3:medium:headed` script to package.json
+
+* nap3 rename napkin <old-slug> <new-slug>
+  * problem: typos in napkin names (e.g. voice transcription: "nodes" → "notes") can't be fixed
+  * napkin created through CLI, dir name is the identity, no way to rename
+  * fix: `nap3 rename napkin 0200-notes 0200-nodes`
+    * socket → model renames dir on disk
+    * updates .napkin.nap.json if it references the slug
+    * updates all agent markers that reference this napkin
+    * pushes new snapshot → sidebar reflects new name
+  * just the CLI command — no UI needed for now
