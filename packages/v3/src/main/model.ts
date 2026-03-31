@@ -902,9 +902,12 @@ export function createModel(fs: FileSystem): NapModel {
       throw new Error(`cannot switch to '${slug}': not a directory`);
     }
     stopWatching();
+    // Reset write guard — stale flag from previous nepic must not
+    // suppress watcher reloads in the new nepic
+    hasPendingWrite = false;
     await loadFromFilesystem(newDir);
     startWatching(newDir);
-    // Persist activeNepicId
+    // Persist activeNepicId (outside watched dirs — no guard needed)
     await fs.writeJSON(base + '/ui-state.json', { activeNepicId: slug });
   }
 
