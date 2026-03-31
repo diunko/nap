@@ -73,10 +73,12 @@ app.whenReady().then(async () => {
   // Wire model → IPC bridge
   model.onChange(() => {
     if (win.isDestroyed()) return;
+    activeNepicId = model.getActiveNepicId();
     const snapshot: AppSnapshot = {
       napkins: model.getNapkins(),
       architects: model.getArchitects(),
       activeNepicId,
+      nepics: model.getNepics(),
       watcherEvents: model.getWatcherEvents(),
     };
     win.webContents.send('app:state', snapshot);
@@ -160,6 +162,30 @@ app.whenReady().then(async () => {
     (global as any).__napPtyManager__ = ptySpawner;
   }
 
+  // IPC: switch active nepic
+  ipcMain.handle('nepic:switch', async (_event, nepicId: string) => {
+    await model.switchNepic(nepicId);
+    activeNepicId = model.getActiveNepicId();
+    activeNepicDir = model.getNepicDir();
+    return { ok: true };
+  });
+
+  // IPC: create a new nepic
+  ipcMain.handle('nepic:create', async (_event, name: string) => {
+    const nepics = model.getNepics();
+    const nextNum = String(nepics.length + 1).padStart(2, '0');
+    const slug = `${nextNum}-${name}`;
+    const result = await model.createNepic(slug, name);
+    // Switch to new nepic
+    await model.switchNepic(slug);
+    activeNepicId = model.getActiveNepicId();
+    activeNepicDir = model.getNepicDir();
+    return {
+      nepic: { id: slug, slug, name },
+      architectId: result.architectId,
+    };
+  });
+
   // Register did-finish-load BEFORE async ops so it isn't missed
   win.webContents.on('did-finish-load', () => {
     if (activeNepicDir) {
@@ -167,6 +193,7 @@ app.whenReady().then(async () => {
         napkins: model.getNapkins(),
         architects: model.getArchitects(),
         activeNepicId,
+        nepics: model.getNepics(),
         watcherEvents: model.getWatcherEvents(),
       };
       win.webContents.send('app:state', snapshot);

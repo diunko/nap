@@ -1,5 +1,5 @@
 import type { FileSystem } from './filesystem';
-import type { NapkinState, AgentState, NapkinStatus, Entry, FileEntry, DirEntry, WatcherEvent } from '../shared/bridge-types';
+import type { NapkinState, AgentState, NapkinStatus, NepicInfo, Entry, FileEntry, DirEntry, WatcherEvent } from '../shared/bridge-types';
 import type { PtySpawner } from './pty-spawner';
 import { resolveByName } from './name-resolver';
 import * as crypto from 'crypto';
@@ -103,14 +103,24 @@ export interface NapModel {
   getAllAgentsTree(): AgentTreeNode[];
   getNepicDir(): string;
   getWatcherEvents(): WatcherEvent[];
+  getNepics(): NepicInfo[];
+  getActiveNepicId(): string;
+  switchNepic(slug: string): Promise<void>;
 }
 
 const DEBOUNCE_MS = 200;
+
+function parseBullets(content: string): string[] {
+  return content.split('\n')
+    .filter(line => line.trimStart().startsWith('*'))
+    .map(line => line.trimStart().replace(/^\*\s*/, ''));
+}
 
 export function createModel(fs: FileSystem): NapModel {
   let napkins: NapkinState[] = [];
   let architects: AgentState[] = [];
   let nepicDir = '';
+  let nepicList: NepicInfo[] = [];
   const listeners = new Set<() => void>();
   let hasPendingWrite = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -251,6 +261,11 @@ export function createModel(fs: FileSystem): NapModel {
         excludeDirs: ['agents'],
       });
 
+      // Parse napkin bullets from .nap.md
+      const napMdPath = napkinPath + '/' + slug + '.nap.md';
+      const napMdContent = await fs.readFile(napMdPath);
+      const napkinBullets = napMdContent ? parseBullets(napMdContent) : [];
+
       loadedNapkins.push({
         id: slug,
         slug,
@@ -259,6 +274,7 @@ export function createModel(fs: FileSystem): NapModel {
         path: napkinPath,
         agents,
         entries: napkinEntries,
+        napkinBullets,
       });
     }
 
@@ -317,6 +333,22 @@ export function createModel(fs: FileSystem): NapModel {
       if (runningAgents.has(agent.id)) agent.running = true;
       if (doneAgents.has(agent.id)) agent.done = true;
     }
+
+    // Load nepic list from parent dir
+    const nepicsBase = dir.replace(/\/[^/]+$/, '');
+    const allNepicDirs = await fs.readdir(nepicsBase);
+    const loadedNepics: NepicInfo[] = [];
+    for (const d of allNepicDirs) {
+      if (d.startsWith('.') || d === 'ui-state.json') continue;
+      if (await fs.isDirectory(nepicsBase + '/' + d)) {
+        loadedNepics.push({
+          id: d,
+          slug: d,
+          name: d.replace(/^\d+-/, ''),
+        });
+      }
+    }
+    nepicList = loadedNepics;
 
     notify();
   }
@@ -555,6 +587,7 @@ export function createModel(fs: FileSystem): NapModel {
       path: napkinPath,
       agents: [],
       entries: [],
+      napkinBullets: [],
     };
     napkins.push(newNapkin);
     notify();
@@ -855,6 +888,16 @@ export function createModel(fs: FileSystem): NapModel {
     return roots.map(buildNode);
   }
 
+  async function switchNepicFn(slug: string): Promise<void> {
+    stopWatching();
+    const base = nepicDir.replace(/\/[^/]+$/, '');
+    const newDir = base + '/' + slug;
+    await loadFromFilesystem(newDir);
+    startWatching(newDir);
+    // Persist activeNepicId
+    await fs.writeJSON(base + '/ui-state.json', { activeNepicId: slug });
+  }
+
   return {
     loadFromFilesystem,
     getNapkins: () => napkins,
@@ -885,6 +928,9 @@ export function createModel(fs: FileSystem): NapModel {
     getAllAgentsTree,
     getNepicDir: () => nepicDir,
     getWatcherEvents: () => watcherEventLog,
+    getNepics: () => nepicList,
+    getActiveNepicId: () => getNepicSlug(),
+    switchNepic: switchNepicFn,
   };
 }
 

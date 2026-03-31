@@ -9,7 +9,7 @@ describe('Bridge', () => {
     const fs = createMinimalFixture();
     const model = createModel(fs);
     const bridge = new FakeBridge();
-    wireModelToBridge(model, bridge, 'nepic-01');
+    wireModelToBridge(model, bridge);
 
     const spy = vi.fn();
     bridge.onSnapshot(spy);
@@ -20,7 +20,7 @@ describe('Bridge', () => {
     const snapshot = spy.mock.calls[0][0];
     expect(snapshot.napkins).toEqual(model.getNapkins());
     expect(snapshot.architects).toEqual(model.getArchitects());
-    expect(snapshot.activeNepicId).toBe('nepic-01');
+    expect(snapshot.activeNepicId).toBe('nepic');
   });
 
   // T-0100-11
@@ -28,7 +28,7 @@ describe('Bridge', () => {
     const fs = createRichFixture();
     const model = createModel(fs);
     const bridge = new FakeBridge();
-    wireModelToBridge(model, bridge, 'nepic-01');
+    wireModelToBridge(model, bridge);
 
     const spy = vi.fn();
     bridge.onSnapshot(spy);
@@ -56,7 +56,7 @@ describe('Bridge', () => {
     const fs = createMinimalFixture();
     const model = createModel(fs);
     const bridge = new FakeBridge();
-    wireModelToBridge(model, bridge, 'nepic-01');
+    wireModelToBridge(model, bridge);
 
     const spy1 = vi.fn();
     const spy2 = vi.fn();

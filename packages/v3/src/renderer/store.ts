@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppSnapshot, NapkinState, AgentState, WatcherEvent } from '../shared/bridge-types';
+import type { AppSnapshot, NapkinState, AgentState, NepicInfo, WatcherEvent } from '../shared/bridge-types';
 
 export type CardViewMode = 'collapsed' | 'focused' | 'extended';
 
@@ -10,6 +10,7 @@ export interface NapStore {
   activeNepicId: string;
   activeTerminalId: string | null;
   watcherEvents: WatcherEvent[];
+  nepics: NepicInfo[];
 
   // ── Renderer-only state (preserved across snapshots) ──
   focusedCardSlug: string | null;
@@ -19,14 +20,18 @@ export interface NapStore {
   browserFilterVisible: boolean;
   debugPanelCollapsed: boolean;
   debugPanelTab: 'model' | 'filesystem' | 'events';
+  kanbanVisible: boolean;
 
   // ── Actions ──
   applySnapshot: (snapshot: AppSnapshot) => void;
   setActiveTerminal: (id: string) => void;
   expandCard: (slug: string) => void;
+  focusCard: (slug: string) => void;
   extendCard: () => void;
   collapseCard: () => void;
   toggleSidebar: () => void;
+  toggleKanban: () => void;
+  switchNepic: (id: string) => void;
   setBrowserFilter: (text: string) => void;
   setBrowserFilterVisible: (visible: boolean) => void;
   toggleDebugPanel: () => void;
@@ -39,6 +44,7 @@ export const useNapStore = create<NapStore>((set, get) => ({
   activeNepicId: '',
   activeTerminalId: null,
   watcherEvents: [],
+  nepics: [],
 
   focusedCardSlug: null,
   cardViewMode: 'collapsed' as CardViewMode,
@@ -47,6 +53,7 @@ export const useNapStore = create<NapStore>((set, get) => ({
   browserFilterVisible: false,
   debugPanelCollapsed: false,
   debugPanelTab: 'model' as const,
+  kanbanVisible: false,
 
   // Snapshot only updates model state — renderer-only state preserved
   applySnapshot: (snapshot: AppSnapshot) => {
@@ -54,6 +61,7 @@ export const useNapStore = create<NapStore>((set, get) => ({
       napkins: snapshot.napkins,
       architects: snapshot.architects,
       activeNepicId: snapshot.activeNepicId,
+      nepics: snapshot.nepics ?? [],
       watcherEvents: snapshot.watcherEvents ?? [],
     });
   },
@@ -70,6 +78,11 @@ export const useNapStore = create<NapStore>((set, get) => ({
     } else {
       set({ focusedCardSlug: slug, cardViewMode: 'focused' });
     }
+  },
+
+  // Force focus a card (always focus, never toggle — used by kanban navigation)
+  focusCard: (slug: string) => {
+    set({ focusedCardSlug: slug, cardViewMode: 'focused', sidebarVisible: true });
   },
 
   // Cmd+E → toggle focused ↔ extended (only if a card is focused)
@@ -89,6 +102,16 @@ export const useNapStore = create<NapStore>((set, get) => ({
 
   toggleSidebar: () => {
     set({ sidebarVisible: !get().sidebarVisible });
+  },
+
+  toggleKanban: () => {
+    set({ kanbanVisible: !get().kanbanVisible });
+  },
+
+  switchNepic: (id: string) => {
+    if (typeof window !== 'undefined' && window.electronAPI?.switchNepic) {
+      window.electronAPI.switchNepic(id);
+    }
   },
 
   setBrowserFilter: (text: string) => {

@@ -38,12 +38,13 @@ export class FakeBridge implements Bridge {
 
 // ── Wire model to bridge — pushes snapshot on every model change ──
 
-export function wireModelToBridge(model: NapModel, bridge: Bridge, activeNepicId: string): () => void {
+export function wireModelToBridge(model: NapModel, bridge: Bridge): () => void {
   function push(): void {
     bridge.pushSnapshot({
       napkins: model.getNapkins(),
       architects: model.getArchitects(),
-      activeNepicId,
+      activeNepicId: model.getActiveNepicId(),
+      nepics: model.getNepics(),
       watcherEvents: model.getWatcherEvents(),
     });
   }

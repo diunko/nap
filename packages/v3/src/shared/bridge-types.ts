@@ -26,6 +26,12 @@ export interface WatcherEvent {
   filename: string;
 }
 
+export interface NepicInfo {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 // ── Core state types ──
 
 export interface AgentState {
@@ -53,6 +59,7 @@ export interface NapkinState {
   path: string;
   agents: AgentState[];
   entries: Entry[];        // napkin dir files for focused/extended views
+  napkinBullets: string[]; // bullet lines from .nap.md
 }
 
 // ── Bridge protocol ──
@@ -61,6 +68,7 @@ export interface AppSnapshot {
   napkins: NapkinState[];
   architects: AgentState[];
   activeNepicId: string;
+  nepics: NepicInfo[];
   watcherEvents?: WatcherEvent[];
 }
 

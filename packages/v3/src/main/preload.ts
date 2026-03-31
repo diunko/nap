@@ -55,4 +55,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── UI state persistence ──
   saveUiState: (state: unknown) => ipcRenderer.send('save-ui-state', state),
   loadUiState: () => ipcRenderer.invoke('load-ui-state'),
+
+  // ── Nepic management (0500) ──
+  switchNepic: (id: string) => ipcRenderer.invoke('nepic:switch', id),
+  createNepic: (name: string) => ipcRenderer.invoke('nepic:create', name),
 });

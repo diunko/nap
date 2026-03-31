@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { Sidebar } from './Sidebar';
 import { Terminal } from './Terminal';
 import { DebugPanel } from './DebugPanel';
+import { KanbanOverlay } from './KanbanOverlay';
+import { Gutter } from './Gutter';
 import { useNapStore, loadPersistedUiState } from './store';
 import { createTerminalInstance, getTerminal, disposeTerminal } from './terminal-registry';
 import { createFileLinkProvider } from './file-link-provider';
@@ -27,6 +29,8 @@ declare global {
       openFilePath: (filePath: string) => void;
       saveUiState: (state: unknown) => void;
       loadUiState: () => Promise<unknown>;
+      switchNepic: (id: string) => Promise<unknown>;
+      createNepic: (name: string) => Promise<unknown>;
     };
   }
 }
@@ -39,6 +43,8 @@ function App() {
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
   const toggleSidebar = useNapStore((s) => s.toggleSidebar);
   const toggleDebugPanel = useNapStore((s) => s.toggleDebugPanel);
+  const toggleKanban = useNapStore((s) => s.toggleKanban);
+  const nepics = useNapStore((s) => s.nepics);
 
   // Wire snapshot IPC
   useEffect(() => {
@@ -109,7 +115,7 @@ function App() {
     }
   });
 
-  // Cmd+B → toggle sidebar, Cmd+D → toggle debug panel
+  // Cmd+B → toggle sidebar, Cmd+D → toggle debug panel, Cmd+` → toggle kanban
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
@@ -120,13 +126,19 @@ function App() {
         e.preventDefault();
         toggleDebugPanel();
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === '`') {
+        e.preventDefault();
+        toggleKanban();
+      }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleSidebar, toggleDebugPanel]);
+  }, [toggleSidebar, toggleDebugPanel, toggleKanban]);
 
   return (
     <div style={{ display: 'flex', height: '100%', background: '#1e1e1e' }}>
+      <KanbanOverlay />
+      {nepics.length > 0 && <Gutter />}
       {sidebarVisible && <Sidebar />}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {activeTerminalId ? (

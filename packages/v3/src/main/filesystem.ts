@@ -7,6 +7,7 @@ import * as path from 'path';
 export interface FileSystem {
   readdir(dir: string): Promise<string[]>;
   readJSON(filePath: string): Promise<unknown | null>;
+  readFile(filePath: string): Promise<string | null>;
   isDirectory(filePath: string): Promise<boolean>;
   writeJSON(filePath: string, data: unknown): Promise<void>;
   watch(dir: string, callback: (event: string, filename: string) => void): () => void;
@@ -30,6 +31,14 @@ export class NodeFileSystem implements FileSystem {
     try {
       const content = await fsPromises.readFile(filePath, 'utf-8');
       return JSON.parse(content);
+    } catch {
+      return null;
+    }
+  }
+
+  async readFile(filePath: string): Promise<string | null> {
+    try {
+      return await fsPromises.readFile(filePath, 'utf-8');
     } catch {
       return null;
     }
@@ -60,10 +69,10 @@ export class NodeFileSystem implements FileSystem {
 // ── In-memory implementation for tests (v2: async + write + watch) ──
 
 export class MemoryFileSystem implements FileSystem {
-  private files: Record<string, object | null>;
+  private files: Record<string, object | string | null>;
   private watchers: Map<string, Set<(event: string, filename: string) => void>> = new Map();
 
-  constructor(files: Record<string, object | null>) {
+  constructor(files: Record<string, object | string | null>) {
     this.files = { ...files };
   }
 
@@ -86,6 +95,13 @@ export class MemoryFileSystem implements FileSystem {
   async readJSON(filePath: string): Promise<unknown | null> {
     const value = this.files[filePath];
     return value !== undefined ? value : null;
+  }
+
+  async readFile(filePath: string): Promise<string | null> {
+    const value = this.files[filePath];
+    if (value === undefined || value === null) return null;
+    if (typeof value === 'string') return value;
+    return JSON.stringify(value);
   }
 
   async isDirectory(dirPath: string): Promise<boolean> {
@@ -124,12 +140,12 @@ export class MemoryFileSystem implements FileSystem {
   }
 
   /** Update a file WITHOUT triggering watch (set up state before simulateChange) */
-  updateFile(filePath: string, data: object): void {
+  updateFile(filePath: string, data: object | string): void {
     this.files[filePath] = data;
   }
 
   /** Add a new file WITHOUT triggering watch */
-  addFile(filePath: string, data: object): void {
+  addFile(filePath: string, data: object | string): void {
     this.files[filePath] = data;
   }
 
