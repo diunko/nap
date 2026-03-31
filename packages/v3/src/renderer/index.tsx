@@ -140,7 +140,7 @@ function App() {
       <KanbanOverlay />
       {nepics.length > 0 && <Gutter />}
       {sidebarVisible && <Sidebar />}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
         {activeTerminalId ? (
           <Terminal />
         ) : (
@@ -148,8 +148,8 @@ function App() {
             v3
           </div>
         )}
+        <DebugPanel />
       </div>
-      <DebugPanel />
     </div>
   );
 }

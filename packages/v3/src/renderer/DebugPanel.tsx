@@ -173,15 +173,18 @@ export function DebugPanel() {
         data-testid="debug-panel"
         onClick={toggleDebugPanel}
         style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
           width: 20,
-          height: '100%',
           borderLeft: '1px solid #333',
           backgroundColor: '#1a1a1a',
           cursor: 'pointer',
-          flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          zIndex: 10,
         }}
         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#252526')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1a1a1a')}
@@ -202,8 +205,10 @@ export function DebugPanel() {
       data-testid="debug-panel"
       style={{
         width,
-        height: '100%',
-        position: 'relative',
+        position: 'absolute',
+        right: 0,
+        top: 0,
+        bottom: 0,
         borderLeft: '1px solid #333',
         backgroundColor: '#1a1a1a',
         fontFamily: 'Menlo, Monaco, monospace',
@@ -211,9 +216,9 @@ export function DebugPanel() {
         color: '#ccc',
         overflowX: 'hidden',
         overflowY: 'auto',
-        flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
+        zIndex: 10,
       }}
     >
       {/* Drag handle */}
