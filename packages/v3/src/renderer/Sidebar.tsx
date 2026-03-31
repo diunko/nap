@@ -1,14 +1,10 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useNapStore } from './store';
-import type { NapkinState, AgentState, NapkinStatus } from '../shared/bridge-types';
+import type { CardViewMode } from './store';
+import type { NapkinState, AgentState, NapkinStatus, Entry, FileEntry, DirEntry } from '../shared/bridge-types';
+import { dotStyle, roleColor } from '../shared/dot-style';
 
-// ── Dot colors by role ──
-
-const ROLE_COLORS: Record<string, string> = {
-  'test-arch': '#f59e0b',
-  'fs-eng': '#22c55e',
-  architect: '#3b82f6',
-};
+// ── Phase colors ──
 
 const PHASE_COLORS: Record<NapkinStatus, string> = {
   done: '#6b7280',
@@ -18,18 +14,20 @@ const PHASE_COLORS: Record<NapkinStatus, string> = {
   backlog: '#525252',
 };
 
-function dotColor(agent: AgentState): string {
-  if (agent.exited) return '#6b7280';
-  return ROLE_COLORS[agent.role] ?? '#a3a3a3';
-}
+// ── Agent dot (role color + status shape) ──
 
-// ── Agent dot ──
-
-function AgentDot({ agent }: { agent: AgentState }) {
-  const color = dotColor(agent);
-  const isDone = agent.done;
-  const hollow = agent.exited || isDone;
+function AgentDot({ agent, size = 8 }: { agent: AgentState; size?: number }) {
   const setActiveTerminal = useNapStore((s) => s.setActiveTerminal);
+  const style = dotStyle({
+    role: agent.role,
+    running: agent.running,
+    done: agent.done,
+    exited: agent.exited,
+  });
+
+  const hollow = style.shape === 'hollow';
+  const dashed = style.shape === 'dashed-check';
+  const actualSize = hollow ? size - 1 : size;
 
   return (
     <span
@@ -43,39 +41,211 @@ function AgentDot({ agent }: { agent: AgentState }) {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: 8,
-        height: 8,
+        width: actualSize,
+        height: actualSize,
         borderRadius: '50%',
-        backgroundColor: hollow ? 'transparent' : color,
-        border: `2px ${isDone ? 'dashed' : 'solid'} ${hollow ? color : 'transparent'}`,
+        backgroundColor: hollow || dashed ? 'transparent' : style.color,
+        border: `2px ${dashed ? 'dashed' : 'solid'} ${hollow || dashed ? style.color : 'transparent'}`,
         marginRight: 4,
         verticalAlign: 'middle',
         cursor: agent.started ? 'pointer' : 'default',
+        animation: agent.running ? 'pulse 2s ease-in-out infinite' : 'none',
       }}
     >
-      {isDone && (
+      {dashed && (
         <svg width="6" height="6" viewBox="0 0 6 6">
-          <path d="M1 3.2 L2.3 4.5 L5 1.5" stroke={color} strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M1 3.2 L2.3 4.5 L5 1.5" stroke={style.color} strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
     </span>
   );
 }
 
-// ── Napkin card (collapsed) ──
+// ── File row with hover controls (extended view) ──
 
-function NapkinCard({ napkin, isFocused }: { napkin: NapkinState; isFocused: boolean }) {
+function FileRow({
+  file,
+  indent,
+  showControls,
+}: {
+  file: FileEntry;
+  indent: number;
+  showControls: boolean;
+}) {
+  return (
+    <div
+      data-testid="file-entry"
+      style={{
+        padding: `1px 0 1px ${indent}px`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        cursor: 'pointer',
+        borderRadius: 3,
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        window.electronAPI?.openFilePath(file.absPath);
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+        const ctrl = e.currentTarget.querySelector<HTMLElement>('[data-file-controls]');
+        if (ctrl) ctrl.style.visibility = 'visible';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+        const ctrl = e.currentTarget.querySelector<HTMLElement>('[data-file-controls]');
+        if (ctrl) ctrl.style.visibility = 'hidden';
+      }}
+    >
+      <span
+        style={{
+          color: '#6b7280',
+          flexShrink: 0,
+          width: 10,
+          textAlign: 'center',
+          fontSize: 12,
+        }}
+      >
+        *
+      </span>
+      <span
+        style={{
+          flex: 1,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          color: file.isMain ? '#e5e5e5' : '#9cdcfe',
+          fontWeight: file.isMain ? 600 : 'normal',
+        }}
+      >
+        {file.name}
+      </span>
+      {showControls && (
+        <span data-file-controls style={{ display: 'flex', gap: 8, flexShrink: 0, visibility: 'hidden' }}>
+          <span
+            style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(file.absPath);
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+          >
+            &#x2398;
+          </span>
+          <span
+            style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              window.electronAPI?.openFilePath(file.absPath);
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+          >
+            &#x2197;
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── Recursive entry renderer ──
+
+function EntryTree({
+  entries,
+  indent,
+  showControls,
+  maxDepth,
+  currentDepth,
+}: {
+  entries: Entry[];
+  indent: number;
+  showControls: boolean;
+  maxDepth?: number;
+  currentDepth?: number;
+}) {
+  const depth = currentDepth ?? 0;
+
+  // Sort: main file first, then files alphabetically, then dirs
+  const sorted = [...entries].sort((a, b) => {
+    if (a.type === 'file' && (a as FileEntry).isMain) return -1;
+    if (b.type === 'file' && (b as FileEntry).isMain) return 1;
+    if (a.type !== b.type) return a.type === 'file' ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  return (
+    <>
+      {sorted.map((entry, i) => {
+        if (entry.type === 'file') {
+          return <FileRow key={`f-${i}`} file={entry} indent={indent} showControls={showControls} />;
+        }
+
+        const dir = entry as DirEntry;
+        const canExpand = maxDepth === undefined || depth < maxDepth;
+
+        return (
+          <div key={`d-${i}`}>
+            <div
+              data-testid="dir-entry"
+              style={{
+                padding: `1px 0 1px ${indent}px`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                borderRadius: 3,
+              }}
+            >
+              <span style={{ color: '#6b7280', flexShrink: 0, width: 10, textAlign: 'center', fontSize: 12 }}>*</span>
+              <span style={{ color: '#cccccc' }}>{dir.name}/</span>
+            </div>
+            {canExpand && dir.children.length > 0 && (
+              <EntryTree
+                entries={dir.children}
+                indent={indent + 16}
+                showControls={showControls}
+                maxDepth={maxDepth}
+                currentDepth={depth + 1}
+              />
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// ── Napkin card ──
+
+function NapkinCard({
+  napkin,
+  isFocused,
+  viewMode,
+}: {
+  napkin: NapkinState;
+  isFocused: boolean;
+  viewMode: CardViewMode;
+}) {
   const setActiveTerminal = useNapStore((s) => s.setActiveTerminal);
+  const expandCard = useNapStore((s) => s.expandCard);
+  const showExtended = isFocused && viewMode === 'extended';
+
   const clickTarget = napkin.agents.find((a) => a.running)
     || napkin.agents.find((a) => a.started);
+
+  function handleCardClick() {
+    expandCard(napkin.slug);
+    if (clickTarget) setActiveTerminal(clickTarget.id);
+  }
 
   return (
     <div
       data-testid="napkin-card"
-      onClick={() => clickTarget && setActiveTerminal(clickTarget.id)}
       style={{
         padding: '0 12px 0 9px',
-        cursor: clickTarget ? 'pointer' : 'default',
+        cursor: 'pointer',
         background: isFocused ? '#37373d' : 'transparent',
         borderLeft: isFocused ? '3px solid #007acc' : '3px solid transparent',
         transition: 'background 0.15s',
@@ -87,21 +257,27 @@ function NapkinCard({ napkin, isFocused }: { napkin: NapkinState; isFocused: boo
         if (!isFocused) e.currentTarget.style.background = 'transparent';
       }}
     >
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '3px 0',
-        gap: 6,
-        userSelect: 'none',
-      }}>
+      {/* Header — collapsed view (always visible) */}
+      <div
+        onClick={handleCardClick}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '3px 0',
+          gap: 6,
+          userSelect: 'none',
+        }}
+      >
         <span style={{ color: '#6b7280', flexShrink: 0 }}>*</span>
-        <span style={{
-          flex: 1,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          color: isFocused ? '#e5e5e5' : '#cccccc',
-        }}>
+        <span
+          style={{
+            flex: 1,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            color: isFocused ? '#e5e5e5' : '#cccccc',
+          }}
+        >
           {napkin.slug}
         </span>
         <span style={{ display: 'flex', gap: 3, flexShrink: 0, margin: '0 2px' }}>
@@ -113,19 +289,149 @@ function NapkinCard({ napkin, isFocused }: { napkin: NapkinState; isFocused: boo
           {napkin.status}
         </span>
       </div>
+
+      {/* Body — focused/extended view */}
+      {isFocused && (
+        <div style={{ padding: '0 0 4px 0' }}>
+          {/* File entries */}
+          <EntryTree
+            entries={napkin.entries}
+            indent={16}
+            showControls={showExtended}
+            maxDepth={showExtended ? undefined : 0}
+          />
+
+          {/* Non-agent subdirs in extended only — already handled by EntryTree */}
+
+          {/* Agents */}
+          {napkin.agents.map((agent, i) => (
+            <div key={`ag-${i}`}>
+              <div
+                data-testid="browser-agent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (agent.started) setActiveTerminal(agent.id);
+                }}
+                style={{
+                  padding: '1px 0 1px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  cursor: agent.started ? 'pointer' : 'default',
+                  borderRadius: 3,
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
+                }
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
+                <span style={{ flexShrink: 0, width: 10, display: 'flex', justifyContent: 'center' }}>
+                  <AgentDot agent={agent} size={8} />
+                </span>
+                <span
+                  style={{
+                    flex: 1,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    color: '#cccccc',
+                  }}
+                >
+                  {agent.name}/
+                </span>
+                <span style={{ color: roleColor(agent.role), fontSize: 12, flexShrink: 0 }}>
+                  {agent.exited ? 'exited' : agent.done ? 'done' : agent.running ? 'run' : 'wait'}
+                </span>
+              </div>
+
+              {/* Extended view: [terminal] + agent files */}
+              {showExtended && (
+                <>
+                  {agent.started && (
+                    <div
+                      data-testid="terminal-entry"
+                      style={{
+                        padding: '1px 0 1px 32px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        cursor: 'pointer',
+                        borderRadius: 3,
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveTerminal(agent.id);
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')
+                      }
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
+                      <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
+                        [terminal]
+                      </span>
+                    </div>
+                  )}
+                  {agent.entries.length > 0 && (
+                    <EntryTree
+                      entries={agent.entries}
+                      indent={32}
+                      showControls={true}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          ))}
+
+          {/* Dim summary for all-exited agents in focused (not extended) */}
+          {!showExtended && napkin.agents.length > 0 && napkin.agents.every((a) => a.exited) && (
+            <div
+              style={{
+                padding: '2px 0 2px 18px',
+                color: '#6b7280',
+                fontSize: 11,
+                cursor: 'default',
+              }}
+            >
+              {napkin.agents.length} agent{napkin.agents.length > 1 ? 's' : ''} exited
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Architect card (pinned at top) ──
+// ── Architect card ──
 
-function ArchitectCard({ architect, isFocused }: { architect: AgentState; isFocused: boolean }) {
+function ArchitectCard({
+  architect,
+  isFocused,
+  viewMode,
+}: {
+  architect: AgentState;
+  isFocused: boolean;
+  viewMode: CardViewMode;
+}) {
   const setActiveTerminal = useNapStore((s) => s.setActiveTerminal);
+  const expandCard = useNapStore((s) => s.expandCard);
+  const showExtended = isFocused && viewMode === 'extended';
+
+  const labelColor =
+    architect.running ? '#22c55e'
+    : architect.done ? '#3b82f6'
+    : '#6b7280';
+
+  function handleClick() {
+    expandCard(architect.id);
+    if (architect.running || architect.started) setActiveTerminal(architect.id);
+  }
 
   return (
     <div
       data-testid="architect-card"
-      onClick={() => (architect.running || architect.started) && setActiveTerminal(architect.id)}
       style={{
         padding: '0 12px 0 9px',
         cursor: (architect.running || architect.started) ? 'pointer' : 'default',
@@ -140,27 +446,72 @@ function ArchitectCard({ architect, isFocused }: { architect: AgentState; isFocu
         if (!isFocused) e.currentTarget.style.background = 'transparent';
       }}
     >
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '3px 0',
-        gap: 6,
-        userSelect: 'none',
-      }}>
+      {/* Header */}
+      <div
+        onClick={handleClick}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '3px 0',
+          gap: 6,
+          userSelect: 'none',
+        }}
+      >
         <span style={{ color: '#6b7280', flexShrink: 0 }}>*</span>
-        <span style={{
-          flex: 1,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          color: isFocused ? '#e5e5e5' : '#cccccc',
-        }}>
+        <span
+          style={{
+            flex: 1,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            color: isFocused ? '#e5e5e5' : '#cccccc',
+          }}
+        >
           {architect.name}
         </span>
-        <span style={{ color: '#6b7280', fontSize: 12, flexShrink: 0 }}>
-          architect
+        <span style={{ display: 'flex', gap: 3, flexShrink: 0, margin: '0 2px' }}>
+          <AgentDot agent={architect} />
+        </span>
+        <span style={{ color: labelColor, fontSize: 12, flexShrink: 0 }}>
+          {architect.running ? 'acting' : architect.done ? 'done' : 'exited'}
         </span>
       </div>
+
+      {/* Body — focused/extended view (home dir file tree) */}
+      {isFocused && architect.entries.length > 0 && (
+        <div style={{ padding: '0 0 4px 0' }}>
+          {/* [terminal] entry */}
+          {architect.started && (
+            <div
+              data-testid="terminal-entry"
+              style={{
+                padding: '1px 0 1px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTerminal(architect.id);
+              }}
+            >
+              <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
+              <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
+                [terminal]
+              </span>
+            </div>
+          )}
+
+          {/* Files (focused: one level, extended: all levels) */}
+          <EntryTree
+            entries={architect.entries}
+            indent={16}
+            showControls={showExtended}
+            maxDepth={showExtended ? undefined : 0}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -168,13 +519,55 @@ function ArchitectCard({ architect, isFocused }: { architect: AgentState; isFocu
 // ── Sidebar ──
 
 export function Sidebar() {
-  const { napkins, architects, activeTerminalId } = useNapStore();
+  const napkins = useNapStore((s) => s.napkins);
+  const architects = useNapStore((s) => s.architects);
+  const activeTerminalId = useNapStore((s) => s.activeTerminalId);
+  const focusedCardSlug = useNapStore((s) => s.focusedCardSlug);
+  const cardViewMode = useNapStore((s) => s.cardViewMode);
+  const sidebarVisible = useNapStore((s) => s.sidebarVisible);
+  const browserFilterText = useNapStore((s) => s.browserFilterText);
+  const browserFilterVisible = useNapStore((s) => s.browserFilterVisible);
+  const setBrowserFilter = useNapStore((s) => s.setBrowserFilter);
+  const setBrowserFilterVisible = useNapStore((s) => s.setBrowserFilterVisible);
+  const extendCard = useNapStore((s) => s.extendCard);
+  const filterInputRef = useRef<HTMLInputElement>(null);
 
-  // Find which card owns the active terminal
-  const activeArchitect = architects.find((a) => a.id === activeTerminalId);
-  const activeNapkin = napkins.find((n) =>
-    n.agents.some((a) => a.id === activeTerminalId),
-  );
+  // Cmd+K handler
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setBrowserFilterVisible(true);
+        setTimeout(() => filterInputRef.current?.focus(), 0);
+      }
+      if (e.key === 'Escape' && browserFilterVisible) {
+        e.preventDefault();
+        setBrowserFilterVisible(false);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [browserFilterVisible, setBrowserFilterVisible]);
+
+  // Cmd+E handler (toggle focused ↔ extended)
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+        e.preventDefault();
+        extendCard();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [extendCard]);
+
+  if (!sidebarVisible) return null;
+
+  const filteredNapkins = browserFilterText
+    ? napkins.filter((n) =>
+        n.slug.toLowerCase().includes(browserFilterText.toLowerCase()),
+      )
+    : napkins;
 
   return (
     <div
@@ -194,22 +587,68 @@ export function Sidebar() {
         overflow: 'hidden',
       }}
     >
-      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
+      {/* Filter bar */}
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid #3c3c3c' }}>
+        <input
+          ref={filterInputRef}
+          data-testid="browser-filter"
+          type="text"
+          value={browserFilterText}
+          onChange={(e) => setBrowserFilter(e.target.value)}
+          placeholder={browserFilterVisible ? 'Filter...' : '\u2318K  filter napkins...'}
+          readOnly={!browserFilterVisible}
+          onClick={() => {
+            if (!browserFilterVisible) {
+              setBrowserFilterVisible(true);
+              setTimeout(() => filterInputRef.current?.focus(), 0);
+            }
+          }}
+          style={{
+            width: '100%',
+            background: '#1e1e1e',
+            border: browserFilterVisible ? '1px solid #007acc' : '1px solid #3c3c3c',
+            color: browserFilterVisible ? '#cccccc' : '#6b7280',
+            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+            fontSize: 12,
+            padding: '5px 10px',
+            borderRadius: 4,
+            outline: 'none',
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
+
+      {/* Card list */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '6px 0',
+          scrollBehavior: 'smooth',
+        }}
+      >
+        {/* Architects pinned at top */}
         {architects.map((a) => (
           <ArchitectCard
             key={a.name}
             architect={a}
-            isFocused={a.id === activeTerminalId}
+            isFocused={focusedCardSlug === a.id}
+            viewMode={cardViewMode}
           />
         ))}
+
+        {/* Separator */}
         {architects.length > 0 && (
           <div style={{ height: 1, background: '#3c3c3c', margin: '6px 12px' }} />
         )}
-        {napkins.map((n) => (
+
+        {/* Napkins */}
+        {filteredNapkins.map((n) => (
           <NapkinCard
             key={n.slug}
             napkin={n}
-            isFocused={activeNapkin?.slug === n.slug}
+            isFocused={focusedCardSlug === n.slug}
+            viewMode={cardViewMode}
           />
         ))}
       </div>
