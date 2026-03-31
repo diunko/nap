@@ -110,6 +110,15 @@ export interface NapModel {
 
 const DEBOUNCE_MS = 200;
 
+const ARCHITECT_PROMPT = `You're the architect for this project. Read your role in \`.nap/00-org/40-roles/architect.md\` — every line matters.
+
+Then read the rest of \`.nap/00-org/\` — the promise, workflow, and structure docs. This is how the team works.
+
+Explore the codebase. Understand what's here. Take your time.
+
+If there's no seed napkin, talk to the human. They have an idea. Brainstorm with them using /napkin — stress-test the idea, chase rabbit holes, compress what survives into a mega napkin. That napkin becomes the seed for everything that follows.
+`;
+
 
 export function createModel(fs: FileSystem): NapModel {
   let napkins: NapkinState[] = [];
@@ -731,6 +740,7 @@ export function createModel(fs: FileSystem): NapModel {
 
     hasPendingWrite = true;
     await fs.writeJSON(archPath + '/.agent.nap.json', archMarker);
+    await fs.writeFile(archPath + '/prompt.md', ARCHITECT_PROMPT);
     notify();
 
     return {

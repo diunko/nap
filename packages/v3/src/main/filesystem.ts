@@ -10,6 +10,7 @@ export interface FileSystem {
   readFile(filePath: string): Promise<string | null>;
   isDirectory(filePath: string): Promise<boolean>;
   writeJSON(filePath: string, data: unknown): Promise<void>;
+  writeFile(filePath: string, content: string): Promise<void>;
   watch(dir: string, callback: (event: string, filename: string) => void): () => void;
 }
 
@@ -56,6 +57,11 @@ export class NodeFileSystem implements FileSystem {
   async writeJSON(filePath: string, data: unknown): Promise<void> {
     await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
     await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2));
+  }
+
+  async writeFile(filePath: string, content: string): Promise<void> {
+    await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+    await fsPromises.writeFile(filePath, content);
   }
 
   watch(dir: string, callback: (event: string, filename: string) => void): () => void {
@@ -117,6 +123,11 @@ export class MemoryFileSystem implements FileSystem {
 
   async writeJSON(filePath: string, data: unknown): Promise<void> {
     this.files[filePath] = data as object;
+    this._triggerWatch(filePath);
+  }
+
+  async writeFile(filePath: string, content: string): Promise<void> {
+    this.files[filePath] = content;
     this._triggerWatch(filePath);
   }
 
