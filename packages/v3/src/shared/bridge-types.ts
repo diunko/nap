@@ -59,7 +59,7 @@ export interface NapkinState {
   path: string;
   agents: AgentState[];
   entries: Entry[];        // napkin dir files for focused/extended views
-  napkinBullets: string[]; // bullet lines from .nap.md
+  napkinContent: string;   // raw .nap.md text
 }
 
 // ── Bridge protocol ──

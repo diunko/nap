@@ -50,6 +50,70 @@ function KanbanDot({ agent, size = 6 }: { agent: AgentState; size?: number }) {
   );
 }
 
+// ── Napkin content rendering — indentation-aware ──
+
+const MAX_CONTENT_LINES = 8;
+
+interface ContentLine {
+  level: number;  // 0-based indentation depth
+  text: string;   // display text (trimmed)
+}
+
+export function parseContentLines(raw: string): ContentLine[] {
+  if (!raw) return [];
+  const lines: ContentLine[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue;
+    // Count leading spaces (2 spaces = 1 level)
+    const stripped = line.replace(/^(\s*)/, '');
+    const leadingSpaces = line.length - stripped.length;
+    const level = Math.floor(leadingSpaces / 2);
+    // Strip bullet marker if present
+    const text = stripped.replace(/^\*\s*/, '');
+    if (text) lines.push({ level, text });
+  }
+  return lines;
+}
+
+function NapkinContentLines({ content }: { content: string }) {
+  const lines = parseContentLines(content);
+  if (lines.length === 0) return null;
+
+  const capped = lines.slice(0, MAX_CONTENT_LINES);
+  const truncated = lines.length > MAX_CONTENT_LINES;
+
+  return (
+    <>
+      {capped.map((line, i) => {
+        if (line.level >= 2) {
+          // Level 3+ → ellipsis
+          return (
+            <div key={`c-${i}`} style={{ color: '#4a4a5a', padding: '1px 0', paddingLeft: 16 }}>
+              ...
+            </div>
+          );
+        }
+        return (
+          <div
+            key={`c-${i}`}
+            style={{
+              color: line.level === 0 ? '#cccccc' : '#8a8a9a',
+              padding: '1px 0',
+              paddingLeft: line.level * 10,
+            }}
+          >
+            <span style={{ color: '#6b7280' }}>* </span>
+            {line.text}
+          </div>
+        );
+      })}
+      {truncated && (
+        <div style={{ color: '#4a4a5a', padding: '1px 0' }}>...</div>
+      )}
+    </>
+  );
+}
+
 // ── Kanban Card ──
 
 function KanbanCard({
@@ -143,13 +207,8 @@ function KanbanCard({
         <div data-testid="kanban-card-body" style={{ padding: '0 10px 8px 10px', fontSize: 12, lineHeight: 1.5 }}>
           <div style={{ height: 1, background: '#3c3c3c', margin: '0 0 5px 0' }} />
 
-          {/* Napkin bullets */}
-          {napkin.napkinBullets.map((bullet, i) => (
-            <div key={`b-${i}`} style={{ color: '#cccccc', padding: '1px 0' }}>
-              <span style={{ color: '#6b7280' }}>* </span>
-              {bullet}
-            </div>
-          ))}
+          {/* Napkin content */}
+          <NapkinContentLines content={napkin.napkinContent} />
 
           {/* Artifact badges */}
           <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>

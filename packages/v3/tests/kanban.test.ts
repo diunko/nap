@@ -7,6 +7,7 @@ import {
   F15_NEPIC_DIR,
 } from './fixtures';
 import { dotStyle } from '../src/shared/dot-style';
+import { parseContentLines } from '../src/renderer/KanbanOverlay';
 import type { NapkinStatus, AgentState } from '../src/shared/bridge-types';
 
 // ── Pure functions extracted for testability (same logic as renderer) ──
@@ -79,21 +80,21 @@ describe('Kanban data derivation', () => {
   });
 
   // T-0500-03
-  it('kanban card shows napkin bullets from .nap.md', async () => {
+  it('kanban card carries raw napkinContent from .nap.md', async () => {
     const fs = createKanbanFixture();
     const model = createModel(fs);
     await model.loadFromFilesystem(NEPIC_DIR);
 
     const design = model.getNapkins().find(n => n.slug === '0100-design');
     expect(design).toBeDefined();
-    expect(design!.napkinBullets).toEqual(['design system', 'color tokens', 'typography']);
+    expect(design!.napkinContent).toBe('* design system\n* color tokens\n* typography');
 
     const modelNapkin = model.getNapkins().find(n => n.slug === '0200-model');
-    expect(modelNapkin!.napkinBullets).toEqual(['state machine', 'snapshot protocol']);
+    expect(modelNapkin!.napkinContent).toBe('* state machine\n* snapshot protocol');
 
-    // Napkin without .nap.md → empty bullets
+    // Napkin without .nap.md → empty string
     const zoom = model.getNapkins().find(n => n.slug === '0400-zoom');
-    expect(zoom!.napkinBullets).toEqual([]);
+    expect(zoom!.napkinContent).toBe('');
   });
 
   // T-0500-04
@@ -126,6 +127,45 @@ describe('Kanban data derivation', () => {
       .map(e => e.name);
     expect(fileNames).toContain('0300-sidebar.nap.md');
     expect(fileNames).toContain('0300-sidebar.spec.md');
+  });
+});
+
+// ── Part 2: napkin content rendering (indentation-aware) ──
+
+describe('Napkin content parsing', () => {
+  it('parses flat bullets into level-0 lines', () => {
+    const lines = parseContentLines('* alpha\n* beta');
+    expect(lines).toEqual([
+      { level: 0, text: 'alpha' },
+      { level: 0, text: 'beta' },
+    ]);
+  });
+
+  it('parses nested bullets — 2 spaces per indent level', () => {
+    const lines = parseContentLines('* top\n  * nested\n    * deep');
+    expect(lines).toEqual([
+      { level: 0, text: 'top' },
+      { level: 1, text: 'nested' },
+      { level: 2, text: 'deep' },
+    ]);
+  });
+
+  it('handles non-bullet indented content', () => {
+    const lines = parseContentLines('heading\n  detail\n    sub-detail');
+    expect(lines).toEqual([
+      { level: 0, text: 'heading' },
+      { level: 1, text: 'detail' },
+      { level: 2, text: 'sub-detail' },
+    ]);
+  });
+
+  it('skips blank lines', () => {
+    const lines = parseContentLines('* a\n\n* b\n  \n* c');
+    expect(lines).toHaveLength(3);
+  });
+
+  it('returns empty array for empty string', () => {
+    expect(parseContentLines('')).toEqual([]);
   });
 });
 

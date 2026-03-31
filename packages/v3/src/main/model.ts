@@ -110,11 +110,6 @@ export interface NapModel {
 
 const DEBOUNCE_MS = 200;
 
-function parseBullets(content: string): string[] {
-  return content.split('\n')
-    .filter(line => line.trimStart().startsWith('*'))
-    .map(line => line.trimStart().replace(/^\*\s*/, ''));
-}
 
 export function createModel(fs: FileSystem): NapModel {
   let napkins: NapkinState[] = [];
@@ -261,10 +256,9 @@ export function createModel(fs: FileSystem): NapModel {
         excludeDirs: ['agents'],
       });
 
-      // Parse napkin bullets from .nap.md
+      // Read raw napkin content from .nap.md
       const napMdPath = napkinPath + '/' + slug + '.nap.md';
-      const napMdContent = await fs.readFile(napMdPath);
-      const napkinBullets = napMdContent ? parseBullets(napMdContent) : [];
+      const napkinContent = await fs.readFile(napMdPath) ?? '';
 
       loadedNapkins.push({
         id: slug,
@@ -274,7 +268,7 @@ export function createModel(fs: FileSystem): NapModel {
         path: napkinPath,
         agents,
         entries: napkinEntries,
-        napkinBullets,
+        napkinContent,
       });
     }
 
@@ -587,7 +581,7 @@ export function createModel(fs: FileSystem): NapModel {
       path: napkinPath,
       agents: [],
       entries: [],
-      napkinBullets: [],
+      napkinContent: '',
     };
     napkins.push(newNapkin);
     notify();
