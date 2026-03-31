@@ -3,12 +3,12 @@ import { useNapStore } from './store';
 import type { NapkinState, AgentState, NapkinStatus } from '../shared/bridge-types';
 import { dotStyle } from '../shared/dot-style';
 
-const COLUMNS: { key: NapkinStatus; label: string }[] = [
-  { key: 'backlog', label: 'BACKLOG' },
-  { key: 'todo', label: 'TODO' },
-  { key: 'doing', label: 'DOING' },
-  { key: 'review', label: 'REVIEW' },
-  { key: 'done', label: 'DONE' },
+type KanbanColumn = 'backlog' | 'doing' | 'done';
+
+const COLUMNS: { key: KanbanColumn; label: string; statuses: NapkinStatus[] }[] = [
+  { key: 'backlog', label: 'BACKLOG', statuses: ['backlog', 'todo'] },
+  { key: 'doing', label: 'DOING', statuses: ['doing', 'review'] },
+  { key: 'done', label: 'DONE', statuses: ['done'] },
 ];
 
 const KNOWN_BADGES = ['nap', 'spec', 'test', 'journeys'] as const;
@@ -265,16 +265,15 @@ export function KanbanOverlay() {
     }
   }
 
-  // Group napkins by phase
-  const grouped: Record<NapkinStatus, NapkinState[]> = {
+  // Group napkins into 3 display columns (internal statuses unchanged)
+  const grouped: Record<KanbanColumn, NapkinState[]> = {
     backlog: [],
-    todo: [],
     doing: [],
-    review: [],
     done: [],
   };
   for (const n of napkins) {
-    (grouped[n.status] || grouped.backlog).push(n);
+    const col = COLUMNS.find((c) => c.statuses.includes(n.status));
+    (col ? grouped[col.key] : grouped.backlog).push(n);
   }
 
   return (

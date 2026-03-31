@@ -85,8 +85,8 @@ test('T-0500-11: fallback keydown handler fires for Cmd+`', async () => {
   await cleanupApp(app, tmpDir);
 });
 
-// T-0500-12: kanban overlay has five columns with correct headers and counts
-test('T-0500-12: kanban overlay has five columns', async () => {
+// T-0500-12: kanban overlay has three display columns with correct headers and counts
+test('T-0500-12: kanban overlay has three columns', async () => {
   await bootWithF14();
 
   // Open kanban
@@ -97,9 +97,9 @@ test('T-0500-12: kanban overlay has five columns', async () => {
   // Wait for overlay to render
   await page.waitForSelector('[data-testid="kanban-overlay"]');
 
-  // Check 5 columns exist
+  // Check 3 display columns exist
   const columns = await page.evaluate(() => {
-    const cols = ['backlog', 'todo', 'doing', 'review', 'done'];
+    const cols = ['backlog', 'doing', 'done'];
     return cols.map((key) => {
       const el = document.querySelector(`[data-testid="kanban-col-${key}"]`);
       const header = document.querySelector(`[data-testid="kanban-col-header-${key}"]`);
@@ -111,17 +111,18 @@ test('T-0500-12: kanban overlay has five columns', async () => {
     });
   });
 
-  expect(columns).toHaveLength(5);
+  expect(columns).toHaveLength(3);
   for (const col of columns) {
     expect(col.exists).toBe(true);
   }
 
-  // Verify counts in headers
+  // backlog column = backlog + todo statuses → 2 cards
   const backlogHeader = columns.find((c) => c.key === 'backlog');
-  expect(backlogHeader?.headerText).toContain('(1)');
+  expect(backlogHeader?.headerText).toContain('(2)');
 
+  // doing column = doing + review statuses → 2 cards
   const doingHeader = columns.find((c) => c.key === 'doing');
-  expect(doingHeader?.headerText).toContain('(1)');
+  expect(doingHeader?.headerText).toContain('(2)');
 
   await cleanupApp(app, tmpDir);
 });
@@ -227,15 +228,15 @@ test('T-0500-70: full round-trip — kanban renders correct cards', async () => 
 
   // Count cards per column
   const cardCounts = await page.evaluate(() => {
-    const cols = ['backlog', 'todo', 'doing', 'review', 'done'];
+    const cols = ['backlog', 'doing', 'done'];
     return cols.map((key) => {
       const col = document.querySelector(`[data-testid="kanban-col-${key}"]`);
       return col?.querySelectorAll('[data-testid="kanban-card"]').length ?? 0;
     });
   });
 
-  // F14: 1 backlog, 1 todo, 1 doing, 1 review, 1 done
-  expect(cardCounts).toEqual([1, 1, 1, 1, 1]);
+  // F14: backlog(backlog+todo)=2, doing(doing+review)=2, done=1
+  expect(cardCounts).toEqual([2, 2, 1]);
 
   await cleanupApp(app, tmpDir);
 });
