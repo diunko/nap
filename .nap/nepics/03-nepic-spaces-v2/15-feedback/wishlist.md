@@ -89,7 +89,9 @@ Ideas with energy.
   * describes exactly where everything should be and why
   * the agent reads this as its source of truth
   * when the app evolves, update the spec → agent handles the migration
-* could be: `nap3 init --migrate` or `nap3 migrate` as separate command
+* `nap3 init --migrate` — same command, different mode
+  * no .nap/ → normal init
+  * .nap/ exists → migrate mode
 * first version: just a well-crafted prompt that launches Claude with the right context
   * no special infrastructure needed — it's a Claude session with file access
-  * `nap3 migrate` = `claude --verbose "read .nap/00-org/30-structure.nap.md and inspect this project..."`
+  * `nap3 init --migrate` = `claude --verbose "read .nap/00-org/30-structure.nap.md and inspect this project..."`
