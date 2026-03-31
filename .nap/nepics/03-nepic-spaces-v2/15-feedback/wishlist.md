@@ -69,3 +69,27 @@ Ideas with energy.
 * what does NOT change:
   * agent UUIDs, agent dir names, CC session UUIDs, git history
 * CLI command only — no UI needed
+
+## nap3 migrate — project structure fixer
+
+* `nap3 migrate` — inspects existing .nap/ project, transforms to current workflow version
+* runs WITHOUT the app — launches a Claude session in bare terminal
+* the agent:
+  * reads a canonical workflow spec (the latest 00-org/ docs)
+  * inspects the existing .nap/ structure — what's there, what's missing, what's outdated
+  * figures out what version/form the project is in (v1 sqlite, v2 markers, old dir layout, etc.)
+  * transforms: moves dirs, creates missing marker files, migrates sqlite → markers, scaffolds missing structure
+  * reports what it did
+* use cases:
+  * old project with SQLite → migrate to marker files
+  * project with old dir layout (40-board/ symlinks) → remove, status in markers
+  * project missing 00-org/ updates → copy latest from templates
+  * app version upgraded, workflow docs changed → agent updates project to match
+* needs: a canonical "project structure spec" document
+  * describes exactly where everything should be and why
+  * the agent reads this as its source of truth
+  * when the app evolves, update the spec → agent handles the migration
+* could be: `nap3 init --migrate` or `nap3 migrate` as separate command
+* first version: just a well-crafted prompt that launches Claude with the right context
+  * no special infrastructure needed — it's a Claude session with file access
+  * `nap3 migrate` = `claude --verbose "read .nap/00-org/30-structure.nap.md and inspect this project..."`
