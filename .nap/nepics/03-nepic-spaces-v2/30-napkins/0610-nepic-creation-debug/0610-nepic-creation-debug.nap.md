@@ -53,3 +53,8 @@
   * architect should not be treated differently from other agents
   * if architect is not resuming: check if computeResumeActions handles architects correctly
   * same three cases (A/B/C) apply to architects
+
+* bug 7: new nepic's architect dir has no prompt.md
+  * problem: (+) creates nepic with architect stub (.agent.nap.json) but no prompt.md
+  * architect boots and has nothing to read
+  * createNepic should copy prompt.md from templates (same as nap3 init does)
