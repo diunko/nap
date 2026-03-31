@@ -10,6 +10,7 @@
     "test:v2:medium": "npm run test:medium -w packages/v2",
     "test:v3:small": "npm run test:small -w packages/v3",
     "test:v3:medium": "npm run test:medium -w packages/v3",
+    "test:v3:medium:headed": "npm run test:medium:headed -w packages/v3",
     "typecheck:v2": "npm run typecheck -w packages/v2",
     "typecheck:v3": "npm run typecheck -w packages/v3",
     "postinstall": "electron-rebuild"

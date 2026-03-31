@@ -14,6 +14,7 @@
     "build:cli": "tsc -p tsconfig.cli.json",
     "test:small": "vitest run",
     "test:medium": "npm run build && npm run build:cli && NAP_TEST=1 npx playwright test",
+    "test:medium:headed": "npm run build && npm run build:cli && NAP_TEST=1 HEADED=1 npx playwright test",
     "test": "npm run test:small && npm run test:medium"
   },
   "dependencies": {

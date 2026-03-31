@@ -17,6 +17,7 @@ function createWindow(): BrowserWindow {
     width: 1200,
     height: 800,
     backgroundColor: '#1e1e1e',
+    show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
@@ -29,6 +30,10 @@ function createWindow(): BrowserWindow {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'));
   }
+
+  win.once('ready-to-show', () => {
+    if (!process.env['NAP_TEST'] || process.env['HEADED']) win.show();
+  });
 
   return win;
 }
