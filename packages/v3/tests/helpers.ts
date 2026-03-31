@@ -13,7 +13,7 @@ export const APP_DIR = path.join(__dirname, '..');
  */
 export function createTestNepicDir(
   tmpDir: string,
-  fixture: Record<string, object | null>,
+  fixture: Record<string, object | string | null>,
 ): string {
   const nepicDir = path.join(tmpDir, '.nap', 'nepics', 'test-nepic');
 
@@ -27,7 +27,11 @@ export function createTestNepicDir(
     fs.mkdirSync(path.dirname(fullPath), { recursive: true });
 
     if (content !== null) {
-      fs.writeFileSync(fullPath, JSON.stringify(content, null, 2));
+      if (typeof content === 'string') {
+        fs.writeFileSync(fullPath, content);
+      } else {
+        fs.writeFileSync(fullPath, JSON.stringify(content, null, 2));
+      }
     }
     // null = directory marker, directory already created by mkdirSync
   }

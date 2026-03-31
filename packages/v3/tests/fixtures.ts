@@ -1,4 +1,5 @@
 import { MemoryFileSystem } from '../src/main/filesystem';
+import type { NepicInfo } from '../src/shared/bridge-types';
 
 // ── F1: minimal project ──
 export function createMinimalFixture(): MemoryFileSystem {
@@ -488,3 +489,144 @@ export const F10_FIXTURE: Record<string, object | null> = {
     exited: false,
   },
 };
+
+// ── F14: kanban fixture (5 napkins across all phases + agents with bullets) ──
+export function createKanbanFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepic/30-napkins/0100-design/.napkin.nap.json': { status: 'done' },
+    'nepic/30-napkins/0100-design/0100-design.nap.md': '* design system\n* color tokens\n* typography',
+    'nepic/30-napkins/0100-design/agents/001-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-d-ta',
+      role: 'test-arch',
+      name: '001-test-arch',
+      created_at: 1711700000000,
+      started: true,
+      exited: true,
+      done: true,
+    },
+    'nepic/30-napkins/0100-design/agents/002-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-d-fs',
+      role: 'fs-eng',
+      name: '002-fs-eng',
+      created_at: 1711700100000,
+      started: true,
+      exited: true,
+      done: true,
+    },
+
+    'nepic/30-napkins/0200-model/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0200-model/0200-model.nap.md': '* state machine\n* snapshot protocol',
+    'nepic/30-napkins/0200-model/agents/001-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-m-fs',
+      role: 'fs-eng',
+      name: '001-fs-eng',
+      created_at: 1711800000000,
+      started: true,
+      exited: false,
+    },
+
+    'nepic/30-napkins/0300-sidebar/.napkin.nap.json': { status: 'review' },
+    'nepic/30-napkins/0300-sidebar/0300-sidebar.nap.md': '* sidebar component',
+    'nepic/30-napkins/0300-sidebar/0300-sidebar.spec.md': '## spec',
+
+    'nepic/30-napkins/0400-zoom/.napkin.nap.json': { status: 'todo' },
+
+    'nepic/30-napkins/0500-kanban/.napkin.nap.json': { status: 'backlog' },
+
+    'nepic/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-arch',
+      role: 'architect',
+      name: '001-architect',
+      created_at: 1711600000000,
+      started: true,
+      exited: false,
+    },
+  });
+}
+
+export const F14_FIXTURE: Record<string, object | string | null> = {
+  'nepic/30-napkins/0100-design/.napkin.nap.json': { status: 'done' },
+  'nepic/30-napkins/0100-design/0100-design.nap.md': '* design system\n* color tokens\n* typography',
+  'nepic/30-napkins/0100-design/agents/001-test-arch/.agent.nap.json': {
+    cc_session_uuid: 'uuid-d-ta',
+    role: 'test-arch',
+    name: '001-test-arch',
+    created_at: 1711700000000,
+    started: true,
+    exited: true,
+    done: true,
+  },
+  'nepic/30-napkins/0100-design/agents/002-fs-eng/.agent.nap.json': {
+    cc_session_uuid: 'uuid-d-fs',
+    role: 'fs-eng',
+    name: '002-fs-eng',
+    created_at: 1711700100000,
+    started: true,
+    exited: true,
+    done: true,
+  },
+  'nepic/30-napkins/0200-model/.napkin.nap.json': { status: 'doing' },
+  'nepic/30-napkins/0200-model/0200-model.nap.md': '* state machine\n* snapshot protocol',
+  'nepic/30-napkins/0200-model/agents/001-fs-eng/.agent.nap.json': {
+    cc_session_uuid: 'uuid-m-fs',
+    role: 'fs-eng',
+    name: '001-fs-eng',
+    created_at: 1711800000000,
+    started: true,
+    exited: false,
+  },
+  'nepic/30-napkins/0300-sidebar/.napkin.nap.json': { status: 'review' },
+  'nepic/30-napkins/0300-sidebar/0300-sidebar.nap.md': '* sidebar component',
+  'nepic/30-napkins/0300-sidebar/0300-sidebar.spec.md': '## spec',
+  'nepic/30-napkins/0400-zoom/.napkin.nap.json': { status: 'todo' },
+  'nepic/30-napkins/0500-kanban/.napkin.nap.json': { status: 'backlog' },
+  'nepic/20-architects/001-architect/.agent.nap.json': {
+    cc_session_uuid: 'uuid-arch',
+    role: 'architect',
+    name: '001-architect',
+    created_at: 1711600000000,
+    started: true,
+    exited: false,
+  },
+};
+
+// ── F15: multi-nepic fixture (3 nepics — for gutter and switching tests) ──
+export function createMultiNepicFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepics/01-v1/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepics/01-v1/30-napkins/0100-explore/agents/001-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-v1-fs',
+      role: 'fs-eng',
+      name: '001-fs-eng',
+      created_at: 1711700000000,
+      started: true,
+    },
+    'nepics/01-v1/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-v1-arch',
+      role: 'architect',
+      name: '001-architect',
+      created_at: 1711600000000,
+      started: true,
+    },
+
+    'nepics/02-spaces/30-napkins/0100-design/.napkin.nap.json': { status: 'done' },
+    'nepics/02-spaces/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-s-arch',
+      role: 'architect',
+      name: '001-architect',
+      created_at: 1711600000000,
+      started: true,
+    },
+
+    'nepics/03-kanban/30-napkins/0100-board/.napkin.nap.json': { status: 'backlog' },
+    'nepics/03-kanban/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-k-arch',
+      role: 'architect',
+      name: '001-architect',
+      created_at: 1711600000000,
+      started: false,
+    },
+  });
+}
+
+export const F15_NEPIC_DIR = 'nepics/01-v1';
