@@ -51,7 +51,7 @@ export const useNapStore = create<NapStore>((set, get) => ({
   sidebarVisible: true,
   browserFilterText: '',
   browserFilterVisible: false,
-  debugPanelCollapsed: false,
+  debugPanelCollapsed: true,
   debugPanelTab: 'model' as const,
   kanbanVisible: false,
 
