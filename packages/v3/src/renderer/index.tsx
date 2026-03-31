@@ -34,6 +34,9 @@ window.__napStore__ = useNapStore;
 function App() {
   const applySnapshot = useNapStore((s) => s.applySnapshot);
   const activeTerminalId = useNapStore((s) => s.activeTerminalId);
+  const sidebarVisible = useNapStore((s) => s.sidebarVisible);
+  const toggleSidebar = useNapStore((s) => s.toggleSidebar);
+  const toggleDebugPanel = useNapStore((s) => s.toggleDebugPanel);
 
   // Wire snapshot IPC
   useEffect(() => {
@@ -102,9 +105,25 @@ function App() {
     }
   });
 
+  // Cmd+B → toggle sidebar, Cmd+D → toggle debug panel
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
+        e.preventDefault();
+        toggleDebugPanel();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleSidebar, toggleDebugPanel]);
+
   return (
     <div style={{ display: 'flex', height: '100%', background: '#1e1e1e' }}>
-      <Sidebar />
+      {sidebarVisible && <Sidebar />}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {activeTerminalId ? (
           <Terminal />
