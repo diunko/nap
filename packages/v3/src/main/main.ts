@@ -77,6 +77,7 @@ app.whenReady().then(async () => {
       napkins: model.getNapkins(),
       architects: model.getArchitects(),
       activeNepicId,
+      watcherEvents: model.getWatcherEvents(),
     };
     win.webContents.send('app:state', snapshot);
   });

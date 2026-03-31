@@ -1,5 +1,5 @@
 import type { FileSystem } from './filesystem';
-import type { NapkinState, AgentState, NapkinStatus } from '../shared/bridge-types';
+import type { NapkinState, AgentState, NapkinStatus, Entry, FileEntry, DirEntry, WatcherEvent } from '../shared/bridge-types';
 import type { PtySpawner } from './pty-spawner';
 import { resolveByName } from './name-resolver';
 import * as crypto from 'crypto';
@@ -102,6 +102,7 @@ export interface NapModel {
   getStatus(query: { napkin?: string; agent?: string; nepic?: string }): StatusResult;
   getAllAgentsTree(): AgentTreeNode[];
   getNepicDir(): string;
+  getWatcherEvents(): WatcherEvent[];
 }
 
 const DEBOUNCE_MS = 200;
@@ -118,6 +119,9 @@ export function createModel(fs: FileSystem): NapModel {
   // Ephemeral state kept separate — never wiped by filesystem reloads
   const runningAgents = new Set<string>();
   const doneAgents = new Set<string>();
+
+  // Watcher events for debug panel
+  const watcherEventLog: WatcherEvent[] = [];
 
   function notify(): void {
     for (const fn of listeners) {
@@ -136,6 +140,33 @@ export function createModel(fs: FileSystem): NapModel {
       if (agent) return agent;
     }
     return architects.find(a => a.id === agentId) ?? null;
+  }
+
+  async function readEntries(
+    dir: string,
+    options?: { slug?: string; excludeDirs?: string[] },
+  ): Promise<Entry[]> {
+    const names = await fs.readdir(dir);
+    const entries: Entry[] = [];
+    const excludeDirs = options?.excludeDirs ?? [];
+
+    for (const name of names) {
+      if (name.startsWith('.')) continue;
+      if (excludeDirs.includes(name)) continue;
+
+      const absPath = dir + '/' + name;
+      if (await fs.isDirectory(absPath)) {
+        const children = await readEntries(absPath);
+        entries.push({ type: 'dir', name, absPath, children });
+      } else {
+        const isMain = options?.slug ? name === `${options.slug}.nap.md` : false;
+        const entry: FileEntry = { type: 'file', name, absPath };
+        if (isMain) entry.isMain = true;
+        entries.push(entry);
+      }
+    }
+
+    return entries;
   }
 
   async function loadAgents(
@@ -165,6 +196,7 @@ export function createModel(fs: FileSystem): NapModel {
         nepic?: string;
       } | null;
 
+      const agentEntries = await readEntries(agentPath);
       agents.push({
         id: marker?.cc_session_uuid ?? '',
         name: marker?.name ?? name,
@@ -179,6 +211,7 @@ export function createModel(fs: FileSystem): NapModel {
         running: false,
         done: marker?.done ?? false,
         homePath: agentPath,
+        entries: agentEntries,
       });
     }
 
@@ -212,6 +245,12 @@ export function createModel(fs: FileSystem): NapModel {
         ? await loadAgents(agentsDir, napkinNepicId, slug)
         : [];
 
+      // Read napkin-level file entries (exclude agents/ dir and hidden files)
+      const napkinEntries = await readEntries(napkinPath, {
+        slug,
+        excludeDirs: ['agents'],
+      });
+
       loadedNapkins.push({
         id: slug,
         slug,
@@ -219,6 +258,7 @@ export function createModel(fs: FileSystem): NapModel {
         status,
         path: napkinPath,
         agents,
+        entries: napkinEntries,
       });
     }
 
@@ -249,6 +289,7 @@ export function createModel(fs: FileSystem): NapModel {
         } | null;
 
         if (marker) {
+          const archEntries = await readEntries(archPath);
           loadedArchitects.push({
             id: marker.cc_session_uuid ?? '',
             name: marker.name ?? name,
@@ -263,6 +304,7 @@ export function createModel(fs: FileSystem): NapModel {
             running: false,
             done: marker.done ?? false,
             homePath: archPath,
+            entries: archEntries,
           });
         }
       }
@@ -297,7 +339,15 @@ export function createModel(fs: FileSystem): NapModel {
 
   function startWatching(dir: string): void {
     const napkinsDir = dir + '/30-napkins';
-    const unsub = fs.watch(napkinsDir, () => {
+    const unsub = fs.watch(napkinsDir, (event, filename) => {
+      // Log watcher event for debug panel
+      watcherEventLog.unshift({
+        timestamp: Date.now(),
+        event,
+        filename,
+      });
+      // Cap at 100 most recent events
+      if (watcherEventLog.length > 100) watcherEventLog.length = 100;
       handleWatchEvent();
     });
     watchUnsubs.push(unsub);
@@ -351,6 +401,7 @@ export function createModel(fs: FileSystem): NapModel {
         running: false,
         done: false,
         homePath: agentHomePath,
+        entries: [],
       });
     }
 
@@ -503,6 +554,7 @@ export function createModel(fs: FileSystem): NapModel {
       status,
       path: napkinPath,
       agents: [],
+      entries: [],
     };
     napkins.push(newNapkin);
     notify();
@@ -565,6 +617,7 @@ export function createModel(fs: FileSystem): NapModel {
       running: false,
       done: false,
       homePath: agentHomePath,
+      entries: [],
     };
     napkin.agents.push(agentState);
     notify();
@@ -611,6 +664,7 @@ export function createModel(fs: FileSystem): NapModel {
       running: false,
       done: false,
       homePath: archPath,
+      entries: [],
     };
     architects.push(agentState);
     notify();
@@ -830,6 +884,7 @@ export function createModel(fs: FileSystem): NapModel {
     getStatus,
     getAllAgentsTree,
     getNepicDir: () => nepicDir,
+    getWatcherEvents: () => watcherEventLog,
   };
 }
 

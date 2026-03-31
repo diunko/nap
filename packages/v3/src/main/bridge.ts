@@ -44,6 +44,7 @@ export function wireModelToBridge(model: NapModel, bridge: Bridge, activeNepicId
       napkins: model.getNapkins(),
       architects: model.getArchitects(),
       activeNepicId,
+      watcherEvents: model.getWatcherEvents(),
     });
   }
 
