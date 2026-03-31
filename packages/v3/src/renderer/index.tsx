@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { Sidebar } from './Sidebar';
 import { Terminal } from './Terminal';
 import { DebugPanel } from './DebugPanel';
-import { useNapStore } from './store';
+import { useNapStore, loadPersistedUiState } from './store';
 import { createTerminalInstance, getTerminal, disposeTerminal } from './terminal-registry';
 import { createFileLinkProvider } from './file-link-provider';
 import type { AppSnapshot } from '../shared/bridge-types';
@@ -25,6 +25,8 @@ declare global {
         onExit: (cb: (id: string, exitCode: number) => void) => () => void;
       };
       openFilePath: (filePath: string) => void;
+      saveUiState: (state: unknown) => void;
+      loadUiState: () => Promise<unknown>;
     };
   }
 }
@@ -45,6 +47,8 @@ function App() {
         applySnapshot(snapshot);
       });
     }
+    // Load persisted UI state (debug panel collapse/tab)
+    loadPersistedUiState();
   }, [applySnapshot]);
 
   // Wire pty data → xterm terminals

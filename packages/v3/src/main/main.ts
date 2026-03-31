@@ -143,6 +143,18 @@ app.whenReady().then(async () => {
     shell.openPath(filePath);
   });
 
+  // UI state persistence (debug panel collapse/tab, sidebar visible)
+  ipcMain.on('save-ui-state', (_event, state: unknown) => {
+    model.saveUiState(state);
+  });
+
+  ipcMain.handle('load-ui-state', async () => {
+    if (!activeNepicDir) return null;
+    const fs = new NodeFileSystem();
+    const uiStatePath = activeNepicDir + '/ui-state.json';
+    return await fs.readJSON(uiStatePath);
+  });
+
   // Expose pty manager for medium tests
   if (isTest) {
     (global as any).__napPtyManager__ = ptySpawner;

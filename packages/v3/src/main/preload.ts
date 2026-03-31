@@ -51,4 +51,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ── File opener ──
   openFilePath: (filePath: string) => ipcRenderer.send('open-file-path', filePath),
+
+  // ── UI state persistence ──
+  saveUiState: (state: unknown) => ipcRenderer.send('save-ui-state', state),
+  loadUiState: () => ipcRenderer.invoke('load-ui-state'),
 });

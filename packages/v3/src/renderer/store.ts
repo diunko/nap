@@ -104,10 +104,34 @@ export const useNapStore = create<NapStore>((set, get) => ({
   },
 
   toggleDebugPanel: () => {
-    set({ debugPanelCollapsed: !get().debugPanelCollapsed });
+    const next = !get().debugPanelCollapsed;
+    set({ debugPanelCollapsed: next });
+    persistUiState({ debugPanelCollapsed: next, debugPanelTab: get().debugPanelTab });
   },
 
   setDebugPanelTab: (tab: 'model' | 'filesystem' | 'events') => {
     set({ debugPanelTab: tab });
+    persistUiState({ debugPanelCollapsed: get().debugPanelCollapsed, debugPanelTab: tab });
   },
 }));
+
+// ── UI state persistence helpers ──
+
+function persistUiState(partial: { debugPanelCollapsed?: boolean; debugPanelTab?: string }) {
+  if (typeof window !== 'undefined' && window.electronAPI?.saveUiState) {
+    window.electronAPI.saveUiState(partial);
+  }
+}
+
+// Load persisted ui-state on mount
+export async function loadPersistedUiState(): Promise<void> {
+  if (typeof window === 'undefined' || !window.electronAPI?.loadUiState) return;
+  const state = await window.electronAPI.loadUiState() as Record<string, unknown> | null;
+  if (!state) return;
+  const updates: Partial<NapStore> = {};
+  if (typeof state.debugPanelCollapsed === 'boolean') updates.debugPanelCollapsed = state.debugPanelCollapsed;
+  if (state.debugPanelTab === 'model' || state.debugPanelTab === 'filesystem' || state.debugPanelTab === 'events') {
+    updates.debugPanelTab = state.debugPanelTab;
+  }
+  if (Object.keys(updates).length > 0) useNapStore.setState(updates);
+}
