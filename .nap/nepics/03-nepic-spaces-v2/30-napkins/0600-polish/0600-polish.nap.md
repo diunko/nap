@@ -17,6 +17,19 @@
     * done = done
   * simpler to scan, same information
 
+* napkin content rendering
+  * problem: kanban shows all bullets flat, no nesting — unreadable
+  * model should pass raw .nap.md text, not parsed bullets
+    * bridge carries `napkinContent: string` instead of `napkinBullets: string[]`
+    * renderer decides what to show based on context
+  * kanban card rendering:
+    * parse indentation levels from raw text
+    * show level 1-2 as styled lines (indented, dimmer for level 2)
+    * level 3+ → `...` ellipsis at start of line
+    * cap at ~8 lines, truncate with "..." at bottom
+    * not just asterisks — handle any markdown-like indented content
+  * extended view: could show full content (future)
+
 * medium tests: headless by default
   * problem: test windows blink rapidly during `npm run test:v3:medium` — distracting, not useful
   * v3 main.ts missing `show: false` on BrowserWindow — always shows window
