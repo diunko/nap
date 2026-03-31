@@ -293,6 +293,147 @@ export function createEmptyNepicFixture(): MemoryFileSystem {
   });
 }
 
+// ── F12: zoom fixture (agents in all lifecycle states + content files) ──
+export function createZoomFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0100-explore/0100-explore.nap.md': {} as object,
+    'nepic/30-napkins/0100-explore/0100-explore.spec.md': {} as object,
+    'nepic/30-napkins/0100-explore/agents/001-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-ta',
+      role: 'test-arch',
+      name: '001-test-arch',
+      created_at: 1711700000000,
+      started: true,
+      exited: false,
+    },
+    'nepic/30-napkins/0100-explore/agents/002-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-fs',
+      role: 'fs-eng',
+      name: '002-fs-eng',
+      created_at: 1711700100000,
+      started: true,
+      exited: true,
+      done: true,
+    },
+    'nepic/30-napkins/0100-explore/agents/003-reviewer/.agent.nap.json': {
+      cc_session_uuid: 'uuid-rv',
+      role: 'reviewer',
+      name: '003-reviewer',
+      created_at: 1711700200000,
+      started: false,
+      exited: false,
+    },
+    'nepic/30-napkins/0200-build/.napkin.nap.json': { status: 'backlog' },
+    'nepic/30-napkins/0200-build/0200-build.nap.md': {} as object,
+    'nepic/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-arch',
+      role: 'architect',
+      name: '001-architect',
+      created_at: 1711600000000,
+      started: true,
+      exited: false,
+    },
+    'nepic/20-architects/001-architect/prompt.md': {} as object,
+    'nepic/20-architects/001-architect/scratch/notes.md': {} as object,
+    'nepic/20-architects/001-architect/onboarding/setup.md': {} as object,
+  });
+}
+
+// ── F13: dot color state matrix (one agent per lifecycle state) ──
+export function createDotMatrixFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepic/30-napkins/0100-dots/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0100-dots/agents/001-running/.agent.nap.json': {
+      cc_session_uuid: 'uuid-running',
+      role: 'test-arch',
+      name: '001-running',
+      created_at: 1711700000000,
+      started: true,
+      exited: false,
+    },
+    'nepic/30-napkins/0100-dots/agents/002-done/.agent.nap.json': {
+      cc_session_uuid: 'uuid-done',
+      role: 'fs-eng',
+      name: '002-done',
+      created_at: 1711700100000,
+      started: true,
+      exited: false,
+      done: true,
+    },
+    'nepic/30-napkins/0100-dots/agents/003-done-exit/.agent.nap.json': {
+      cc_session_uuid: 'uuid-done-exit',
+      role: 'test-arch',
+      name: '003-done-exit',
+      created_at: 1711700200000,
+      started: true,
+      exited: true,
+      done: true,
+    },
+    'nepic/30-napkins/0100-dots/agents/004-exited/.agent.nap.json': {
+      cc_session_uuid: 'uuid-exited',
+      role: 'fs-eng',
+      name: '004-exited',
+      created_at: 1711700300000,
+      started: true,
+      exited: true,
+    },
+    'nepic/30-napkins/0100-dots/agents/005-waiting/.agent.nap.json': {
+      cc_session_uuid: 'uuid-waiting',
+      role: 'test-eng',
+      name: '005-waiting',
+      created_at: 1711700400000,
+      started: false,
+      exited: false,
+    },
+  });
+}
+
+// F12 fixture data for medium tests
+export const F12_FIXTURE: Record<string, object | null> = {
+  'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+  'nepic/30-napkins/0100-explore/0100-explore.nap.md': {},
+  'nepic/30-napkins/0100-explore/0100-explore.spec.md': {},
+  'nepic/30-napkins/0100-explore/agents/001-test-arch/.agent.nap.json': {
+    cc_session_uuid: 'uuid-ta',
+    role: 'test-arch',
+    name: '001-test-arch',
+    created_at: 1711700000000,
+    started: true,
+    exited: false,
+  },
+  'nepic/30-napkins/0100-explore/agents/002-fs-eng/.agent.nap.json': {
+    cc_session_uuid: 'uuid-fs',
+    role: 'fs-eng',
+    name: '002-fs-eng',
+    created_at: 1711700100000,
+    started: true,
+    exited: true,
+    done: true,
+  },
+  'nepic/30-napkins/0100-explore/agents/003-reviewer/.agent.nap.json': {
+    cc_session_uuid: 'uuid-rv',
+    role: 'reviewer',
+    name: '003-reviewer',
+    created_at: 1711700200000,
+    started: false,
+    exited: false,
+  },
+  'nepic/30-napkins/0200-build/.napkin.nap.json': { status: 'backlog' },
+  'nepic/30-napkins/0200-build/0200-build.nap.md': {},
+  'nepic/20-architects/001-architect/.agent.nap.json': {
+    cc_session_uuid: 'uuid-arch',
+    role: 'architect',
+    name: '001-architect',
+    created_at: 1711600000000,
+    started: true,
+    exited: false,
+  },
+  'nepic/20-architects/001-architect/prompt.md': {},
+  'nepic/20-architects/001-architect/scratch/notes.md': {},
+  'nepic/20-architects/001-architect/onboarding/setup.md': {},
+};
+
 export const NEPIC_DIR = 'nepic';
 
 // F10 fixture data for medium tests
