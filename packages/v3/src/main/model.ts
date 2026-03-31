@@ -373,19 +373,22 @@ export function createModel(fs: FileSystem): NapModel {
   }
 
   function startWatching(dir: string): void {
-    const napkinsDir = dir + '/30-napkins';
-    const unsub = fs.watch(napkinsDir, (event, filename) => {
-      // Log watcher event for debug panel
-      watcherEventLog.unshift({
-        timestamp: Date.now(),
-        event,
-        filename,
+    function watchDir(subdir: string): void {
+      const fullDir = dir + '/' + subdir;
+      const unsub = fs.watch(fullDir, (event, filename) => {
+        watcherEventLog.unshift({
+          timestamp: Date.now(),
+          event,
+          filename,
+        });
+        if (watcherEventLog.length > 100) watcherEventLog.length = 100;
+        handleWatchEvent();
       });
-      // Cap at 100 most recent events
-      if (watcherEventLog.length > 100) watcherEventLog.length = 100;
-      handleWatchEvent();
-    });
-    watchUnsubs.push(unsub);
+      watchUnsubs.push(unsub);
+    }
+
+    watchDir('30-napkins');
+    watchDir('20-architects');
   }
 
   function stopWatching(): void {
