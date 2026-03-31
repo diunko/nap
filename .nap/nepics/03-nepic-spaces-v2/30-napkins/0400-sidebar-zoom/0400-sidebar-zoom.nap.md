@@ -10,11 +10,18 @@
 
 * collapsed (what we have now — refine)
   * one line per card: `* name    ●●◌   phase`
-  * dot colors by STATUS not role
-    * green (#22c55e) = running, pulsing animation
-    * blue (#3b82f6) = done
-    * amber (#f59e0b) = nap
-    * gray (#6b7280) = exited, hollow
+  * dot system — two dimensions in one dot
+    * COLOR = role (encodes the pipeline visually)
+      * orange (#f59e0b) = test-architect
+      * green (#22c55e) = fullstack-eng
+      * gray (#6b7280) = test-engineer
+      * blue (#3b82f6) = architect + default/unknown
+    * SHAPE = status
+      * filled = running
+      * dashed + checkmark = done
+      * hollow gray = exited (same gray for all roles)
+    * glance at a napkin → see: orange done, green running, gray waiting
+    * keep as-is — proven in use, don't change
   * click card → focused view
   * click agent dot → switch to that terminal
 
