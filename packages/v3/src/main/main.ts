@@ -69,7 +69,12 @@ app.whenReady().then(async () => {
   let activeNepicId = '';
   let activeNepicDir = '';
 
-  const nepicDirs = await fs.readdir(nepicsBase);
+  const nepicDirEntries = await fs.readdir(nepicsBase);
+  const nepicDirs = [];
+  for (const d of nepicDirEntries) {
+    if (d.startsWith('.') || d === 'ui-state.json') continue;
+    if (await fs.isDirectory(join(nepicsBase, d))) nepicDirs.push(d);
+  }
   if (nepicDirs.length > 0) {
     activeNepicId = nepicDirs[nepicDirs.length - 1];
     activeNepicDir = join(nepicsBase, activeNepicId);
