@@ -630,3 +630,166 @@ export function createMultiNepicFixture(): MemoryFileSystem {
 }
 
 export const F15_NEPIC_DIR = 'nepics/01-v1';
+
+// ── F16: archived agent fixture (archived agent + archived architect) ──
+export function createArchivedFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0100-explore/0100-explore.nap.md': '* explore feature\n* archived agents\n',
+    'nepic/30-napkins/0100-explore/agents/001-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-archived-ta',
+      role: 'test-arch',
+      name: '001-test-arch',
+      napkin: '0100-explore',
+      nepic: 'test-nepic',
+      created_at: 1711700000000,
+      started: false,
+      archived: true,
+    },
+    'nepic/30-napkins/0100-explore/agents/001-test-arch/prompt.md': 'Read the spec and design tests.',
+    'nepic/30-napkins/0100-explore/agents/001-test-arch/response.md': 'Designed 5 test cases.',
+    'nepic/30-napkins/0100-explore/agents/002-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-alive-fs',
+      role: 'fs-eng',
+      name: '002-fs-eng',
+      napkin: '0100-explore',
+      nepic: 'test-nepic',
+      created_at: 1711700100000,
+      started: true,
+      exited: false,
+    },
+    'nepic/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-archived-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: 'test-nepic',
+      created_at: 1711600000000,
+      started: false,
+      archived: true,
+    },
+    'nepic/20-architects/001-architect/prompt.md': 'Lead the project.',
+    'nepic/20-architects/001-architect/response.md': 'Created 3 napkins.',
+  });
+}
+
+export const F16_FIXTURE: Record<string, object | string | null> = {
+  'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+  'nepic/30-napkins/0100-explore/0100-explore.nap.md': '* explore feature\n* archived agents\n',
+  'nepic/30-napkins/0100-explore/agents/001-test-arch/.agent.nap.json': {
+    cc_session_uuid: 'uuid-archived-ta',
+    role: 'test-arch',
+    name: '001-test-arch',
+    napkin: '0100-explore',
+    nepic: 'test-nepic',
+    created_at: 1711700000000,
+    started: false,
+    archived: true,
+  },
+  'nepic/30-napkins/0100-explore/agents/001-test-arch/prompt.md': 'Read the spec and design tests.',
+  'nepic/30-napkins/0100-explore/agents/001-test-arch/response.md': 'Designed 5 test cases.',
+  'nepic/30-napkins/0100-explore/agents/002-fs-eng/.agent.nap.json': {
+    cc_session_uuid: 'uuid-alive-fs',
+    role: 'fs-eng',
+    name: '002-fs-eng',
+    napkin: '0100-explore',
+    nepic: 'test-nepic',
+    created_at: 1711700100000,
+    started: true,
+    exited: false,
+  },
+  'nepic/20-architects/001-architect/.agent.nap.json': {
+    cc_session_uuid: 'uuid-archived-arch',
+    role: 'architect',
+    name: '001-architect',
+    nepic: 'test-nepic',
+    created_at: 1711600000000,
+    started: false,
+    archived: true,
+  },
+  'nepic/20-architects/001-architect/prompt.md': 'Lead the project.',
+  'nepic/20-architects/001-architect/response.md': 'Created 3 napkins.',
+};
+
+// ── F17: import candidates fixture (dirs with prompt.md but no markers) ──
+export const F17_IMPORT_CANDIDATES: Record<string, string | null> = {
+  // Agent with prompt.md + response.md, no marker
+  'nepic/30-napkins/0100-explore/agents/001-test-arch/prompt.md': 'test prompt',
+  'nepic/30-napkins/0100-explore/agents/001-test-arch/response.md': 'test response',
+  // Agent with only prompt.md, no marker
+  'nepic/30-napkins/0100-explore/agents/002-fs-eng/prompt.md': 'fs prompt',
+  // Agent WITH existing marker — should be skipped
+  'nepic/30-napkins/0100-explore/agents/003-reviewer/.agent.nap.json': '{"cc_session_uuid":"uuid-existing","role":"reviewer","name":"003-reviewer"}',
+  'nepic/30-napkins/0100-explore/agents/003-reviewer/prompt.md': 'review prompt',
+  // Dir with no prompt or response — should be skipped
+  'nepic/30-napkins/0100-explore/agents/004-empty/.placeholder': '',
+  // Architect without marker
+  'nepic/20-architects/001-architect/prompt.md': 'architect prompt',
+  'nepic/20-architects/001-architect/response.md': 'architect response',
+  // Napkin markers
+  'nepic/30-napkins/0100-explore/.napkin.nap.json': '{"status":"doing"}',
+};
+
+// ── F18: mixed lifecycle fixture (10 agents for story 5) ──
+export function createMixedLifecycleFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    // 6 alive agents (started, not exited)
+    'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0100-explore/agents/001-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-alive-1', role: 'fs-eng', name: '001-fs-eng',
+      created_at: 1711700000000, started: true, exited: false,
+    },
+    'nepic/30-napkins/0100-explore/agents/002-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-alive-2', role: 'test-arch', name: '002-test-arch',
+      created_at: 1711700100000, started: true, exited: false,
+    },
+    'nepic/30-napkins/0200-build/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0200-build/agents/001-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-alive-3', role: 'fs-eng', name: '001-fs-eng',
+      created_at: 1711700200000, started: true, exited: false,
+    },
+    'nepic/30-napkins/0200-build/agents/002-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-alive-4', role: 'test-arch', name: '002-test-arch',
+      created_at: 1711700300000, started: true, exited: false,
+    },
+    'nepic/30-napkins/0300-polish/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0300-polish/agents/001-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-alive-5', role: 'fs-eng', name: '001-fs-eng',
+      created_at: 1711700400000, started: true, exited: false,
+    },
+    'nepic/30-napkins/0300-polish/agents/002-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-alive-6', role: 'test-arch', name: '002-test-arch',
+      created_at: 1711700500000, started: true, exited: false,
+    },
+
+    // 2 agents that will fail resume (started, not exited — detection happens at runtime)
+    'nepic/30-napkins/0400-debug/.napkin.nap.json': { status: 'doing' },
+    'nepic/30-napkins/0400-debug/agents/001-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-will-fail-1', role: 'fs-eng', name: '001-fs-eng',
+      created_at: 1711700600000, started: true, exited: false,
+    },
+    'nepic/30-napkins/0400-debug/agents/002-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-will-fail-2', role: 'test-arch', name: '002-test-arch',
+      created_at: 1711700700000, started: true, exited: false,
+    },
+
+    // 2 archived agents (imported)
+    'nepic/30-napkins/0500-archived/.napkin.nap.json': { status: 'done' },
+    'nepic/30-napkins/0500-archived/agents/001-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-archived-1', role: 'fs-eng', name: '001-fs-eng',
+      created_at: 1711700800000, started: false, archived: true,
+    },
+    'nepic/30-napkins/0500-archived/agents/001-fs-eng/prompt.md': 'do the thing',
+    'nepic/30-napkins/0500-archived/agents/001-fs-eng/response.md': 'did the thing',
+    'nepic/30-napkins/0500-archived/agents/002-test-arch/.agent.nap.json': {
+      cc_session_uuid: 'uuid-archived-2', role: 'test-arch', name: '002-test-arch',
+      created_at: 1711700900000, started: false, archived: true,
+    },
+    'nepic/30-napkins/0500-archived/agents/002-test-arch/prompt.md': 'test the thing',
+    'nepic/30-napkins/0500-archived/agents/002-test-arch/response.md': 'tested the thing',
+
+    'nepic/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-arch', role: 'architect', name: '001-architect',
+      created_at: 1711600000000, started: true, exited: false,
+    },
+  });
+}
