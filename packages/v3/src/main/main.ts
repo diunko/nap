@@ -137,6 +137,9 @@ app.whenReady().then(async () => {
     const agent = model.getAllAgents().find((a) => a.id === id);
     if (!agent) return;
 
+    // Archived agents don't resume — they need the successor flow
+    if (agent.archived) return;
+
     ptySpawner.spawn({
       id: agent.id,
       command: `claude --verbose --resume ${agent.id}`,
@@ -148,6 +151,14 @@ app.whenReady().then(async () => {
     });
 
     model.setAgentRunning(agent.id, true);
+  });
+
+  // Spawn successor for an archived agent
+  ipcMain.handle('agent:spawn-successor', async (_event, id: string) => {
+    if (!ptySpawner) return { error: true, message: 'no pty spawner' };
+    const newId = await model.spawnSuccessor(id, ptySpawner);
+    if (!newId) return { error: true, message: 'agent not found' };
+    return { ok: true, newId };
   });
 
   // Open file in default editor

@@ -31,6 +31,7 @@ declare global {
       loadUiState: () => Promise<unknown>;
       switchNepic: (id: string) => Promise<unknown>;
       createNepic: (name: string) => Promise<unknown>;
+      spawnSuccessor: (id: string) => Promise<{ ok?: boolean; newId?: string; error?: boolean; message?: string }>;
     };
   }
 }

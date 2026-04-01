@@ -59,4 +59,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Nepic management (0500) ──
   switchNepic: (id: string) => ipcRenderer.invoke('nepic:switch', id),
   createNepic: (name: string) => ipcRenderer.invoke('nepic:create', name),
+
+  // ── Agent successor (0620) ──
+  spawnSuccessor: (id: string) => ipcRenderer.invoke('agent:spawn-successor', id),
 });

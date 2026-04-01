@@ -1,7 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNapStore } from './store';
+import type { AgentState } from '../shared/bridge-types';
 import { getTerminal, openTerminal, createTerminalInstance, toggleFollow } from './terminal-registry';
 import { createFileLinkProvider } from './file-link-provider';
+
+function useActiveAgent(): AgentState | null {
+  const activeTerminalId = useNapStore((s) => s.activeTerminalId);
+  const napkins = useNapStore((s) => s.napkins);
+  const architects = useNapStore((s) => s.architects);
+
+  if (!activeTerminalId) return null;
+
+  const architect = architects.find((a) => a.id === activeTerminalId);
+  if (architect) return architect;
+
+  for (const napkin of napkins) {
+    const agent = napkin.agents.find((a) => a.id === activeTerminalId);
+    if (agent) return agent;
+  }
+
+  return null;
+}
 
 function useBreadcrumb() {
   const activeTerminalId = useNapStore((s) => s.activeTerminalId);
@@ -13,7 +32,7 @@ function useBreadcrumb() {
   // Is it an architect?
   const architect = architects.find((a) => a.id === activeTerminalId);
   if (architect) {
-    const label = architect.running ? 'running' : architect.exited ? 'exited' : 'done';
+    const label = architect.archived ? 'archived' : architect.running ? 'running' : architect.exited ? 'exited' : 'done';
     return { agentName: architect.name, label };
   }
 
@@ -21,7 +40,7 @@ function useBreadcrumb() {
   for (const napkin of napkins) {
     const agent = napkin.agents.find((a) => a.id === activeTerminalId);
     if (agent) {
-      const label = agent.running ? 'running' : agent.exited ? 'exited' : agent.done ? 'done' : '';
+      const label = agent.archived ? 'archived' : agent.running ? 'running' : agent.exited ? 'exited' : agent.done ? 'done' : '';
       return { napkinSlug: napkin.slug, agentName: agent.name, label };
     }
   }
@@ -29,11 +48,67 @@ function useBreadcrumb() {
   return { agentName: activeTerminalId };
 }
 
+function SuccessorPrompt({ agent }: { agent: AgentState }) {
+  const [spawning, setSpawning] = useState(false);
+
+  async function handleSpawn() {
+    setSpawning(true);
+    const result = await window.electronAPI.spawnSuccessor(agent.id);
+    if (result?.newId) {
+      // Store will update via snapshot — switch terminal to new ID
+      useNapStore.getState().setActiveTerminal(result.newId);
+    }
+    setSpawning(false);
+  }
+
+  return (
+    <div
+      data-testid="successor-prompt"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+        color: '#6b7280',
+        gap: 16,
+      }}
+    >
+      <div style={{ fontSize: 14, color: '#9ca3af' }}>
+        Session expired — invoke a successor?
+      </div>
+      <div style={{ fontSize: 12, color: '#6b7280', maxWidth: 400, textAlign: 'center' }}>
+        A fresh Claude will read the original prompt, response, and codebase to continue this work.
+      </div>
+      <button
+        data-testid="successor-spawn-btn"
+        onClick={handleSpawn}
+        disabled={spawning}
+        style={{
+          padding: '8px 20px',
+          background: spawning ? '#374151' : '#2563eb',
+          color: '#e5e5e5',
+          border: 'none',
+          borderRadius: 6,
+          cursor: spawning ? 'default' : 'pointer',
+          fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+          fontSize: 13,
+        }}
+      >
+        {spawning ? 'Spawning...' : 'Invoke successor'}
+      </button>
+    </div>
+  );
+}
+
 export function Terminal() {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeTerminalId = useNapStore((s) => s.activeTerminalId);
+  const activeAgent = useActiveAgent();
   const breadcrumb = useBreadcrumb();
   const [following, setFollowing] = useState(false);
+  const isArchived = activeAgent?.archived ?? false;
 
   // Cmd+G: toggle follow mode
   useEffect(() => {
@@ -193,10 +268,14 @@ export function Terminal() {
         borderBottom: following ? '2px solid #2a5a9a' : '2px solid transparent',
         transition: 'border-color 0.15s',
       }}>
-        <div
-          ref={containerRef}
-          style={{ width: '100%', height: '100%' }}
-        />
+        {isArchived && activeAgent ? (
+          <SuccessorPrompt agent={activeAgent} />
+        ) : (
+          <div
+            ref={containerRef}
+            style={{ width: '100%', height: '100%' }}
+          />
+        )}
       </div>
     </div>
   );
