@@ -46,6 +46,7 @@
 * dot style for archived
   * needs its own visual — not running, not done, not exited
   * open question: what conveys "archived" at a glance?
+  * // decision: use same grayed out hollow border as exited
   * label: "archived" in dim text
 
 * done criteria

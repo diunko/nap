@@ -31,6 +31,7 @@
     * becomes regular running agent — can nap done, can be resumed
       * // status becomes done:true, exited:false, archived: false
     * indistinguishable from a freshly created agent // not freshly, but anyway
+      * // e.g., resume session uses uuid of new maintainer session
 
 * importing existing projects: nap3 import-agents <nepic-dir>
   * scans for agent dirs that have prompt.md/response.md but no .agent.nap.json
