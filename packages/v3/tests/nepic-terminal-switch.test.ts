@@ -175,3 +175,99 @@ describe('Nepic terminal switching', () => {
     expect(useNapStore.getState().activeTerminalId).toBe('uuid-v2-agent');
   });
 });
+
+describe('Nepic focused card switching', () => {
+  beforeEach(() => {
+    _resetNepicTerminalMemory();
+    useNapStore.setState({
+      napkins: [],
+      architects: [],
+      activeNepicId: '',
+      activeTerminalId: null,
+      focusedCardSlug: null,
+      cardViewMode: 'collapsed' as const,
+      nepics: [],
+      watcherEvents: [],
+    });
+  });
+
+  it('nepic switch defaults to architect card focused', () => {
+    const arch1 = makeAgent({ id: 'uuid-v1-arch', role: 'architect', started: true, running: true });
+    const arch2 = makeAgent({ id: 'uuid-v2-arch', role: 'architect', started: true, running: true });
+
+    useNapStore.getState().applySnapshot(makeSnapshot({
+      activeNepicId: '01-v1',
+      architects: [arch1],
+    }));
+
+    useNapStore.getState().applySnapshot(makeSnapshot({
+      activeNepicId: '02-ttt',
+      architects: [arch2],
+    }));
+
+    expect(useNapStore.getState().focusedCardSlug).toBe('uuid-v2-arch');
+    expect(useNapStore.getState().cardViewMode).toBe('focused');
+  });
+
+  it('nepic switch restores remembered focused card', () => {
+    const arch1 = makeAgent({ id: 'uuid-v1-arch', role: 'architect', started: true, running: true });
+    const arch2 = makeAgent({ id: 'uuid-v2-arch', role: 'architect', started: true, running: true });
+    const snap1 = makeSnapshot({ activeNepicId: '01-v1', architects: [arch1] });
+    const snap2 = makeSnapshot({ activeNepicId: '02-ttt', architects: [arch2] });
+
+    // Load v1, focus a napkin card
+    useNapStore.getState().applySnapshot(snap1);
+    useNapStore.getState().expandCard('0100-explore');
+    expect(useNapStore.getState().focusedCardSlug).toBe('0100-explore');
+
+    // Switch to v2 — v1's focused card saved
+    useNapStore.getState().applySnapshot(snap2);
+    expect(useNapStore.getState().focusedCardSlug).toBe('uuid-v2-arch');
+
+    // Switch back to v1 — restores '0100-explore'
+    useNapStore.getState().applySnapshot(snap1);
+    expect(useNapStore.getState().focusedCardSlug).toBe('0100-explore');
+    expect(useNapStore.getState().cardViewMode).toBe('focused');
+  });
+
+  it('same-nepic snapshot does not change focusedCardSlug', () => {
+    const arch = makeAgent({ id: 'uuid-arch', role: 'architect', started: true, running: true });
+
+    useNapStore.getState().applySnapshot(makeSnapshot({
+      activeNepicId: '01-v1',
+      architects: [arch],
+    }));
+    useNapStore.getState().expandCard('my-napkin');
+
+    // Another snapshot for same nepic
+    useNapStore.getState().applySnapshot(makeSnapshot({
+      activeNepicId: '01-v1',
+      architects: [arch],
+    }));
+
+    expect(useNapStore.getState().focusedCardSlug).toBe('my-napkin');
+  });
+
+  it('round-trip preserves focused cards for both nepics', () => {
+    const arch1 = makeAgent({ id: 'uuid-v1-arch', role: 'architect', started: true, running: true });
+    const arch2 = makeAgent({ id: 'uuid-v2-arch', role: 'architect', started: true, running: true });
+    const snap1 = makeSnapshot({ activeNepicId: '01-v1', architects: [arch1] });
+    const snap2 = makeSnapshot({ activeNepicId: '02-ttt', architects: [arch2] });
+
+    // v1: focus napkin-a
+    useNapStore.getState().applySnapshot(snap1);
+    useNapStore.getState().expandCard('napkin-a');
+
+    // v2: focus napkin-b
+    useNapStore.getState().applySnapshot(snap2);
+    useNapStore.getState().expandCard('napkin-b');
+
+    // Back to v1
+    useNapStore.getState().applySnapshot(snap1);
+    expect(useNapStore.getState().focusedCardSlug).toBe('napkin-a');
+
+    // Back to v2
+    useNapStore.getState().applySnapshot(snap2);
+    expect(useNapStore.getState().focusedCardSlug).toBe('napkin-b');
+  });
+});

@@ -38,12 +38,14 @@ export interface NapStore {
   setDebugPanelTab: (tab: 'model' | 'filesystem' | 'events') => void;
 }
 
-// Per-nepic last-active terminal memory (renderer-only, not persisted)
+// Per-nepic renderer state memory (not persisted)
 const nepicTerminalMemory = new Map<string, string>();
+const nepicFocusedCardMemory = new Map<string, string>();
 
-/** Test-only: clear per-nepic terminal memory between tests */
+/** Test-only: clear per-nepic memory between tests */
 export function _resetNepicTerminalMemory(): void {
   nepicTerminalMemory.clear();
+  nepicFocusedCardMemory.clear();
 }
 
 export const useNapStore = create<NapStore>((set, get) => ({
@@ -68,9 +70,14 @@ export const useNapStore = create<NapStore>((set, get) => ({
     const prev = get();
     const nepicChanged = snapshot.activeNepicId !== prev.activeNepicId && prev.activeNepicId !== '';
 
-    // Save current terminal for the old nepic before switching
-    if (nepicChanged && prev.activeTerminalId && prev.activeNepicId) {
-      nepicTerminalMemory.set(prev.activeNepicId, prev.activeTerminalId);
+    // Save current state for the old nepic before switching
+    if (nepicChanged && prev.activeNepicId) {
+      if (prev.activeTerminalId) {
+        nepicTerminalMemory.set(prev.activeNepicId, prev.activeTerminalId);
+      }
+      if (prev.focusedCardSlug) {
+        nepicFocusedCardMemory.set(prev.activeNepicId, prev.focusedCardSlug);
+      }
     }
 
     const updates: Partial<NapStore> = {
@@ -81,16 +88,26 @@ export const useNapStore = create<NapStore>((set, get) => ({
       watcherEvents: snapshot.watcherEvents ?? [],
     };
 
-    // On nepic switch, restore last terminal or pick architect
+    // On nepic switch, restore last terminal + focused card or pick architect
     if (nepicChanged) {
       const remembered = nepicTerminalMemory.get(snapshot.activeNepicId);
       if (remembered) {
         updates.activeTerminalId = remembered;
       } else {
-        // Default to first running architect, or first started architect
         const arch = snapshot.architects.find(a => a.running)
           ?? snapshot.architects.find(a => a.started);
         updates.activeTerminalId = arch?.id ?? null;
+      }
+
+      const rememberedCard = nepicFocusedCardMemory.get(snapshot.activeNepicId);
+      if (rememberedCard) {
+        updates.focusedCardSlug = rememberedCard;
+        updates.cardViewMode = 'focused';
+      } else {
+        // Default: focus the architect card
+        const arch = snapshot.architects[0];
+        updates.focusedCardSlug = arch?.id ?? null;
+        updates.cardViewMode = arch ? 'focused' : 'collapsed';
       }
     }
 
