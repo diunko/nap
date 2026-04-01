@@ -30,6 +30,7 @@ Commands:
   peek <name>                   Focus agent terminal in UI
   log <name>                    Dump terminal scrollback
   stop <name>                   Stop an agent
+  import-agents <nepic-dir>     Import existing agent dirs as archived
 
 Flags:
   --help                        Show help
@@ -137,6 +138,13 @@ Dump terminal scrollback to stdout.
 Stop an agent's process.
 
   name              Agent name
+  --help            Show this help
+`,
+  'import-agents': `Usage: nap3 import-agents <nepic-dir>
+
+Import existing agent dirs (with prompt.md/response.md but no markers) as archived.
+
+  nepic-dir         Path to nepic directory (e.g. .nap/nepics/01-v1)
   --help            Show this help
 `,
 };
@@ -880,6 +888,110 @@ async function main(): Promise<void> {
         process.stderr.write(String(res['message']) + '\n');
         process.exit(1);
       }
+      break;
+    }
+
+    case 'import-agents': {
+      if (!args[0]) {
+        process.stderr.write('Usage: nap3 import-agents <nepic-dir>\n');
+        process.exit(1);
+      }
+
+      const nepicDir = path.resolve(args[0]);
+      if (!fs.existsSync(nepicDir)) {
+        process.stderr.write(`not found: ${nepicDir}\n`);
+        process.exit(1);
+      }
+
+      let imported = 0;
+
+      // Infer role from dir name: strip numeric prefix + first dash
+      // "001-test-arch" → "test-arch", "002-fs-eng" → "fs-eng"
+      function inferRole(dirName: string): string {
+        return dirName.replace(/^\d+-/, '');
+      }
+
+      // Scan 30-napkins/*/agents/*/
+      const napkinsDir = path.join(nepicDir, '30-napkins');
+      if (fs.existsSync(napkinsDir)) {
+        const napkinSlugs = fs.readdirSync(napkinsDir, { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .map(d => d.name);
+
+        for (const napkinSlug of napkinSlugs) {
+          const agentsDir = path.join(napkinsDir, napkinSlug, 'agents');
+          if (!fs.existsSync(agentsDir)) continue;
+
+          const agentDirs = fs.readdirSync(agentsDir, { withFileTypes: true })
+            .filter(d => d.isDirectory());
+
+          for (const agentDir of agentDirs) {
+            const agentPath = path.join(agentsDir, agentDir.name);
+            const markerPath = path.join(agentPath, '.agent.nap.json');
+
+            // Skip if marker already exists
+            if (fs.existsSync(markerPath)) continue;
+
+            // Check if it looks like an agent dir (has prompt.md or response.md)
+            const hasPrompt = fs.existsSync(path.join(agentPath, 'prompt.md'));
+            const hasResponse = fs.existsSync(path.join(agentPath, 'response.md'));
+            if (!hasPrompt && !hasResponse) continue;
+
+            // Create marker
+            const marker = {
+              cc_session_uuid: crypto.randomUUID(),
+              role: inferRole(agentDir.name),
+              name: agentDir.name,
+              napkin: napkinSlug,
+              nepic: path.basename(nepicDir),
+              archived: true,
+              started: false,
+              created_at: Date.now(),
+            };
+
+            fs.writeFileSync(markerPath, JSON.stringify(marker, null, 2));
+            imported++;
+            process.stdout.write(`  ${napkinSlug}/agents/${agentDir.name} → ${marker.role} (archived)\n`);
+          }
+        }
+      }
+
+      // Scan 20-architects/*/
+      const architectsDir = path.join(nepicDir, '20-architects');
+      if (fs.existsSync(architectsDir)) {
+        const archDirs = fs.readdirSync(architectsDir, { withFileTypes: true })
+          .filter(d => d.isDirectory());
+
+        for (const archDir of archDirs) {
+          const archPath = path.join(architectsDir, archDir.name);
+          const markerPath = path.join(archPath, '.agent.nap.json');
+
+          // Skip if marker already exists
+          if (fs.existsSync(markerPath)) continue;
+
+          // Check if it looks like an agent dir
+          const hasPrompt = fs.existsSync(path.join(archPath, 'prompt.md'));
+          const hasResponse = fs.existsSync(path.join(archPath, 'response.md'));
+          if (!hasPrompt && !hasResponse) continue;
+
+          // Create marker
+          const marker = {
+            cc_session_uuid: crypto.randomUUID(),
+            role: 'architect',
+            name: archDir.name,
+            nepic: path.basename(nepicDir),
+            archived: true,
+            started: false,
+            created_at: Date.now(),
+          };
+
+          fs.writeFileSync(markerPath, JSON.stringify(marker, null, 2));
+          imported++;
+          process.stdout.write(`  20-architects/${archDir.name} → architect (archived)\n`);
+        }
+      }
+
+      process.stdout.write(`Imported ${imported} agent(s) as archived.\n`);
       break;
     }
 
