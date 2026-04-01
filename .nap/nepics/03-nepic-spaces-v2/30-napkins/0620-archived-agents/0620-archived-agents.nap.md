@@ -49,6 +49,13 @@
   * // decision: use same grayed out hollow border as exited
   * label: "archived" in dim text
 
+* bug: pty:resume (click) has no dead-session detection
+  * problem: click-resume path in main.ts has no detection for dead sessions
+  * resume failure detection only exists in startAgents (startup coordinator)
+  * clicking a non-archived agent with dead session → empty terminal, blinking cursor
+  * fix: add same detection to pty:resume (fast exit + "No conversation found")
+  * on detection → mark agent archived → show successor prompt
+
 * done criteria
   * archived flag in marker, model skips on auto-resume
   * resume failure detected → successor prompt shown in terminal
