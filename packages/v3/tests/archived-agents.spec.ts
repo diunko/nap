@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
+import * as path from 'path';
 import * as fs from 'fs';
 import {
   launchApp,
   cleanupApp,
   makeTmpDir,
   createTestNepicDir,
+  F8_FIXTURE,
 } from './helpers';
 import { F16_FIXTURE } from './fixtures';
 
@@ -171,6 +173,92 @@ test('T-0620-57: archived agents appear in sidebar with correct dot style', asyn
     });
     expect(archivedArch).toBeDefined();
     expect(archivedArch.archived).toBe(true);
+  } finally {
+    await cleanupApp(app, tmpDir);
+  }
+});
+
+// ── T-0620-31: Resume failure → agent marked archived (Path B detection) ──
+
+test('T-0620-31: resume fails with "No conversation found" → agent marked archived', async () => {
+  tmpDir = makeTmpDir();
+  const nepicDir = createTestNepicDir(tmpDir, F8_FIXTURE);
+  const app = await launchApp(tmpDir);
+
+  try {
+    const page = await app.firstWindow();
+
+    // Wait for uuid-ta to be running (it's started+!exited → gets resumed)
+    await page.waitForFunction(
+      () => {
+        const s = (window as any).__napStore__?.getState();
+        return s?.napkins?.[0]?.agents?.some(
+          (a: any) => a.id === 'uuid-ta' && a.running === true,
+        );
+      },
+      {},
+      { timeout: 15000 },
+    );
+
+    // Wait for the terminal to be marked ready in the pty manager.
+    // This is critical: markReady flushes the output buffer to the renderer.
+    // If we write+kill before ready, the buffer still exists and detection
+    // works even with the bug (false pass).
+    const isReady = await app.evaluate(async () => {
+      const ptyManager = (global as any).__napPtyManager__;
+      for (let i = 0; i < 50; i++) {
+        if ((ptyManager as any).readyTerminals?.has('uuid-ta')) return true;
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return false;
+    });
+    expect(isReady).toBe(true);
+
+    // Write the error message to stdin. cat echoes it → output arrives at pty.
+    // After markReady, output goes to renderer AND detection buffer (fix).
+    // Without the fix, output only goes to renderer — detection buffer empty.
+    await app.evaluate(async () => {
+      const ptyManager = (global as any).__napPtyManager__;
+      ptyManager.write('uuid-ta', 'No conversation found with session ID: uuid-ta\n');
+    });
+
+    // Let cat echo the output back
+    await page.waitForTimeout(500);
+
+    // Kill the pty — triggers exit handler with fast timing + matching output
+    await app.evaluate(async () => {
+      const ptyManager = (global as any).__napPtyManager__;
+      ptyManager.kill('uuid-ta');
+    });
+
+    // Wait for the agent to be marked archived (not just exited)
+    await page.waitForFunction(
+      () => {
+        const s = (window as any).__napStore__?.getState();
+        const agent = s?.napkins?.[0]?.agents?.find((a: any) => a.id === 'uuid-ta');
+        return agent?.archived === true;
+      },
+      {},
+      { timeout: 10000 },
+    );
+
+    // Verify the agent is archived, not just exited
+    const agentState = await page.evaluate(() => {
+      const s = (window as any).__napStore__.getState();
+      const agent = s.napkins[0].agents.find((a: any) => a.id === 'uuid-ta');
+      return { archived: agent?.archived, exited: agent?.exited, running: agent?.running };
+    });
+
+    expect(agentState.archived).toBe(true);
+    expect(agentState.running).toBe(false);
+
+    // Verify the marker on disk has archived=true
+    const markerPath = path.join(
+      nepicDir,
+      '30-napkins/0100-explore/agents/001-test-arch/.agent.nap.json',
+    );
+    const marker = JSON.parse(fs.readFileSync(markerPath, 'utf-8'));
+    expect(marker.archived).toBe(true);
   } finally {
     await cleanupApp(app, tmpDir);
   }
