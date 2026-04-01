@@ -16,10 +16,14 @@ export class FakePtySpawner implements PtySpawner {
   spawned: { id: string; command: string; cwd: string }[] = [];
   private running = new Set<string>();
   private exitCallbacks = new Map<string, (exitCode: number) => void | Promise<void>>();
+  private outputBuffers = new Map<string, string>();
+  private spawnTimes = new Map<string, number>();
 
   spawn(opts: { id: string; command: string; cwd: string }): void {
     this.spawned.push(opts);
     this.running.add(opts.id);
+    this.spawnTimes.set(opts.id, Date.now());
+    this.outputBuffers.set(opts.id, '');
   }
 
   kill(id: string): void {
@@ -66,5 +70,27 @@ export class FakePtySpawner implements PtySpawner {
       }
       this.exitCallbacks.delete(id);
     }
+  }
+
+  /** Test-only: inject output data into the buffer */
+  simulateOutput(id: string, data: string): void {
+    const existing = this.outputBuffers.get(id) ?? '';
+    this.outputBuffers.set(id, existing + data);
+  }
+
+  /** Get the output buffer for a pty */
+  getOutputBuffer(id: string): string {
+    return this.outputBuffers.get(id) ?? '';
+  }
+
+  /** Get spawn time for a pty */
+  getSpawnTime(id: string): number | undefined {
+    return this.spawnTimes.get(id);
+  }
+
+  /** Check if a spawn command was a --resume */
+  isResumeCommand(id: string): boolean {
+    const entry = this.spawned.find(s => s.id === id);
+    return entry ? entry.command.includes('--resume') : false;
   }
 }

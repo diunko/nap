@@ -2,6 +2,12 @@ import type { NapModel } from './model';
 import type { PtySpawner } from './pty-spawner';
 import { computeResumeActions } from './resume';
 
+/** Threshold for fast-exit detection (same as v2 main.ts:191) */
+const RESUME_FAIL_THRESHOLD_MS = 5000;
+
+// Track resume spawn times so exit handlers can detect failed resumes
+const resumeSpawnTimes = new Map<string, number>();
+
 /**
  * STOP→RUN: compute resume decisions, spawn ptys, update model.
  */
@@ -14,6 +20,11 @@ export async function startAgents(model: NapModel, ptySpawner: PtySpawner): Prom
     // Skip agents whose ptys are already running (e.g., after nepic switch)
     if (ptySpawner.isRunning(decision.agentId)) continue;
 
+    // Track resume spawn time for fast-exit detection
+    if (decision.action === 'resume') {
+      resumeSpawnTimes.set(decision.agentId, Date.now());
+    }
+
     ptySpawner.spawn({
       id: decision.agentId,
       command: decision.command!,
@@ -21,7 +32,24 @@ export async function startAgents(model: NapModel, ptySpawner: PtySpawner): Prom
     });
 
     // Register exit handler — fires when pty dies on its own (NOT on quit)
-    ptySpawner.onExit(decision.agentId, () => {
+    ptySpawner.onExit(decision.agentId, async () => {
+      const spawnTime = resumeSpawnTimes.get(decision.agentId);
+      resumeSpawnTimes.delete(decision.agentId);
+
+      // Resume failure detection: fast exit + was --resume + "No conversation found"
+      if (
+        decision.action === 'resume' &&
+        spawnTime &&
+        (Date.now() - spawnTime) < RESUME_FAIL_THRESHOLD_MS
+      ) {
+        // Check output buffer for the dead session message
+        const output = (ptySpawner as any).getOutputBuffer?.(decision.agentId) ?? '';
+        if (output.includes('No conversation found')) {
+          await model.setAgentArchived(decision.agentId);
+          return;
+        }
+      }
+
       return model.setAgentExitedById(decision.agentId);
     });
 
@@ -33,6 +61,9 @@ export async function startAgents(model: NapModel, ptySpawner: PtySpawner): Prom
     }
   }
 }
+
+/** Exposed for testing */
+export { RESUME_FAIL_THRESHOLD_MS };
 
 /**
  * RUN→STOP: save UI state, disconnect exit handlers, kill ptys.

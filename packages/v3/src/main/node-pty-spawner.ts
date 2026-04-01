@@ -9,6 +9,7 @@ export class NodePtySpawner implements PtySpawner {
   private processes = new Map<string, pty.IPty>();
   private exitCallbacks = new Map<string, (exitCode: number) => void | Promise<void>>();
   private outputBuffers = new Map<string, string[]>();
+  private lastOutputBuffers = new Map<string, string>();
   private readyTerminals = new Set<string>();
   private dataHandler: ((id: string, data: string) => void) | null = null;
   private exitNotifier: ((id: string, exitCode: number) => void) | null = null;
@@ -61,6 +62,12 @@ export class NodePtySpawner implements PtySpawner {
     });
 
     proc.onExit(({ exitCode }: { exitCode: number }) => {
+      // Save output buffer before deletion — needed for resume failure detection
+      const buffer = this.outputBuffers.get(id);
+      if (buffer) {
+        this.lastOutputBuffers.set(id, buffer.join(''));
+      }
+
       this.processes.delete(id);
       this.outputBuffers.delete(id);
       this.readyTerminals.delete(id);
@@ -71,6 +78,9 @@ export class NodePtySpawner implements PtySpawner {
         cb(exitCode);
         this.exitCallbacks.delete(id);
       }
+
+      // Clean up after exit handler has run
+      this.lastOutputBuffers.delete(id);
 
       // Renderer notification
       this.exitNotifier?.(id, exitCode);
@@ -110,6 +120,16 @@ export class NodePtySpawner implements PtySpawner {
   }
 
   // ── Extended methods for real pty management ──
+
+  /** Get the output buffer for resume failure detection */
+  getOutputBuffer(id: string): string {
+    // Check lastOutputBuffers first (available during exit handler)
+    const last = this.lastOutputBuffers.get(id);
+    if (last !== undefined) return last;
+    // Fall back to live buffer
+    const buffer = this.outputBuffers.get(id);
+    return buffer ? buffer.join('') : '';
+  }
 
   /** Signal that a terminal is ready to receive data — flushes buffer */
   markReady(id: string): void {
