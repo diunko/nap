@@ -78,9 +78,17 @@ Launched by architect via `nap start`. Gets its own context window.
 
 Reads spec + test.md. Writes code shaped so the tests are possible — proper APIs, module boundaries, injectable dependencies.
 
+Also builds test infrastructure: fakes (FakeFileSystem, FakePtySpawner, FakeBridge), fixture helpers, test utility functions. These are architecture, not tests — they enable the TE to write tests without building plumbing.
+
+May write a few smoke tests to validate own work during development. But the full test suite is the TE's job. The TA's test spec is a contract — the fs-eng builds code that makes those tests possible, the TE implements them.
+
 ### 4. Tests (test-eng agent)
 
-Reads test.md + the code. Writes actual test code. Runs it. Reports failures.
+Reads test.md + the code + the fs-eng's test infrastructure. Implements ALL test cases from the TA's spec — both small (vitest) and medium (Playwright). The TA's spec is a contract, not a menu.
+
+The TE validates the code with fresh eyes. They didn't build it — they test it. If the code doesn't match what the TA spec'd, they find the gap. If the fs-eng's API is hard to test, that's a signal.
+
+The TE implements tests independently. They don't ask the fs-eng "how should I test this?" — they read the TA's cases and figure it out from the code. Inconsistencies found this way are real bugs.
 
 ### 5. Iterate
 
