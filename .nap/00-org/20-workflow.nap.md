@@ -59,9 +59,15 @@ ln -s ../../30-napkins/0100-feature 40-board/60-done/0100-feature
 
 **Who moves symlinks:** the architect, as part of the workflow. When SQLite lands (M1), the app automates this.
 
-## The happy path
+## Two flows: features and bug fixes
 
-### 1. Napkin → spec (architect + human)
+Features and bug fixes have different pipelines. Don't mix them.
+
+---
+
+## Feature flow
+
+### 1. Napkin → spec + stories (architect + human)
 
 Architect reads the napkin. Writes:
 - `NNNN-feature.spec.md` — min spec, only constraints the implementer can't derive
@@ -93,6 +99,33 @@ The TE implements tests independently. They don't ask the fs-eng "how should I t
 ### 5. Iterate
 
 Test eng reports failures → fullstack eng fixes → test eng re-runs. Loop until green.
+
+---
+
+## Bug fix flow
+
+Different pipeline. Shorter. Test-driven.
+
+### 1. Bug napkin (architect + human)
+
+Human reports the bug. Architect writes a napkin:
+- `NNNN-bugname.nap.md` — what the user sees, what's expected, which code paths are involved
+- Architect traces the flow, identifies likely root cause
+- Human and architect align on the fix approach
+
+### 2. Fix (fullstack-eng agent)
+
+One agent, test-driven:
+1. **Research** — read the code, understand the flow, find the root cause
+2. **Reproduce** — write a test that catches the bug. Run it. It must FAIL.
+3. **Fix** — implement the fix. Run the test. It must PASS.
+4. **Verify** — run all tests. Nothing else broke.
+
+The reproduction test is the proof. No test = no fix.
+
+### 3. Review
+
+Architect reads the response, verifies the fix, checks the test makes sense. If the bug is in a complex area, optionally launch a TE to add more test coverage around the fix.
 
 ## IMPORTANT: Two ways to use agents
 
