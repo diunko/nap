@@ -38,6 +38,9 @@ export interface NapStore {
   setDebugPanelTab: (tab: 'model' | 'filesystem' | 'events') => void;
 }
 
+// Per-nepic last-active terminal memory (renderer-only, not persisted)
+const nepicTerminalMemory = new Map<string, string>();
+
 export const useNapStore = create<NapStore>((set, get) => ({
   napkins: [],
   architects: [],
@@ -57,13 +60,36 @@ export const useNapStore = create<NapStore>((set, get) => ({
 
   // Snapshot only updates model state — renderer-only state preserved
   applySnapshot: (snapshot: AppSnapshot) => {
-    set({
+    const prev = get();
+    const nepicChanged = snapshot.activeNepicId !== prev.activeNepicId && prev.activeNepicId !== '';
+
+    // Save current terminal for the old nepic before switching
+    if (nepicChanged && prev.activeTerminalId && prev.activeNepicId) {
+      nepicTerminalMemory.set(prev.activeNepicId, prev.activeTerminalId);
+    }
+
+    const updates: Partial<NapStore> = {
       napkins: snapshot.napkins,
       architects: snapshot.architects,
       activeNepicId: snapshot.activeNepicId,
       nepics: snapshot.nepics ?? [],
       watcherEvents: snapshot.watcherEvents ?? [],
-    });
+    };
+
+    // On nepic switch, restore last terminal or pick architect
+    if (nepicChanged) {
+      const remembered = nepicTerminalMemory.get(snapshot.activeNepicId);
+      if (remembered) {
+        updates.activeTerminalId = remembered;
+      } else {
+        // Default to first running architect, or first started architect
+        const arch = snapshot.architects.find(a => a.running)
+          ?? snapshot.architects.find(a => a.started);
+        updates.activeTerminalId = arch?.id ?? null;
+      }
+    }
+
+    set(updates);
   },
 
   setActiveTerminal: (id: string) => {
