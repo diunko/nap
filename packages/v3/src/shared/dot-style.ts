@@ -28,9 +28,15 @@ export interface DotInput {
   running: boolean;
   done: boolean;
   exited: boolean;
+  archived?: boolean;
 }
 
 export function dotStyle(input: DotInput): DotStyle {
+  // Archived: gray hollow (same visual as exited)
+  if (input.archived) {
+    return { color: EXITED_COLOR, shape: 'hollow' };
+  }
+
   // Exited overrides role color — all exited dots are gray hollow
   if (input.exited && !input.done) {
     return { color: EXITED_COLOR, shape: 'hollow' };

@@ -23,11 +23,13 @@ function AgentDot({ agent, size = 8 }: { agent: AgentState; size?: number }) {
     running: agent.running,
     done: agent.done,
     exited: agent.exited,
+    archived: agent.archived,
   });
 
   const hollow = style.shape === 'hollow';
   const dashed = style.shape === 'dashed-check';
   const actualSize = hollow ? size - 1 : size;
+  const clickable = agent.started || agent.archived;
 
   return (
     <span
@@ -35,7 +37,7 @@ function AgentDot({ agent, size = 8 }: { agent: AgentState; size?: number }) {
       title={`${agent.name} (${agent.role})`}
       onClick={(e) => {
         e.stopPropagation();
-        if (agent.started) setActiveTerminal(agent.id);
+        if (clickable) setActiveTerminal(agent.id);
       }}
       style={{
         display: 'inline-flex',
@@ -52,7 +54,7 @@ function AgentDot({ agent, size = 8 }: { agent: AgentState; size?: number }) {
         border: `2px ${dashed ? 'dashed' : 'solid'} ${hollow || dashed ? style.color : 'transparent'}`,
         marginRight: 4,
         verticalAlign: 'middle',
-        cursor: agent.started ? 'pointer' : 'default',
+        cursor: clickable ? 'pointer' : 'default',
         animation: agent.running ? 'pulse 2s ease-in-out infinite' : 'none',
       }}
     >
@@ -314,14 +316,14 @@ function NapkinCard({
                 data-testid="browser-agent"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (agent.started) setActiveTerminal(agent.id);
+                  if (agent.started || agent.archived) setActiveTerminal(agent.id);
                 }}
                 style={{
                   padding: '1px 0 1px 16px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  cursor: agent.started ? 'pointer' : 'default',
+                  cursor: (agent.started || agent.archived) ? 'pointer' : 'default',
                   borderRadius: 3,
                 }}
                 onMouseEnter={(e) =>
@@ -344,14 +346,14 @@ function NapkinCard({
                   {agent.name}/
                 </span>
                 <span style={{ color: roleColor(agent.role), fontSize: 12, flexShrink: 0 }}>
-                  {agent.exited ? 'exited' : agent.done ? 'done' : agent.running ? 'run' : 'wait'}
+                  {agent.archived ? 'archived' : agent.exited ? 'exited' : agent.done ? 'done' : agent.running ? 'run' : 'wait'}
                 </span>
               </div>
 
               {/* Extended view: [terminal] + agent files */}
               {showExtended && (
                 <>
-                  {agent.started && (
+                  {(agent.started || agent.archived) && (
                     <div
                       data-testid="terminal-entry"
                       style={{
@@ -428,9 +430,11 @@ function ArchitectCard({
     : architect.done ? '#3b82f6'
     : '#6b7280';
 
+  const archClickable = architect.running || architect.started || architect.archived;
+
   function handleClick() {
     expandCard(architect.id);
-    if (architect.running || architect.started) setActiveTerminal(architect.id);
+    if (archClickable) setActiveTerminal(architect.id);
   }
 
   return (
@@ -438,7 +442,7 @@ function ArchitectCard({
       data-testid="architect-card"
       style={{
         padding: '0 12px 0 9px',
-        cursor: (architect.running || architect.started) ? 'pointer' : 'default',
+        cursor: archClickable ? 'pointer' : 'default',
         background: isFocused ? '#37373d' : 'transparent',
         borderLeft: isFocused ? '3px solid #007acc' : '3px solid transparent',
         transition: 'background 0.15s',
@@ -477,7 +481,7 @@ function ArchitectCard({
           <AgentDot agent={architect} />
         </span>
         <span style={{ color: labelColor, fontSize: 12, flexShrink: 0 }}>
-          {architect.running ? 'lead' : architect.done ? 'done' : 'exited'}
+          {architect.archived ? 'archived' : architect.running ? 'lead' : architect.done ? 'done' : 'exited'}
         </span>
       </div>
 
@@ -485,7 +489,7 @@ function ArchitectCard({
       {isFocused && architect.entries.length > 0 && (
         <div style={{ padding: '0 0 4px 0' }}>
           {/* [terminal] entry */}
-          {architect.started && (
+          {(architect.started || architect.archived) && (
             <div
               data-testid="terminal-entry"
               style={{

@@ -15,6 +15,10 @@ export interface ResumeAction {
  */
 export function computeResumeActions(agents: AgentState[]): ResumeAction[] {
   return agents.map((agent) => {
+    // Archived agents always skip — checked BEFORE started/exited
+    if (agent.archived) {
+      return { agentId: agent.id, action: 'skip' as const };
+    }
     if (agent.exited) {
       return { agentId: agent.id, action: 'skip' as const };
     }
