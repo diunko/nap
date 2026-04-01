@@ -65,7 +65,7 @@ ln -s ../../30-napkins/0100-feature 40-board/60-done/0100-feature
 
 Architect reads the napkin. Writes:
 - `NNNN-feature.spec.md` — min spec, only constraints the implementer can't derive
-- `NNNN-feature.journeys.md` — concrete developer/user journeys
+- `NNNN-feature.stories.md` — user stories in napkin format. Each story: what the human does, what they see, which components interact. Bridges human perspective with technical reality. The TA uses these to design journey tests.
 
 ### 2. Spec → test architecture (test-architect agent)
 

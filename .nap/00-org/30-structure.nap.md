@@ -100,5 +100,5 @@ Role and subject in the name:
 |---|---|
 | `.nap.md` | Napkin — compressed idea anchors |
 | `.spec.md` | Min spec — why, what, constraints the implementer can't derive |
-| `.journeys.md` | Developer/user journeys |
+| `.stories.md` | User stories — what the human does + which components interact |
 | `.test.md` | Test architecture — strategic test cases |
