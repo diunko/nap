@@ -54,6 +54,7 @@ export interface StatusResult {
   done?: boolean;
   exited?: boolean;
   started?: boolean;
+  archived?: boolean;
   role?: string;
   napkin?: string | null;
   sessionId?: string;
@@ -90,6 +91,8 @@ export interface NapModel {
   setAgentRunning(agentId: string, running: boolean): void;
   setAgentDone(agentId: string): void;
   setAgentStarted(agentId: string): Promise<void>;
+  setAgentArchived(agentId: string): Promise<void>;
+  spawnSuccessor(agentId: string, ptySpawner: PtySpawner): Promise<string | null>;
   setNapkinStatus(slug: string, status: string): Promise<void>;
   saveUiState(state: unknown): Promise<void>;
 
@@ -204,6 +207,7 @@ export function createModel(fs: FileSystem): NapModel {
         exited?: boolean;
         started?: boolean;
         done?: boolean;
+        archived?: boolean;
         parent?: string | null;
         parent_id?: string | null;
         napkin?: string;
@@ -224,6 +228,7 @@ export function createModel(fs: FileSystem): NapModel {
         exited: marker?.exited ?? false,
         running: false,
         done: marker?.done ?? false,
+        archived: marker?.archived ?? false,
         homePath: agentPath,
         entries: agentEntries,
       });
@@ -302,6 +307,7 @@ export function createModel(fs: FileSystem): NapModel {
           exited?: boolean;
           started?: boolean;
           done?: boolean;
+          archived?: boolean;
           parent?: string | null;
           parent_id?: string | null;
           nepic?: string;
@@ -322,6 +328,7 @@ export function createModel(fs: FileSystem): NapModel {
             exited: marker.exited ?? false,
             running: false,
             done: marker.done ?? false,
+            archived: marker.archived ?? false,
             homePath: archPath,
             entries: archEntries,
           });
@@ -438,6 +445,7 @@ export function createModel(fs: FileSystem): NapModel {
         exited: false,
         running: false,
         done: false,
+        archived: false,
         homePath: agentHomePath,
         entries: [],
       });
@@ -531,6 +539,68 @@ export function createModel(fs: FileSystem): NapModel {
     const updated = { ...existing, started: true };
     hasPendingWrite = true;
     await fs.writeJSON(markerPath, updated);
+  }
+
+  async function setAgentArchived(agentId: string): Promise<void> {
+    const agent = findAgentById(agentId);
+    if (!agent) return;
+
+    agent.archived = true;
+    agent.running = false;
+    runningAgents.delete(agentId);
+    notify();
+
+    const markerPath = agent.homePath + '/.agent.nap.json';
+    const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
+    const updated = { ...existing, archived: true };
+    hasPendingWrite = true;
+    await fs.writeJSON(markerPath, updated);
+  }
+
+  async function spawnSuccessor(agentId: string, ptySpawner: PtySpawner): Promise<string | null> {
+    const agent = findAgentById(agentId);
+    if (!agent) return null;
+
+    const newId = crypto.randomUUID();
+    const prompt = generateSuccessorPrompt(agent);
+
+    // Spawn fresh Claude with generated prompt as first message
+    const command = `claude --verbose --session-id ${newId} '${prompt.replace(/'/g, "'\\''")}'`;
+    ptySpawner.spawn({ id: newId, command, cwd: '' });
+
+    ptySpawner.onExit(newId, () => {
+      return setAgentExitedById(newId);
+    });
+
+    // Update agent in-memory: new UUID, clear archived, mark done+started+running
+    const oldId = agent.id;
+    agent.id = newId;
+    agent.archived = false;
+    agent.done = true;
+    agent.exited = false;
+    agent.started = true;
+    agent.running = true;
+    runningAgents.delete(oldId);
+    doneAgents.delete(oldId);
+    runningAgents.add(newId);
+    doneAgents.add(newId);
+
+    // Write updated marker to disk
+    const markerPath = agent.homePath + '/.agent.nap.json';
+    const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
+    const updated = {
+      ...existing,
+      cc_session_uuid: newId,
+      archived: false,
+      started: true,
+      done: true,
+      exited: false,
+    };
+    hasPendingWrite = true;
+    await fs.writeJSON(markerPath, updated);
+
+    notify();
+    return newId;
   }
 
   async function setNapkinStatus(slug: string, status: string): Promise<void> {
@@ -655,6 +725,7 @@ export function createModel(fs: FileSystem): NapModel {
       exited: false,
       running: false,
       done: false,
+      archived: false,
       homePath: agentHomePath,
       entries: [],
     };
@@ -702,6 +773,7 @@ export function createModel(fs: FileSystem): NapModel {
       exited: false,
       running: false,
       done: false,
+      archived: false,
       homePath: archPath,
       entries: [],
     };
@@ -836,6 +908,7 @@ export function createModel(fs: FileSystem): NapModel {
         done: agent.done,
         exited: agent.exited,
         started: agent.started,
+        archived: agent.archived,
         role: agent.role,
         napkin: agent.napkinId,
         sessionId: agent.id,
@@ -859,6 +932,7 @@ export function createModel(fs: FileSystem): NapModel {
     const allAgents = getAllAgents();
 
     function agentStatus(a: AgentState): string {
+      if (a.archived) return 'archived';
       if (a.exited) return 'exited';
       if (a.done) return 'done';
       if (a.running) return 'running';
@@ -930,6 +1004,8 @@ export function createModel(fs: FileSystem): NapModel {
     setAgentRunning,
     setAgentDone,
     setAgentStarted,
+    setAgentArchived,
+    spawnSuccessor,
     setNapkinStatus,
     saveUiState,
     createNapkin,
@@ -945,6 +1021,33 @@ export function createModel(fs: FileSystem): NapModel {
     getActiveNepicId: () => getNepicSlug(),
     switchNepic: switchNepicFn,
   };
+}
+
+export function generateSuccessorPrompt(agent: AgentState): string {
+  const rolePath = `.nap/00-org/40-roles/${agent.role}.md`;
+  const promptPath = agent.homePath + '/prompt.md';
+  const responsePath = agent.homePath + '/response.md';
+
+  // Find napkin .nap.md path from napkinId
+  let napkinContext = '';
+  if (agent.napkinId) {
+    // Derive napkin dir from agent homePath: .../30-napkins/<slug>/agents/<name> → .../30-napkins/<slug>/<slug>.nap.md
+    const napkinDir = agent.homePath.replace(/\/agents\/[^/]+$/, '');
+    const napMdPath = napkinDir + '/' + agent.napkinId + '.nap.md';
+    napkinContext = `\nRead the napkin for context on the feature vision: ${napMdPath}`;
+  }
+
+  return `You are taking over this work as a successor maintainer.
+
+Read your role: ${rolePath}
+
+Read ${promptPath} — this is what was originally asked of the previous agent.
+
+Read ${responsePath} — this is what the previous agent delivered.
+${napkinContext}
+Explore the code in and around ${agent.homePath} — understand what was built.
+
+You have full context. The human may ask you questions about the work, ask you to fix bugs, or continue the task. Introduce yourself briefly, then wait for instructions.`;
 }
 
 function isValidStatus(s: unknown): s is NapkinStatus {

@@ -47,6 +47,7 @@ export interface AgentState {
   exited: boolean;
   running: boolean;        // ephemeral — pty currently alive
   done: boolean;           // ephemeral — called nap done
+  archived: boolean;       // imported or dead session — needs successor
   homePath: string;
   entries: Entry[];        // home dir files for focused/extended views
 }
