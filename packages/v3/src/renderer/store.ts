@@ -41,6 +41,11 @@ export interface NapStore {
 // Per-nepic last-active terminal memory (renderer-only, not persisted)
 const nepicTerminalMemory = new Map<string, string>();
 
+/** Test-only: clear per-nepic terminal memory between tests */
+export function _resetNepicTerminalMemory(): void {
+  nepicTerminalMemory.clear();
+}
+
 export const useNapStore = create<NapStore>((set, get) => ({
   napkins: [],
   architects: [],
