@@ -3,7 +3,7 @@ import { join } from 'path';
 import { createModel } from './model';
 import { NodeFileSystem } from './filesystem';
 import { NodePtySpawner } from './node-pty-spawner';
-import { startAgents } from './coordinators';
+import { startAgents, RESUME_FAIL_THRESHOLD_MS } from './coordinators';
 import { startSocketServer, stopSocketServer } from './socket-server';
 import { createRequestHandler } from './socket-handler';
 import { setWriter } from './message-queue';
@@ -140,13 +140,23 @@ app.whenReady().then(async () => {
     // Archived agents don't resume — they need the successor flow
     if (agent.archived) return;
 
+    const spawnTime = Date.now();
+
     ptySpawner.spawn({
       id: agent.id,
       command: `claude --verbose --resume ${agent.id}`,
       cwd: '',
     });
 
-    ptySpawner.onExit(agent.id, () => {
+    ptySpawner.onExit(agent.id, async () => {
+      // Resume failure detection: fast exit + "No conversation found"
+      if ((Date.now() - spawnTime) < RESUME_FAIL_THRESHOLD_MS) {
+        const output = (ptySpawner as any).getOutputBuffer?.(agent.id) ?? '';
+        if (output.includes('No conversation found')) {
+          await model.setAgentArchived(agent.id);
+          return;
+        }
+      }
       return model.setAgentExitedById(agent.id);
     });
 
