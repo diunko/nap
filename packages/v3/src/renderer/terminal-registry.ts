@@ -1,5 +1,4 @@
 import { Terminal } from '@xterm/xterm';
-import { CanvasAddon } from '@xterm/addon-canvas';
 import { FitAddon } from '@xterm/addon-fit';
 
 export interface TerminalEntry {
@@ -45,12 +44,7 @@ export function openTerminal(id: string, container: HTMLElement): void {
   entry.terminal.open(container);
   entry.opened = true;
 
-  // Canvas renderer (WebGL removed — simpler, fewer CSP issues)
-  try {
-    entry.terminal.loadAddon(new CanvasAddon());
-  } catch (e) {
-    console.warn('Canvas addon failed, using DOM renderer:', e);
-  }
+  // DOM renderer (Canvas addon removed in xterm 6.0, WebGL has CSP issues)
 }
 
 export function getTerminal(id: string): TerminalEntry | undefined {
