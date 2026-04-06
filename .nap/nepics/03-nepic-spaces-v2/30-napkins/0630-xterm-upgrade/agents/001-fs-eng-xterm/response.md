@@ -18,9 +18,17 @@
 - CSS import path (`@xterm/xterm/css/xterm.css`) unchanged
 - Terminal constructor options unchanged
 
-## Tests
+## Verification: xterm 6.0.0 is actually bundled
+
+npm workspaces hoists deps — the root `node_modules/@xterm/xterm` stays at 5.5.0 (v2's `^5.0.0` constraint). But `packages/v3/node_modules/@xterm/xterm` has 6.0.0. Vite resolves from the package root, so v3 gets 6.0.0.
+
+Confirmed by grepping the built renderer bundle:
+- `xterm-scrollable-element` (6.0-only CSS) **present** in `out/renderer/assets/index-*.css`
+- `xterm-scroll-area` (5.x-only CSS) **absent** from all output files
+
+## Tests (verified against xterm 6.0.0 bundle)
 - **177/177 unit tests pass** (`test:v3:small`)
-- **35/35 e2e tests pass** (`test:v3:medium`)
+- **35/35 e2e tests pass** (`test:v3:medium`) — all 35 including survivability, CLI integration, archived-agents
 - TypeScript typecheck passes with zero errors
 
 ## Scroll bug notes
