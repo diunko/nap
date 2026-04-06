@@ -95,3 +95,17 @@ Ideas with energy.
 * first version: just a well-crafted prompt that launches Claude with the right context
   * no special infrastructure needed — it's a Claude session with file access
   * `nap3 init --migrate` = `claude --verbose "read .nap/00-org/30-structure.nap.md and inspect this project..."`
+
+## migrate v2 to xterm 6.0
+
+* v2 still uses @xterm/xterm ^5.0.0 with @xterm/addon-canvas
+* canvas addon was discontinued in xterm 6.0 — switch to DOM or WebGL renderer
+* aligning both packages on xterm 6.0 eliminates the hoisting split (root gets 5.5.0, v3 gets 6.0.0 locally)
+* lower priority if v2 is being retired
+
+## remove v2
+
+* packages/v2 is legacy — v3 replaces it
+* removing it simplifies the monorepo: one xterm version, cleaner hoisting, fewer deps
+* blocks on: v3 reaching feature parity with anything still used from v2
+* if v2 is removed, the xterm 6.0 migration for v2 becomes unnecessary
