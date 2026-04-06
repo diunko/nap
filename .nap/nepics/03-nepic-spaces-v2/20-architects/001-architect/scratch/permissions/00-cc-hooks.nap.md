@@ -92,6 +92,9 @@
       * no decision in output → passes through to human (dialog shows)
         * // what exactly does it mean?
         * // what about status code? does it matter?
+        * //A: exit 0 + no decision field in JSON = "I have no opinion, ask the human"
+          * //A: exit 0 + allow = approve. exit 0 + deny = reject. exit 0 + nothing = pass through.
+          * //A: exit 2 = always deny (stderr = reason). other exit codes = non-blocking error, ignored.
       * deny rules in settings always override hook allow
       * does NOT fire in non-interactive mode (-p flag)
     * PermissionDenied — after a tool call denied by auto mode classifier
@@ -110,11 +113,19 @@
     * SubagentStop — subagent finished
     * TeammateIdle — agent team teammate about to go idle
     * // tell me more about these
+    * //A: these fire for CC's INTERNAL subagents (Explore, Plan), not NAP-managed agents
+      * //A: NAP agents are external pty processes — CC doesn't know about them as "subagents"
+      * //A: TeammateIdle = CC's "agent team" feature (multiple CC instances collaborating)
+      * //A: not directly useful for NAP unless we bridge CC's internal agent model with ours
 
   * tasks
     * TaskCreated — task being created
     * TaskCompleted — task marked completed
     * // tell me more, what are tasks? is it related to todo lists?
+    * //A: yes — CC has built-in task tracking (TaskCreate, TaskList, TaskUpdate tools)
+      * //A: agents can create tasks to track their own progress
+      * //A: separate from NAP's napkin/status system
+      * //A: could bridge: agent creates CC task → hook notifies NAP → sidebar updates
 
   * completion
     * Stop — CC finishes responding
@@ -122,6 +133,8 @@
       * exit 0 + block: `{ "decision": "block", "reason": "build failed, fix first" }`
       * exit 0 + continue: `{ "continue": true }`
       * // what if non-0 exit?
+      * //A: non-zero (not 2) = non-blocking error, shown in verbose mode only, CC continues normally
+        * //A: exit 2 = blocking error. exit 0 + block decision = the way to prevent CC from finishing
     * StopFailure — turn ends due to API error
 
   * environment
@@ -135,11 +148,18 @@
     * WorktreeCreate — worktree being created
     * WorktreeRemove — worktree being removed
     * // tell me more about payloads here
+    * //A: payload likely includes worktree path + branch name
+      * //A: directly relevant to our wishlist (agent worktrees for isolated development)
+      * //A: if CC creates a worktree, NAP could track it + show in UI + scope [diff] to it
 
   * context
     * PreCompact — before context compaction
     * PostCompact — after context compaction
     * // tell me about payloads
+    * //A: payload likely includes session_id + before/after token counts
+      * //A: relevant for NAP: detect when architect is running low on context
+      * //A: could trigger: "context getting full, consider architect succession"
+      * //A: or just show a warning indicator on the architect's dot/card
 
   * MCP
     * Elicitation — MCP server requests user input
@@ -148,6 +168,15 @@
 * // question: what is that hook that can say:
   * // user input is required (like permissions or smth else, e.g. dialog qith questions, or exit plan mode, or any other interactive dialogue/questionnaire/etc)
   * // or, other, agent's turn is done, waiting for next input
+  * //A: two hooks cover this:
+    * //A: 1. Notification (type: "permission_prompt" | "idle_prompt") — CC needs attention
+      * //A: permission_prompt = "Do you want to proceed?" is showing
+      * //A: idle_prompt = CC finished and waiting for next input
+    * //A: 2. Stop — CC's turn is done, waiting for next human message
+      * //A: this is "agent is idle" — the moment between CC finishing and human typing
+    * //A: for NAP: Stop hook → update agent dot to "waiting for input" state
+      * //A: Notification hook → detect permission prompts across all agents
+      * //A: together: know exactly which agents need attention and why
 * configuration
   * `~/.claude/settings.json` — global (all projects)
   * `.claude/settings.json` — project (committed, shared)
