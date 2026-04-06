@@ -90,6 +90,8 @@
               updatedPermissions: [{ type: "addRules", rules: [...], behavior: "allow", destination: "projectSettings" }] } } }
         ```
       * no decision in output → passes through to human (dialog shows)
+        * // what exactly does it mean?
+        * // what about status code? does it matter?
       * deny rules in settings always override hook allow
       * does NOT fire in non-interactive mode (-p flag)
     * PermissionDenied — after a tool call denied by auto mode classifier
@@ -107,16 +109,19 @@
       * exit 0: inject context into subagent
     * SubagentStop — subagent finished
     * TeammateIdle — agent team teammate about to go idle
+    * // tell me more about these
 
   * tasks
     * TaskCreated — task being created
     * TaskCompleted — task marked completed
+    * // tell me more, what are tasks? is it related to todo lists?
 
   * completion
     * Stop — CC finishes responding
       * payload: { session_id, cwd }
       * exit 0 + block: `{ "decision": "block", "reason": "build failed, fix first" }`
       * exit 0 + continue: `{ "continue": true }`
+      * // what if non-0 exit?
     * StopFailure — turn ends due to API error
 
   * environment
@@ -129,15 +134,20 @@
   * worktrees
     * WorktreeCreate — worktree being created
     * WorktreeRemove — worktree being removed
+    * // tell me more about payloads here
 
   * context
     * PreCompact — before context compaction
     * PostCompact — after context compaction
+    * // tell me about payloads
 
   * MCP
     * Elicitation — MCP server requests user input
     * ElicitationResult — user responds to MCP elicitation
 
+* // question: what is that hook that can say:
+  * // user input is required (like permissions or smth else, e.g. dialog qith questions, or exit plan mode, or any other interactive dialogue/questionnaire/etc)
+  * // or, other, agent's turn is done, waiting for next input
 * configuration
   * `~/.claude/settings.json` — global (all projects)
   * `.claude/settings.json` — project (committed, shared)
