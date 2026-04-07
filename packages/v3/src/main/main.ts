@@ -95,9 +95,19 @@ app.whenReady().then(async () => {
   });
 
   // Wire renderer intents → main
-  ipcMain.on('app:intent', (_event, intent) => {
+  ipcMain.on('app:intent', async (_event, intent) => {
     if (intent?.type === 'setActiveTerminal') {
       // Terminal management
+    }
+    if (intent?.type === 'permission-response') {
+      // Resolve via the same socket handler path
+      const agentId = intent.agentId as string;
+      const decision = intent.decision as string;
+      try {
+        await handler({ type: 'permission-response', id: 0, agentId, decision }, null as any);
+      } catch {
+        // No pending approval — ignore
+      }
     }
   });
 

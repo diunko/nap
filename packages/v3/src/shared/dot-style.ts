@@ -18,6 +18,7 @@ const ROLE_COLORS: Record<string, string> = {
   'fs-eng': '#22c55e',      // green
   'test-eng': '#6b7280',    // gray
   'architect': '#3b82f6',   // blue
+  'guardian': '#a855f7',    // purple
 };
 
 const DEFAULT_COLOR = '#3b82f6';  // blue for unknown roles

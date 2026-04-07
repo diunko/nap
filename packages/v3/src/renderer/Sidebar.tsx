@@ -55,7 +55,9 @@ function AgentDot({ agent, size = 8 }: { agent: AgentState; size?: number }) {
         marginRight: 4,
         verticalAlign: 'middle',
         cursor: clickable ? 'pointer' : 'default',
-        animation: agent.running ? 'pulse 2s ease-in-out infinite' : 'none',
+        animation: agent.pendingApproval
+          ? 'blink 0.6s step-end infinite'
+          : agent.running ? 'pulse 2s ease-in-out infinite' : 'none',
       }}
     >
       {dashed && (

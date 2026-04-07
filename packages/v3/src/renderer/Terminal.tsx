@@ -48,6 +48,105 @@ function useBreadcrumb() {
   return { agentName: activeTerminalId };
 }
 
+function PermissionModal({ agent }: { agent: AgentState }) {
+  const approval = agent.pendingApproval;
+  if (!approval) return null;
+
+  function handleDecision(decision: 'allow' | 'deny') {
+    window.electronAPI.sendIntent({
+      type: 'permission-response',
+      agentId: agent.id,
+      decision,
+    });
+  }
+
+  return (
+    <div
+      data-testid="permission-modal"
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.75)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
+        fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+      }}
+    >
+      <div
+        style={{
+          background: '#1e1e1e',
+          border: '1px solid #3c3c3c',
+          borderRadius: 8,
+          padding: 24,
+          maxWidth: 500,
+          width: '90%',
+          color: '#e5e5e5',
+        }}
+      >
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
+          Permission Request
+        </div>
+        <pre
+          style={{
+            background: '#252526',
+            border: '1px solid #3c3c3c',
+            borderRadius: 4,
+            padding: 12,
+            fontSize: 12,
+            color: '#9cdcfe',
+            overflow: 'auto',
+            maxHeight: 200,
+            margin: '0 0 16px 0',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-all',
+          }}
+        >
+          {JSON.stringify({ tool: approval.tool, command: approval.command, ...approval.payload }, null, 2)}
+        </pre>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <button
+            data-testid="permission-deny-btn"
+            onClick={() => handleDecision('deny')}
+            style={{
+              padding: '6px 16px',
+              background: '#374151',
+              color: '#e5e5e5',
+              border: '1px solid #4b5563',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+              fontSize: 12,
+            }}
+          >
+            Deny
+          </button>
+          <button
+            data-testid="permission-approve-btn"
+            onClick={() => handleDecision('allow')}
+            style={{
+              padding: '6px 16px',
+              background: '#2563eb',
+              color: '#e5e5e5',
+              border: 'none',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+              fontSize: 12,
+            }}
+          >
+            Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SuccessorPrompt({ agent }: { agent: AgentState }) {
   const [spawning, setSpawning] = useState(false);
 
@@ -267,7 +366,9 @@ export function Terminal() {
         minHeight: 0,
         borderBottom: following ? '2px solid #2a5a9a' : '2px solid transparent',
         transition: 'border-color 0.15s',
+        position: 'relative',
       }}>
+        {activeAgent?.pendingApproval && <PermissionModal agent={activeAgent} />}
         {isArchived && activeAgent ? (
           <SuccessorPrompt agent={activeAgent} />
         ) : (
