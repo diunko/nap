@@ -1387,7 +1387,7 @@ async function main(): Promise<void> {
         process.stdout.write(JSON.stringify({
           hookSpecificOutput: {
             hookEventName: 'PermissionRequest',
-            decision: { behavior: 'deny', message: 'denied by guardian', interrupt: true },
+            decision: { behavior: 'deny', message: 'denied by guardian' },
           },
         }));
       }

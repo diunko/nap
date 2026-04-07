@@ -52,7 +52,7 @@ function PermissionModal({ agent }: { agent: AgentState }) {
   const approval = agent.pendingApproval;
   if (!approval) return null;
 
-  function handleDecision(decision: 'allow' | 'deny') {
+  function handleDecision(decision: 'allow' | 'deny' | 'passthrough') {
     window.electronAPI.sendIntent({
       type: 'permission-response',
       agentId: agent.id,
@@ -86,8 +86,28 @@ function PermissionModal({ agent }: { agent: AgentState }) {
           maxWidth: 500,
           width: '90%',
           color: '#e5e5e5',
+          position: 'relative',
         }}
       >
+        <button
+          data-testid="permission-dismiss-btn"
+          onClick={() => handleDecision('passthrough')}
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 12,
+            background: 'none',
+            border: 'none',
+            color: '#6b7280',
+            cursor: 'pointer',
+            fontSize: 18,
+            lineHeight: 1,
+            padding: '4px',
+          }}
+          title="Dismiss — fall through to CC dialog"
+        >
+          x
+        </button>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
           Permission Request
         </div>
