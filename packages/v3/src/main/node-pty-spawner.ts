@@ -1,5 +1,6 @@
 import * as pty from 'node-pty';
 import type { PtySpawner } from './pty-spawner';
+import { getServerSocketPath } from '../shared/constants';
 
 /**
  * Real PtySpawner wrapping node-pty.
@@ -44,6 +45,7 @@ export class NodePtySpawner implements PtySpawner {
         ...process.env,
         TERM: 'xterm-256color',
         NAP_SESSION_ID: opts.id,
+        NAP_SOCKET: getServerSocketPath(process.env['NAP_CWD']),
       } as Record<string, string>,
     });
 
