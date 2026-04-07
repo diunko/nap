@@ -786,6 +786,16 @@ async function main(): Promise<void> {
         process.exit(1);
       }
 
+      // --build: rebuild main + CLI before launching
+      if (flags['build']) {
+        process.stdout.write('building...\n');
+        const { execSync } = require('child_process') as typeof import('child_process');
+        execSync('npm run build && npm run build:cli', {
+          cwd: devPackageRoot,
+          stdio: 'inherit',
+        });
+      }
+
       process.stdout.write(`dev mode: ${devProjectRoot}\n`);
 
       const child = spawn('npm', ['run', 'dev:v3'], {
@@ -814,6 +824,17 @@ async function main(): Promise<void> {
           process.stderr.write('nap3 is already running in this project\n');
           process.exit(1);
         }
+      }
+
+      // --build: rebuild main + CLI before launching
+      if (flags['build']) {
+        process.stdout.write('building...\n');
+        const { execSync } = require('child_process') as typeof import('child_process');
+        const pkgRoot = path.resolve(__dirname, '..', '..', '..');
+        execSync('npm run build && npm run build:cli', {
+          cwd: pkgRoot,
+          stdio: 'inherit',
+        });
       }
 
       // Find electron binary
