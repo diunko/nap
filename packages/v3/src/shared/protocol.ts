@@ -87,6 +87,13 @@ export interface StatusInspectRequest {
   query: { napkin?: string; agent?: string; nepic?: string };
 }
 
+export interface KeyRequest {
+  type: 'key';
+  id: number;
+  name: string;
+  data: string;
+}
+
 export interface NapWaitRequest {
   type: 'nap-wait';
   id: number;
@@ -107,4 +114,5 @@ export type SocketRequest =
   | CreateNepicRequest
   | SetStatusRequest
   | StatusInspectRequest
+  | KeyRequest
   | NapWaitRequest;

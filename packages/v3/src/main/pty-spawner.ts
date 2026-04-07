@@ -8,12 +8,14 @@ export interface PtySpawner {
   runningCount(): number;
   onExit(id: string, callback: (exitCode: number) => void | Promise<void>): void;
   clearExitHandlers(): void;
+  write(id: string, data: string): void;
 }
 
 // ── FakePtySpawner — records calls, for small tests ──
 
 export class FakePtySpawner implements PtySpawner {
   spawned: { id: string; command: string; cwd: string }[] = [];
+  writes: { id: string; data: string }[] = [];
   private running = new Set<string>();
   private exitCallbacks = new Map<string, (exitCode: number) => void | Promise<void>>();
   private outputBuffers = new Map<string, string>();
@@ -57,6 +59,10 @@ export class FakePtySpawner implements PtySpawner {
 
   clearExitHandlers(): void {
     this.exitCallbacks.clear();
+  }
+
+  write(id: string, data: string): void {
+    this.writes.push({ id, data });
   }
 
   /** Test-only: simulate a pty exit. Awaitable so disk writes complete. */

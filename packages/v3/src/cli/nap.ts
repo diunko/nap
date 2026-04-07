@@ -8,6 +8,7 @@ import { spawn } from 'child_process';
 import * as crypto from 'crypto';
 import { NdjsonParser, serialize } from '../shared/ndjson';
 import { findSocketPath, findProjectRoot, isSocketAlive } from '../shared/constants';
+import { parseKey, parseSeq } from '../main/key-parser';
 
 // --- Help text ---
 
@@ -27,6 +28,7 @@ Commands:
   done                          Mark current session as done
   nap <name> [--timeout <s>]    Wait for agent to complete
   poke <name> <message>         Send input to agent terminal
+  key <name> <key> [--seq]     Send raw keypress to agent pty
   peek <name>                   Focus agent terminal in UI
   log <name>                    Dump terminal scrollback
   stop <name>                   Stop an agent
@@ -118,6 +120,24 @@ Send input to a running agent's terminal.
   name              Agent name
   message           Text to send
   --help            Show this help
+`,
+  key: `Usage: nap3 key <name> <key> [--seq <escape-sequence>]
+
+Send a raw keypress or escape sequence to an agent's pty.
+
+Named keys: enter, esc, tab, space, backspace,
+            up, down, left, right,
+            ctrl-c, ctrl-d, ctrl-z
+
+  name              Agent name
+  key               Named key or raw text
+  --seq <value>     Send C-style escape sequence (e.g. "\\x1b[A")
+  --help            Show this help
+
+Examples:
+  nap3 key 002-fs-eng enter
+  nap3 key 002-fs-eng "1"
+  nap3 key 002-fs-eng --seq "\\x1b[A"
 `,
   peek: `Usage: nap3 peek <name>
 
@@ -840,6 +860,33 @@ async function main(): Promise<void> {
       });
       if (res['error']) {
         process.stderr.write(String(res['message']) + '\n');
+        process.exit(1);
+      }
+      break;
+    }
+
+    case 'key': {
+      const seqValue = flags['seq'];
+      if (!args[0] || (!args[1] && !seqValue)) {
+        process.stderr.write('Usage: nap3 key <name> <key> [--seq <escape-sequence>]\n');
+        process.exit(1);
+      }
+      const keyName = args[0];
+      let keyData: string;
+      if (seqValue && typeof seqValue === 'string') {
+        keyData = parseSeq(seqValue);
+      } else {
+        keyData = parseKey(args[1]);
+      }
+      const keySock = resolveSocketOrDie();
+      const keyRes = await send(keySock, {
+        type: 'key',
+        id: requestId++,
+        name: keyName,
+        data: keyData,
+      });
+      if (keyRes['error']) {
+        process.stderr.write(String(keyRes['message']) + '\n');
         process.exit(1);
       }
       break;

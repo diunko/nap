@@ -109,6 +109,18 @@ export function createRequestHandler(
         return { id: reqId };
       }
 
+      case 'key': {
+        const name = req.name as string;
+        const data = req.data as string;
+        const allAgents = model.getAllAgents();
+        const resolved = resolveByName(allAgents, name);
+        if (!resolved.ok) {
+          throw new Error(resolved.error);
+        }
+        ptySpawner.write(resolved.agent.id, data);
+        return { id: reqId };
+      }
+
       case 'peek': {
         return { id: reqId };
       }
