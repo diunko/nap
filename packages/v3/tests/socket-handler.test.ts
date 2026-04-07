@@ -8,6 +8,7 @@ import { createRequestHandler } from '../src/main/socket-handler';
 import { createModel } from '../src/main/model';
 import { FakePtySpawner } from '../src/main/pty-spawner';
 import { NdjsonParser, serialize } from '../src/shared/ndjson';
+import * as mq from '../src/main/message-queue';
 import {
   createCliIntegrationFixture,
   createEmptyNepicFixture,
@@ -228,7 +229,55 @@ describe('Socket handlers', () => {
     expect(String(res['message'])).toContain('did you mean');
   });
 
-  // T-0660-30: key vs poke — key has no 3-step delivery
+  // T-0660-20 (extended): key bypasses message queue — verify enqueue NOT called
+  it('T-0660-20: key bypasses message queue', async () => {
+    await setupF10();
+    const enqueueSpy = vi.spyOn(mq, 'enqueue');
+    const res = await send(sockPath, {
+      type: 'key', id: 1, name: '001-test-arch', data: '\r',
+    });
+    expect(res['error']).toBeUndefined();
+    expect(ptySpawner.writes).toEqual([{ id: 'uuid-ta', data: '\r' }]);
+    expect(enqueueSpy).not.toHaveBeenCalled();
+    enqueueSpy.mockRestore();
+  });
+
+  // T-0660-22: key to non-running agent (agent exists but hasn't been started)
+  it('T-0660-22: key to non-running agent — write is a no-op, no crash', async () => {
+    await setupF10();
+    // 001-fs-eng (napkin 0200-build) exists but has started=false
+    const res = await send(sockPath, {
+      type: 'key', id: 1, name: '001-fs-eng', data: '\r',
+    });
+    // Should not crash — FakePtySpawner.write records it even for non-spawned processes
+    expect(res['error']).toBeUndefined();
+  });
+
+  // T-0660-30: key vs poke — key has no 3-step delivery (full comparison)
+  it('T-0660-30: key "1" → single write; poke "1" → enqueue (3-step)', async () => {
+    await setupF10();
+    // Send key
+    const keyRes = await send(sockPath, {
+      type: 'key', id: 1, name: '001-test-arch', data: '1',
+    });
+    expect(keyRes['error']).toBeUndefined();
+    // key: exactly 1 write of "1", no Esc, no CR
+    expect(ptySpawner.writes).toEqual([{ id: 'uuid-ta', data: '1' }]);
+
+    // Send poke — goes through message queue, not direct writes
+    const enqueueSpy = vi.spyOn(mq, 'enqueue');
+    const pokeRes = await send(sockPath, {
+      type: 'poke', id: 2, name: '001-test-arch', message: '1',
+    });
+    expect(pokeRes['error']).toBeUndefined();
+    expect(enqueueSpy).toHaveBeenCalledWith('uuid-ta', '1');
+    enqueueSpy.mockRestore();
+
+    // key writes should still be just the one from before — poke went through MQ
+    expect(ptySpawner.writes).toEqual([{ id: 'uuid-ta', data: '1' }]);
+  });
+
+  // T-0660-30: key sends exact bytes, no Escape/CR wrapping
   it('key sends exact bytes, no Escape/CR wrapping', async () => {
     await setupF10();
     const res = await send(sockPath, {
