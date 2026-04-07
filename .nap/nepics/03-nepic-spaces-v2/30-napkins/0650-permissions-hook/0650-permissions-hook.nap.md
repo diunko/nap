@@ -150,6 +150,8 @@
         "session_id": "uuid-fs" }
       ```
     * env has: NAP_SESSION_ID=uuid-fs
+    * //A: TA flagged (G2): pty spawner must set NAP_SESSION_ID + NAP_SOCKET in env
+      * //A: currently not set — one-line fix in node-pty-spawner.ts spawn()
 
   * step 2: nap3 hook permission-request (CLI process)
     * reads stdin JSON + NAP_SESSION_ID
@@ -162,6 +164,9 @@
         "payload": <full stdin JSON> }
       ```
     * **blocks** — waits for socket response
+    * //A: TA flagged (G1): socket server is request→response today. this needs a hanging Promise.
+      * //A: shared Map<agentId, { resolve }> registry. permission-response looks up and resolves.
+    * //A: keepalive: server sends periodic pings to prevent OS socket timeout during long hangs
 
   * step 3: socket handler (main.ts)
     * receives hook-permission-request
@@ -181,6 +186,9 @@
       * pokes guardian via pty write (message queue)
     * if guardian not running: does nothing extra (human resolves via modal)
     * **waits** for permission-response for agent uuid-fs
+    * //A: TA flagged (G8): concurrent requests need per-agent registry
+    * //A: TA flagged (G12): if agent exits while pending, clean up registry + clear pendingApproval
+    * //A: TA flagged (G7): on client disconnect, clean up registry entry
 
   * step 4: guardian judges
     * guardian receives poke, reads the message
@@ -215,6 +223,9 @@
       ```
     * exits 0
     * CC reads output → skips permission dialog → runs the command
+    * //A: TA flagged (G6): output format must be EXACT — CC ignores wrong format
+      * //A: deny format: `{ hookSpecificOutput: { ..., decision: { behavior: "deny", message: "reason", interrupt: true } } }`
+      * //A: pass-through: exit 0 with empty JSON or no decision field
 
   * alternative: human resolves via modal
     * at step 3, modal shows in terminal area with approve/deny buttons
