@@ -1,5 +1,5 @@
 import type { FileSystem } from './filesystem';
-import type { NapkinState, AgentState, NapkinStatus, NepicInfo, Entry, FileEntry, DirEntry, WatcherEvent } from '../shared/bridge-types';
+import type { NapkinState, AgentState, NapkinStatus, NepicInfo, Entry, FileEntry, DirEntry, WatcherEvent, PendingApproval } from '../shared/bridge-types';
 import type { PtySpawner } from './pty-spawner';
 import { resolveByName } from './name-resolver';
 import * as crypto from 'crypto';
@@ -109,6 +109,11 @@ export interface NapModel {
   getNepics(): NepicInfo[];
   getActiveNepicId(): string;
   switchNepic(slug: string): Promise<void>;
+
+  // ── Permission hook methods ──
+  setAgentPendingApproval(agentId: string, approval: PendingApproval): void;
+  clearPendingApproval(agentId: string): void;
+  findAgentByRole(role: string): AgentState | null;
 }
 
 const DEBOUNCE_MS = 200;
@@ -136,6 +141,7 @@ export function createModel(fs: FileSystem): NapModel {
   // Ephemeral state kept separate — never wiped by filesystem reloads
   const runningAgents = new Set<string>();
   const doneAgents = new Set<string>();
+  const pendingApprovals = new Map<string, PendingApproval>();
 
   // Watcher events for debug panel
   const watcherEventLog: WatcherEvent[] = [];
@@ -229,6 +235,7 @@ export function createModel(fs: FileSystem): NapModel {
         running: false,
         done: marker?.done ?? false,
         archived: marker?.archived ?? false,
+        pendingApproval: null,
         homePath: agentPath,
         entries: agentEntries,
       });
@@ -329,6 +336,7 @@ export function createModel(fs: FileSystem): NapModel {
             running: false,
             done: marker.done ?? false,
             archived: marker.archived ?? false,
+            pendingApproval: null,
             homePath: archPath,
             entries: archEntries,
           });
@@ -342,6 +350,8 @@ export function createModel(fs: FileSystem): NapModel {
     for (const agent of getAllAgents()) {
       if (runningAgents.has(agent.id)) agent.running = true;
       if (doneAgents.has(agent.id)) agent.done = true;
+      const pa = pendingApprovals.get(agent.id);
+      if (pa) agent.pendingApproval = pa;
     }
 
     // Load nepic list from parent dir
@@ -446,6 +456,7 @@ export function createModel(fs: FileSystem): NapModel {
         running: false,
         done: false,
         archived: false,
+        pendingApproval: null,
         homePath: agentHomePath,
         entries: [],
       });
@@ -483,6 +494,8 @@ export function createModel(fs: FileSystem): NapModel {
 
     // Update ephemeral sets — keep doneAgents (done + exited is valid)
     runningAgents.delete(agentId);
+    pendingApprovals.delete(agentId);
+    agent.pendingApproval = null;
 
     // Write to disk FIRST — prevents race where file watcher reload
     // happens before the write and loses both exited and done flags
@@ -726,6 +739,7 @@ export function createModel(fs: FileSystem): NapModel {
       running: false,
       done: false,
       archived: false,
+      pendingApproval: null,
       homePath: agentHomePath,
       entries: [],
     };
@@ -774,6 +788,7 @@ export function createModel(fs: FileSystem): NapModel {
       running: false,
       done: false,
       archived: false,
+      pendingApproval: null,
       homePath: archPath,
       entries: [],
     };
@@ -985,6 +1000,38 @@ export function createModel(fs: FileSystem): NapModel {
     await fs.writeJSON(base + '/ui-state.json', { activeNepicId: slug });
   }
 
+  // ── Permission hook methods ──
+
+  function setAgentPendingApproval(agentId: string, approval: PendingApproval): void {
+    pendingApprovals.set(agentId, approval);
+    const agent = findAgentById(agentId);
+    if (agent) {
+      agent.pendingApproval = approval;
+      notify();
+    }
+  }
+
+  function clearPendingApproval(agentId: string): void {
+    pendingApprovals.delete(agentId);
+    const agent = findAgentById(agentId);
+    if (agent) {
+      agent.pendingApproval = null;
+      notify();
+    }
+  }
+
+  function findAgentByRole(role: string): AgentState | null {
+    // Search architects first (guardian lives at architect level)
+    const arch = architects.find(a => a.role === role);
+    if (arch) return arch;
+    // Then napkin agents
+    for (const napkin of napkins) {
+      const agent = napkin.agents.find(a => a.role === role);
+      if (agent) return agent;
+    }
+    return null;
+  }
+
   return {
     loadFromFilesystem,
     getNapkins: () => napkins,
@@ -1020,6 +1067,9 @@ export function createModel(fs: FileSystem): NapModel {
     getNepics: () => nepicList,
     getActiveNepicId: () => getNepicSlug(),
     switchNepic: switchNepicFn,
+    setAgentPendingApproval,
+    clearPendingApproval,
+    findAgentByRole,
   };
 }
 

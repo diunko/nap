@@ -290,6 +290,7 @@ describe('IV. Successor flow', () => {
       running: false,
       done: false,
       archived: true,
+      pendingApproval: null,
       homePath: 'nepic/30-napkins/0100-explore/agents/001-test-arch',
       entries: [],
     };

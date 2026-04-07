@@ -16,6 +16,8 @@ function makeAgent(overrides: Partial<AgentState>): AgentState {
     exited: false,
     running: false,
     done: false,
+    archived: false,
+    pendingApproval: null,
     homePath: '',
     entries: [],
     ...overrides,

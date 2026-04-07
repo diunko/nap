@@ -177,6 +177,7 @@ describe('Kanban navigation — best agent heuristic', () => {
       id: '', name: '', role: '', nepicId: '', napkinId: null,
       parentName: null, parentId: null, createdAt: 0,
       started: true, exited: false, running: false, done: false,
+      archived: false, pendingApproval: null,
       homePath: '', entries: [],
       ...overrides,
     };

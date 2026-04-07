@@ -32,6 +32,15 @@ export interface NepicInfo {
   name: string;
 }
 
+// ── Permission types ──
+
+export interface PendingApproval {
+  tool: string;
+  command: string;
+  timestamp: number;
+  payload: object;  // full hook stdin JSON
+}
+
 // ── Core state types ──
 
 export interface AgentState {
@@ -48,6 +57,7 @@ export interface AgentState {
   running: boolean;        // ephemeral — pty currently alive
   done: boolean;           // ephemeral — called nap done
   archived: boolean;       // imported or dead session — needs successor
+  pendingApproval: PendingApproval | null;  // ephemeral — permission request waiting
   homePath: string;
   entries: Entry[];        // home dir files for focused/extended views
 }

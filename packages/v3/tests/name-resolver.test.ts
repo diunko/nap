@@ -16,6 +16,8 @@ function makeAgent(overrides: Partial<AgentState> & { name: string }): AgentStat
     exited: false,
     running: false,
     done: false,
+    archived: false,
+    pendingApproval: null,
     homePath: '/test/' + overrides.name,
     ...overrides,
   };
