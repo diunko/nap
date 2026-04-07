@@ -188,12 +188,15 @@ Handle a CC hook event. Currently supported:
 Reads NAP_SESSION_ID and NAP_SOCKET from environment.
   --help            Show this help
 `,
-  'permission-response': `Usage: nap3 permission-response --agent <id> --decision allow|deny
+  'permission-response': `Usage: nap3 permission-response --agent <id> --decision allow|deny [--message <reason>]
+       nap3 permission-response --list
 
 Resolve a pending permission request for an agent.
 
-  --agent <id>      Agent session ID
+  --agent <id>      Agent name or session ID
   --decision        "allow" or "deny"
+  --message <text>  Denial reason (shown to the agent)
+  --list            List all pending permission requests
   --help            Show this help
 `,
 };
@@ -1384,10 +1387,11 @@ async function main(): Promise<void> {
           },
         }));
       } else if (decision === 'deny') {
+        const denyMessage = (res.message as string) || 'denied by guardian';
         process.stdout.write(JSON.stringify({
           hookSpecificOutput: {
             hookEventName: 'PermissionRequest',
-            decision: { behavior: 'deny', message: 'denied by guardian' },
+            decision: { behavior: 'deny', message: denyMessage },
           },
         }));
       }
@@ -1427,12 +1431,14 @@ async function main(): Promise<void> {
         process.exit(1);
       }
 
+      const message = flags['message'] as string | undefined;
       const sock = resolveSocketOrDie();
       const res = await send(sock, {
         type: 'permission-response',
         id: requestId++,
         agentId,
         decision,
+        ...(message ? { message } : {}),
       });
       if (res['error']) {
         process.stderr.write(String(res['message']) + '\n');

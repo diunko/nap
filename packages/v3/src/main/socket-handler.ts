@@ -13,8 +13,13 @@ const VALID_PHASES = ['backlog', 'todo', 'doing', 'review', 'done'] as const;
 // Maps agentId → { resolve callback, connection }
 // hook-permission-request adds an entry; permission-response resolves it.
 
+interface PermissionResult {
+  decision: string;
+  message?: string;
+}
+
 interface PendingEntry {
-  resolve: (decision: string) => void;
+  resolve: (result: PermissionResult) => void;
   conn: net.Socket;
   keepaliveTimer: ReturnType<typeof setInterval>;
 }
@@ -196,7 +201,7 @@ export function createRequestHandler(
         }
 
         // Create long-lived Promise — hangs until permission-response resolves it
-        const decision = await new Promise<string>((resolve) => {
+        const result = await new Promise<PermissionResult>((resolve) => {
           const keepaliveTimer = setInterval(() => {
             if (!conn.destroyed) {
               conn.write(serialize({ type: 'ping' }));
@@ -217,7 +222,7 @@ export function createRequestHandler(
         });
 
         // Connection resolved — send decision back to the hook process
-        conn.write(serialize({ decision }));
+        conn.write(serialize(result));
         return LONG_LIVED;
       }
 
@@ -240,6 +245,7 @@ export function createRequestHandler(
       case 'permission-response': {
         let agentId = req.agentId as string;
         const decision = req.decision as string;
+        const message = (req.message as string) || undefined;
 
         // Try direct lookup (UUID), then resolve by name
         let entry = pendingRegistry.get(agentId);
@@ -262,7 +268,7 @@ export function createRequestHandler(
         model.clearPendingApproval(agentId);
 
         // Resolve the hanging hook-permission-request Promise
-        entry.resolve(decision);
+        entry.resolve({ decision, message });
 
         return { id: reqId };
       }

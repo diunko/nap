@@ -377,6 +377,65 @@ describe('0650 — Socket handler: permissions', () => {
     conn.destroy();
   });
 
+  // T-0650-07b: deny with message — reason flows through to hook response
+  it('T-0650-07b: deny with message flows through to hook', async () => {
+    await setupWithGuardian();
+
+    const { promise, conn } = sendLongLived(sockPath, {
+      type: 'hook-permission-request',
+      id: 1,
+      agentId: 'uuid-ta',
+      tool: 'Bash',
+      command: 'rm -rf /important/dir',
+      payload: {},
+    });
+
+    await sleep(100);
+
+    await send(sockPath, {
+      type: 'permission-response',
+      id: 2,
+      agentId: 'uuid-ta',
+      decision: 'deny',
+      message: 'not in task spec — targets path outside project scope',
+    });
+
+    const hookResult = await promise;
+    expect(hookResult.decision).toBe('deny');
+    expect(hookResult.message).toBe('not in task spec — targets path outside project scope');
+
+    conn.destroy();
+  });
+
+  // T-0650-07c: deny without message — default reason
+  it('T-0650-07c: deny without message — no message field in response', async () => {
+    await setupWithGuardian();
+
+    const { promise, conn } = sendLongLived(sockPath, {
+      type: 'hook-permission-request',
+      id: 1,
+      agentId: 'uuid-ta',
+      tool: 'Bash',
+      command: 'rm -rf /',
+      payload: {},
+    });
+
+    await sleep(100);
+
+    await send(sockPath, {
+      type: 'permission-response',
+      id: 2,
+      agentId: 'uuid-ta',
+      decision: 'deny',
+    });
+
+    const hookResult = await promise;
+    expect(hookResult.decision).toBe('deny');
+    expect(hookResult.message).toBeUndefined();
+
+    conn.destroy();
+  });
+
   // T-0650-08: permission-response for unknown agent → error
   it('T-0650-08: permission-response for unknown agent → error', async () => {
     await setupWithGuardian();
