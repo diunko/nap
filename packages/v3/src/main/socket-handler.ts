@@ -16,6 +16,7 @@ const VALID_PHASES = ['backlog', 'todo', 'doing', 'review', 'done'] as const;
 interface PermissionResult {
   decision: string;
   message?: string;
+  interrupt?: boolean;
 }
 
 interface PendingEntry {
@@ -246,6 +247,7 @@ export function createRequestHandler(
         let agentId = req.agentId as string;
         const decision = req.decision as string;
         const message = (req.message as string) || undefined;
+        const interrupt = (req.interrupt as boolean) || false;
 
         // Try direct lookup (UUID), then resolve by name
         let entry = pendingRegistry.get(agentId);
@@ -268,7 +270,7 @@ export function createRequestHandler(
         model.clearPendingApproval(agentId);
 
         // Resolve the hanging hook-permission-request Promise
-        entry.resolve({ decision, message });
+        entry.resolve({ decision, message, interrupt: interrupt || undefined });
 
         return { id: reqId };
       }

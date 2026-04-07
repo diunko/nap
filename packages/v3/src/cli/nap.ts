@@ -196,6 +196,7 @@ Resolve a pending permission request for an agent.
   --agent <id>      Agent name or session ID
   --decision        "allow" or "deny"
   --message <text>  Denial reason (shown to the agent)
+  --interrupt       Stop the agent's entire turn (default: deny tool only)
   --list            List all pending permission requests
   --help            Show this help
 `,
@@ -1388,10 +1389,13 @@ async function main(): Promise<void> {
         }));
       } else if (decision === 'deny') {
         const denyMessage = (res.message as string) || 'denied by guardian';
+        const denyInterrupt = (res.interrupt as boolean) || false;
+        const denyDecision: Record<string, unknown> = { behavior: 'deny', message: denyMessage };
+        if (denyInterrupt) denyDecision.interrupt = true;
         process.stdout.write(JSON.stringify({
           hookSpecificOutput: {
             hookEventName: 'PermissionRequest',
-            decision: { behavior: 'deny', message: denyMessage },
+            decision: denyDecision,
           },
         }));
       }
@@ -1432,6 +1436,7 @@ async function main(): Promise<void> {
       }
 
       const message = flags['message'] as string | undefined;
+      const interrupt = flags['interrupt'] === true;
       const sock = resolveSocketOrDie();
       const res = await send(sock, {
         type: 'permission-response',
@@ -1439,6 +1444,7 @@ async function main(): Promise<void> {
         agentId,
         decision,
         ...(message ? { message } : {}),
+        ...(interrupt ? { interrupt: true } : {}),
       });
       if (res['error']) {
         process.stderr.write(String(res['message']) + '\n');

@@ -436,6 +436,68 @@ describe('0650 — Socket handler: permissions', () => {
     conn.destroy();
   });
 
+  // T-0650-07d: deny with --interrupt stops the agent's turn
+  it('T-0650-07d: deny with interrupt flag flows through', async () => {
+    await setupWithGuardian();
+
+    const { promise, conn } = sendLongLived(sockPath, {
+      type: 'hook-permission-request',
+      id: 1,
+      agentId: 'uuid-ta',
+      tool: 'Bash',
+      command: 'rm -rf /',
+      payload: {},
+    });
+
+    await sleep(100);
+
+    await send(sockPath, {
+      type: 'permission-response',
+      id: 2,
+      agentId: 'uuid-ta',
+      decision: 'deny',
+      message: 'agent going rogue',
+      interrupt: true,
+    });
+
+    const hookResult = await promise;
+    expect(hookResult.decision).toBe('deny');
+    expect(hookResult.message).toBe('agent going rogue');
+    expect(hookResult.interrupt).toBe(true);
+
+    conn.destroy();
+  });
+
+  // T-0650-07e: deny without --interrupt has no interrupt field
+  it('T-0650-07e: deny without interrupt — no interrupt field', async () => {
+    await setupWithGuardian();
+
+    const { promise, conn } = sendLongLived(sockPath, {
+      type: 'hook-permission-request',
+      id: 1,
+      agentId: 'uuid-ta',
+      tool: 'Bash',
+      command: 'npm install sketchy-pkg',
+      payload: {},
+    });
+
+    await sleep(100);
+
+    await send(sockPath, {
+      type: 'permission-response',
+      id: 2,
+      agentId: 'uuid-ta',
+      decision: 'deny',
+      message: 'not approved',
+    });
+
+    const hookResult = await promise;
+    expect(hookResult.decision).toBe('deny');
+    expect(hookResult.interrupt).toBeUndefined();
+
+    conn.destroy();
+  });
+
   // T-0650-08: permission-response for unknown agent → error
   it('T-0650-08: permission-response for unknown agent → error', async () => {
     await setupWithGuardian();
