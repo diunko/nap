@@ -949,6 +949,7 @@ export function createModel(fs: FileSystem): NapModel {
     function agentStatus(a: AgentState): string {
       if (a.archived) return 'archived';
       if (a.exited) return 'exited';
+      if (a.pendingApproval) return 'pending';
       if (a.done) return 'done';
       if (a.running) return 'running';
       if (a.started) return 'started';

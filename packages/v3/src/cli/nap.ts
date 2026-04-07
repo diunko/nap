@@ -310,6 +310,7 @@ const STATUS_COLORS: Record<string, string> = {
   done: '\x1b[34m',
   created: '\x1b[33m',
   started: '\x1b[33m',
+  pending: '\x1b[35m',
 };
 const RESET = '\x1b[0m';
 
