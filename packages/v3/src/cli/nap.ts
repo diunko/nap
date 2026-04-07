@@ -826,17 +826,6 @@ async function main(): Promise<void> {
         }
       }
 
-      // --build: rebuild main + CLI before launching
-      if (flags['build']) {
-        process.stdout.write('building...\n');
-        const { execSync } = require('child_process') as typeof import('child_process');
-        const pkgRoot = path.resolve(__dirname, '..', '..', '..');
-        execSync('npm run build && npm run build:cli', {
-          cwd: pkgRoot,
-          stdio: 'inherit',
-        });
-      }
-
       // Find electron binary
       const packageRoot = path.resolve(__dirname, '..', '..', '..');
       const mainScript = path.join(
