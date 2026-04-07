@@ -1,7 +1,7 @@
 export type PtyWriter = (id: string, data: string) => void;
 
 interface QueueEntry {
-  messages: string[];
+  messages: Array<{ text: string; esc: boolean }>;
   delivering: boolean;
 }
 
@@ -14,13 +14,13 @@ export function setWriter(fn: PtyWriter): void {
   writeFn = fn;
 }
 
-export function enqueue(id: string, message: string): void {
+export function enqueue(id: string, message: string, esc = false): void {
   let entry = queues.get(id);
   if (!entry) {
     entry = { messages: [], delivering: false };
     queues.set(id, entry);
   }
-  entry.messages.push(message);
+  entry.messages.push({ text: message, esc });
   if (!entry.delivering) {
     deliverNext(id);
   }
@@ -34,26 +34,34 @@ function deliverNext(id: string): void {
   }
 
   entry.delivering = true;
-  const msg = entry.messages.shift()!;
+  const { text, esc } = entry.messages.shift()!;
 
   if (writeFn) {
-    // Three-step delivery for raw-mode apps (Claude Code / Ink):
-    // 1. Send text
-    // 2. Escape to dismiss autocomplete
-    // 3. CR to submit (Enter in raw mode)
-    writeFn(id, msg);
-    setTimeout(() => {
-      if (writeFn) writeFn(id, '\x1b'); // Escape
-      setTimeout(() => {
-        if (writeFn) writeFn(id, '\r'); // Enter (CR, not LF)
+    // Two-step delivery: text → CR (Enter in raw mode)
+    // Optional ESC step (--esc flag) for dismissing autocomplete
+    writeFn(id, text);
+    const afterText = () => {
+      if (esc && writeFn) {
+        writeFn(id, '\x1b'); // Escape
+        setTimeout(() => {
+          if (writeFn) writeFn(id, '\r'); // Enter
+          scheduleNext();
+        }, 100);
+      } else {
+        if (writeFn) writeFn(id, '\r'); // Enter
+        scheduleNext();
+      }
+    };
 
-        if (entry.messages.length > 0) {
-          setTimeout(() => deliverNext(id), DELIVERY_DELAY_MS);
-        } else {
-          entry.delivering = false;
-        }
-      }, 100);
-    }, 300);
+    function scheduleNext(): void {
+      if (entry!.messages.length > 0) {
+        setTimeout(() => deliverNext(id), DELIVERY_DELAY_MS);
+      } else {
+        entry!.delivering = false;
+      }
+    }
+
+    setTimeout(afterText, 300);
     return;
   }
 

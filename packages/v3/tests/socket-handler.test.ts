@@ -270,7 +270,7 @@ describe('Socket handlers', () => {
       type: 'poke', id: 2, name: '001-test-arch', message: '1',
     });
     expect(pokeRes['error']).toBeUndefined();
-    expect(enqueueSpy).toHaveBeenCalledWith('uuid-ta', '1');
+    expect(enqueueSpy).toHaveBeenCalledWith('uuid-ta', '1', false);
     enqueueSpy.mockRestore();
 
     // key writes should still be just the one from before — poke went through MQ

@@ -188,7 +188,7 @@ test('T-0670-28: setup --guardian permission hook flow', async () => {
   // Verify settings.json has hook config
   const settingsPath = path.join(tmpDir, '.claude', 'settings.json');
   const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-  expect(settings.hooks.PermissionRequest[0].command).toBe('nap3 hook permission-request');
+  expect(settings.hooks.PermissionRequest[0].hooks[0].command).toBe('nap3 hook permission-request');
 
   // Launch app
   const app = await launchApp(tmpDir);

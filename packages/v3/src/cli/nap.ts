@@ -1131,7 +1131,7 @@ async function main(): Promise<void> {
 
     case 'poke': {
       if (!args[0] || !args[1]) {
-        process.stderr.write('Usage: nap3 poke <name> <message>\n');
+        process.stderr.write('Usage: nap3 poke <name> <message> [--esc]\n');
         process.exit(1);
       }
       const sock = resolveSocketOrDie();
@@ -1140,6 +1140,7 @@ async function main(): Promise<void> {
         id: requestId++,
         name: args[0],
         message: args.slice(1).join(' '),
+        esc: flags['esc'] === true,
       });
       if (res['error']) {
         process.stderr.write(String(res['message']) + '\n');
@@ -1395,6 +1396,25 @@ async function main(): Promise<void> {
     }
 
     case 'permission-response': {
+      // --list: show all pending permission requests
+      if (flags['list']) {
+        const sock = resolveSocketOrDie();
+        const res = await send(sock, { type: 'permission-list', id: requestId++ });
+        if (res['error']) {
+          process.stderr.write(String(res['message']) + '\n');
+          process.exit(1);
+        }
+        const pending = (res['pending'] as Array<{ agentId: string; name: string; tool: string; command: string }>) || [];
+        if (pending.length === 0) {
+          process.stdout.write('no pending permission requests\n');
+        } else {
+          for (const p of pending) {
+            process.stdout.write(`${p.name} (${p.agentId}): ${p.tool} — ${p.command}\n`);
+          }
+        }
+        break;
+      }
+
       const agentId = flags['agent'] as string;
       const decision = flags['decision'] as string;
 

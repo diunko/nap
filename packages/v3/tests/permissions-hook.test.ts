@@ -609,6 +609,42 @@ describe('0650 — Socket handler: permissions', () => {
     conn.destroy();
   });
 
+  // T-0650-06b: permission-response by agent NAME (not UUID) — how guardians actually resolve
+  it('T-0650-06b: permission-response by agent name resolves hanging connection', async () => {
+    await setupWithGuardian();
+
+    // Hook sends agentId as UUID (from NAP_SESSION_ID)
+    const { promise, conn } = sendLongLived(sockPath, {
+      type: 'hook-permission-request',
+      id: 1,
+      agentId: 'uuid-fs',  // UUID
+      tool: 'Bash',
+      command: 'npm install',
+      payload: {},
+    });
+
+    await sleep(100);
+
+    // Guardian resolves by NAME (what it sees in the poke message)
+    const resResponse = await send(sockPath, {
+      type: 'permission-response',
+      id: 2,
+      agentId: '002-fs-eng',  // NAME, not UUID
+      decision: 'allow',
+    });
+    expect(resResponse.error).toBeUndefined();
+
+    // Hanging connection should resolve
+    const hookResult = await promise;
+    expect(hookResult.decision).toBe('allow');
+
+    // Model state should be cleared
+    const agent = model.getAllAgents().find(a => a.id === 'uuid-fs');
+    expect(agent!.pendingApproval).toBeNull();
+
+    conn.destroy();
+  });
+
   // T-0650-24: duplicate hook-permission-request for same agent
   it('T-0650-24: duplicate hook-permission-request for same agent → error', async () => {
     await setupWithGuardian();

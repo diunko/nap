@@ -6,12 +6,25 @@ function sleep(ms: number): Promise<void> {
 }
 
 describe('Message queue', () => {
-  // T-0210-55
-  it('poke delivers text → Escape → CR', async () => {
+  // T-0210-55 (updated: default poke is text → CR, no ESC)
+  it('poke delivers text → CR (no ESC by default)', async () => {
     const writes: string[] = [];
     setWriter((_id, data) => writes.push(data));
 
     enqueue('uuid-ta', 'hello');
+    await sleep(1000);
+
+    expect(writes).toEqual(['hello', '\r']);
+
+    // Cleanup
+    setWriter(() => {});
+  });
+
+  it('poke with esc=true delivers text → ESC → CR', async () => {
+    const writes: string[] = [];
+    setWriter((_id, data) => writes.push(data));
+
+    enqueue('uuid-ta-esc', 'hello', true);
     await sleep(1000);
 
     expect(writes).toEqual(['hello', '\x1b', '\r']);
@@ -29,8 +42,8 @@ describe('Message queue', () => {
     enqueue('uuid-ta', 'msg2');
     await sleep(2500);
 
-    // msg1 cycle then msg2 cycle
-    expect(writes.map(w => w.data)).toEqual(['msg1', '\x1b', '\r', 'msg2', '\x1b', '\r']);
+    // msg1 cycle then msg2 cycle (no ESC)
+    expect(writes.map(w => w.data)).toEqual(['msg1', '\r', 'msg2', '\r']);
 
     // Cleanup
     setWriter(() => {});

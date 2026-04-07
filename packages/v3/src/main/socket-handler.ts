@@ -120,12 +120,13 @@ export function createRequestHandler(
       case 'poke': {
         const name = req.name as string;
         const message = req.message as string;
+        const esc = (req.esc as boolean) || false;
         const allAgents = model.getAllAgents();
         const resolved = resolveByName(allAgents, name);
         if (!resolved.ok) {
           throw new Error(resolved.error);
         }
-        enqueue(resolved.agent.id, message);
+        enqueue(resolved.agent.id, message, esc);
         return { id: reqId };
       }
 
@@ -220,13 +221,39 @@ export function createRequestHandler(
         return LONG_LIVED;
       }
 
+      case 'permission-list': {
+        const entries: Array<{ agentId: string; name: string; tool: string; command: string; timestamp: number }> = [];
+        for (const [agentId] of pendingRegistry) {
+          const agent = model.getAllAgents().find(a => a.id === agentId);
+          const approval = agent?.pendingApproval;
+          entries.push({
+            agentId,
+            name: agent?.name ?? agentId,
+            tool: approval?.tool ?? '',
+            command: approval?.command ?? '',
+            timestamp: approval?.timestamp ?? 0,
+          });
+        }
+        return { id: reqId, pending: entries };
+      }
+
       case 'permission-response': {
-        const agentId = req.agentId as string;
+        let agentId = req.agentId as string;
         const decision = req.decision as string;
 
-        const entry = pendingRegistry.get(agentId);
+        // Try direct lookup (UUID), then resolve by name
+        let entry = pendingRegistry.get(agentId);
         if (!entry) {
-          throw new Error(`no pending approval for agent '${agentId}'`);
+          const allAgents = model.getAllAgents();
+          const resolved = resolveByName(allAgents, agentId);
+          if (resolved.ok) {
+            agentId = resolved.agent.id;
+            entry = pendingRegistry.get(agentId);
+          }
+        }
+
+        if (!entry) {
+          throw new Error(`no pending approval for agent '${req.agentId as string}'`);
         }
 
         // Clean up
