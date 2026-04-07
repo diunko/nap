@@ -1,16 +1,36 @@
+import type * as net from 'net';
 import type { NapModel } from './model';
 import type { PtySpawner } from './pty-spawner';
 import type { NapkinStatus } from '../shared/bridge-types';
 import { resolveByName } from './name-resolver';
 import { enqueue } from './message-queue';
+import { LONG_LIVED } from './socket-server';
+import { serialize } from '../shared/ndjson';
 
 const VALID_PHASES = ['backlog', 'todo', 'doing', 'review', 'done'] as const;
+
+// ── Pending approvals registry ──
+// Maps agentId → { resolve callback, connection }
+// hook-permission-request adds an entry; permission-response resolves it.
+
+interface PendingEntry {
+  resolve: (decision: string) => void;
+  conn: net.Socket;
+  keepaliveTimer: ReturnType<typeof setInterval>;
+}
+
+const pendingRegistry = new Map<string, PendingEntry>();
+
+/** Exported for tests — check registry state */
+export function getPendingRegistry(): ReadonlyMap<string, PendingEntry> {
+  return pendingRegistry;
+}
 
 export function createRequestHandler(
   model: NapModel,
   ptySpawner: PtySpawner,
-): (msg: unknown) => Promise<unknown> {
-  return async (msg: unknown) => {
+): (msg: unknown, conn: net.Socket) => Promise<unknown> {
+  return async (msg: unknown, conn: net.Socket) => {
     const req = msg as Record<string, unknown>;
     const reqId = req.id as number;
     const type = req.type as string;
@@ -141,6 +161,83 @@ export function createRequestHandler(
         if (agent.exited) status = 'exited';
         else if (agent.done) status = 'done';
         return { id: reqId, status };
+      }
+
+      case 'hook-permission-request': {
+        const agentId = req.agentId as string;
+        const tool = req.tool as string;
+        const command = req.command as string;
+        const payload = (req.payload as object) || {};
+
+        // Reject duplicate — agent already has a pending approval
+        if (pendingRegistry.has(agentId)) {
+          throw new Error(`agent '${agentId}' already has a pending approval`);
+        }
+
+        // Set model state
+        model.setAgentPendingApproval(agentId, {
+          tool,
+          command,
+          timestamp: Date.now(),
+          payload,
+        });
+
+        // Poke guardian if present + running
+        const guardian = model.findAgentByRole('guardian');
+        if (guardian && guardian.running) {
+          const agent = model.getAllAgents().find(a => a.id === agentId);
+          const agentName = agent?.name ?? agentId;
+          const napkinSlug = agent?.napkinId ?? 'unknown';
+          const role = agent?.role ?? 'unknown';
+          const taskPath = agent?.homePath ? agent.homePath + '/prompt.md' : 'unknown';
+          const pokeMessage = `[permission-request from: ${agentName} | napkin: ${napkinSlug} | role: ${role}]\ntool: ${tool}\ncommand: ${command}\ntask: ${taskPath}`;
+          enqueue(guardian.id, pokeMessage);
+        }
+
+        // Create long-lived Promise — hangs until permission-response resolves it
+        const decision = await new Promise<string>((resolve) => {
+          const keepaliveTimer = setInterval(() => {
+            if (!conn.destroyed) {
+              conn.write(serialize({ type: 'ping' }));
+            }
+          }, 60_000);
+
+          pendingRegistry.set(agentId, { resolve, conn, keepaliveTimer });
+
+          // Clean up if client disconnects before resolution
+          conn.on('close', () => {
+            const entry = pendingRegistry.get(agentId);
+            if (entry) {
+              clearInterval(entry.keepaliveTimer);
+              pendingRegistry.delete(agentId);
+              model.clearPendingApproval(agentId);
+            }
+          });
+        });
+
+        // Connection resolved — send decision back to the hook process
+        conn.write(serialize({ decision }));
+        return LONG_LIVED;
+      }
+
+      case 'permission-response': {
+        const agentId = req.agentId as string;
+        const decision = req.decision as string;
+
+        const entry = pendingRegistry.get(agentId);
+        if (!entry) {
+          throw new Error(`no pending approval for agent '${agentId}'`);
+        }
+
+        // Clean up
+        clearInterval(entry.keepaliveTimer);
+        pendingRegistry.delete(agentId);
+        model.clearPendingApproval(agentId);
+
+        // Resolve the hanging hook-permission-request Promise
+        entry.resolve(decision);
+
+        return { id: reqId };
       }
 
       default:

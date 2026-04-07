@@ -100,6 +100,22 @@ export interface NapWaitRequest {
   name: string;
 }
 
+export interface HookPermissionRequest {
+  type: 'hook-permission-request';
+  id: number;
+  agentId: string;
+  tool: string;
+  command: string;
+  payload: object;
+}
+
+export interface PermissionResponseRequest {
+  type: 'permission-response';
+  id: number;
+  agentId: string;
+  decision: 'allow' | 'deny';
+}
+
 export type SocketRequest =
   | StartRequest
   | PsRequest
@@ -115,4 +131,6 @@ export type SocketRequest =
   | SetStatusRequest
   | StatusInspectRequest
   | KeyRequest
-  | NapWaitRequest;
+  | NapWaitRequest
+  | HookPermissionRequest
+  | PermissionResponseRequest;

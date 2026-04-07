@@ -4,7 +4,13 @@ import * as path from 'path';
 import { NdjsonParser, serialize } from '../shared/ndjson';
 import { isSocketAlive } from '../shared/constants';
 
-export type RequestHandler = (msg: unknown) => unknown | Promise<unknown>;
+/** Sentinel: handler manages the connection lifecycle directly */
+export const LONG_LIVED = Symbol('LONG_LIVED');
+
+export type RequestHandler = (
+  msg: unknown,
+  conn: net.Socket,
+) => unknown | Promise<unknown>;
 
 let server: net.Server | null = null;
 let activeSocketPath: string | null = null;
@@ -32,7 +38,9 @@ export async function startSocketServer(
   server = net.createServer((conn) => {
     const parser = new NdjsonParser(async (msg) => {
       try {
-        const res = await handler(msg);
+        const res = await handler(msg, conn);
+        // LONG_LIVED means the handler owns the connection — don't auto-respond
+        if (res === LONG_LIVED) return;
         conn.write(serialize(res));
       } catch (err) {
         const req = msg as { id?: number };
