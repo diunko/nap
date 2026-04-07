@@ -9,6 +9,7 @@ export interface PtySpawner {
   onExit(id: string, callback: (exitCode: number) => void | Promise<void>): void;
   clearExitHandlers(): void;
   write(id: string, data: string): void;
+  getScrollback(id: string): string;
 }
 
 // ── FakePtySpawner — records calls, for small tests ──
@@ -63,6 +64,10 @@ export class FakePtySpawner implements PtySpawner {
 
   write(id: string, data: string): void {
     this.writes.push({ id, data });
+  }
+
+  getScrollback(id: string): string {
+    return this.outputBuffers.get(id) ?? '';
   }
 
   /** Test-only: simulate a pty exit. Awaitable so disk writes complete. */

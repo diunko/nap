@@ -153,7 +153,17 @@ export function createRequestHandler(
       }
 
       case 'log': {
-        return { id: reqId, lines: [] };
+        const name = req.name as string;
+        const tail = (req.tail as number) || 20;
+        const allAgents = model.getAllAgents();
+        const resolved = resolveByName(allAgents, name);
+        if (!resolved.ok) {
+          throw new Error(resolved.error);
+        }
+        const raw = ptySpawner.getScrollback(resolved.agent.id);
+        const allLines = raw.split('\n').filter(l => l.length > 0);
+        const lines = allLines.slice(-tail);
+        return { id: reqId, lines };
       }
 
       case 'nap-wait': {

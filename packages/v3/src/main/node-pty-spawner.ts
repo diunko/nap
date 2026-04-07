@@ -11,6 +11,7 @@ export class NodePtySpawner implements PtySpawner {
   private exitCallbacks = new Map<string, (exitCode: number) => void | Promise<void>>();
   private outputBuffers = new Map<string, string[]>();
   private detectionBuffers = new Map<string, string>(); // ALL output, survives markReady
+  private scrollbackBuffers = new Map<string, string>(); // scrollback for nap3 log (256KB max)
   private readyTerminals = new Set<string>();
   private dataHandler: ((id: string, data: string) => void) | null = null;
   private exitNotifier: ((id: string, exitCode: number) => void) | null = null;
@@ -52,8 +53,10 @@ export class NodePtySpawner implements PtySpawner {
     this.processes.set(opts.id, proc);
     this.outputBuffers.set(opts.id, []);
     this.detectionBuffers.set(opts.id, '');
+    this.scrollbackBuffers.set(opts.id, '');
 
     const id = opts.id;
+    const MAX_SCROLLBACK = 256 * 1024; // 256KB
 
     proc.onData((data: string) => {
       // Always capture in detection buffer (survives markReady flush)
@@ -62,6 +65,13 @@ export class NodePtySpawner implements PtySpawner {
         // Keep last 4KB only — enough for error messages
         const updated = det + data;
         this.detectionBuffers.set(id, updated.length > 4096 ? updated.slice(-4096) : updated);
+      }
+
+      // Capture scrollback for nap3 log
+      const sb = this.scrollbackBuffers.get(id);
+      if (sb !== undefined) {
+        const updated = sb + data;
+        this.scrollbackBuffers.set(id, updated.length > MAX_SCROLLBACK ? updated.slice(-MAX_SCROLLBACK) : updated);
       }
 
       if (this.readyTerminals.has(id)) {
@@ -76,6 +86,7 @@ export class NodePtySpawner implements PtySpawner {
       this.processes.delete(id);
       this.outputBuffers.delete(id);
       this.readyTerminals.delete(id);
+      this.scrollbackBuffers.delete(id);
 
       // Coordinator's exit callback (model update) — detection buffer still available
       const cb = this.exitCallbacks.get(id);
@@ -106,6 +117,7 @@ export class NodePtySpawner implements PtySpawner {
     this.processes.clear();
     this.outputBuffers.clear();
     this.readyTerminals.clear();
+    this.scrollbackBuffers.clear();
   }
 
   isRunning(id: string): boolean {
@@ -141,6 +153,11 @@ export class NodePtySpawner implements PtySpawner {
       }
     }
     this.outputBuffers.delete(id);
+  }
+
+  /** Get scrollback buffer for nap3 log */
+  getScrollback(id: string): string {
+    return this.scrollbackBuffers.get(id) ?? '';
   }
 
   /** Write data to a pty's stdin */

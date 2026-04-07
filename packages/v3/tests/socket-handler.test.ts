@@ -287,4 +287,50 @@ describe('Socket handlers', () => {
     // key: exactly 1 write of "1"
     expect(ptySpawner.writes).toEqual([{ id: 'uuid-ta', data: '1' }]);
   });
+
+  // ── log handler tests ──
+
+  it('log handler returns scrollback lines', async () => {
+    await setupF10();
+    ptySpawner.simulateOutput('uuid-ta', 'line1\nline2\nline3\n');
+
+    const res = await send(sockPath, { type: 'log', id: 1, name: '001-test-arch' });
+    expect(res['error']).toBeUndefined();
+    const lines = res['lines'] as string[];
+    expect(lines).toContain('line1');
+    expect(lines).toContain('line2');
+    expect(lines).toContain('line3');
+  });
+
+  it('log handler respects tail parameter', async () => {
+    await setupF10();
+    const manyLines = Array.from({ length: 50 }, (_, i) => `line-${i}`).join('\n') + '\n';
+    ptySpawner.simulateOutput('uuid-ta', manyLines);
+
+    const res = await send(sockPath, { type: 'log', id: 1, name: '001-test-arch', tail: 5 });
+    expect(res['error']).toBeUndefined();
+    const lines = res['lines'] as string[];
+    expect(lines).toHaveLength(5);
+    expect(lines[0]).toBe('line-45');
+    expect(lines[4]).toBe('line-49');
+  });
+
+  it('log handler defaults to 20 lines', async () => {
+    await setupF10();
+    const manyLines = Array.from({ length: 50 }, (_, i) => `line-${i}`).join('\n') + '\n';
+    ptySpawner.simulateOutput('uuid-ta', manyLines);
+
+    const res = await send(sockPath, { type: 'log', id: 1, name: '001-test-arch' });
+    expect(res['error']).toBeUndefined();
+    const lines = res['lines'] as string[];
+    expect(lines).toHaveLength(20);
+    expect(lines[0]).toBe('line-30');
+    expect(lines[19]).toBe('line-49');
+  });
+
+  it('log handler with unknown agent → error', async () => {
+    await setupF10();
+    const res = await send(sockPath, { type: 'log', id: 1, name: 'nobody' });
+    expect(res['error']).toBe(true);
+  });
 });

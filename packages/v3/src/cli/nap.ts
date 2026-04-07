@@ -159,11 +159,12 @@ Focus an agent's terminal in the UI.
   name              Agent name
   --help            Show this help
 `,
-  log: `Usage: nap3 log <name>
+  log: `Usage: nap3 log <name> [--tail <n>]
 
 Dump terminal scrollback to stdout.
 
   name              Agent name
+  --tail <n>        Number of lines (default: 20)
   --help            Show this help
 `,
   stop: `Usage: nap3 stop <name>
@@ -1206,11 +1207,12 @@ async function main(): Promise<void> {
 
     case 'log': {
       if (!args[0]) {
-        process.stderr.write('Usage: nap3 log <name>\n');
+        process.stderr.write('Usage: nap3 log <name> [--tail <n>]\n');
         process.exit(1);
       }
+      const tail = flags['tail'] ? Number(flags['tail']) : 20;
       const sock = resolveSocketOrDie();
-      const res = await send(sock, { type: 'log', id: requestId++, name: args[0] });
+      const res = await send(sock, { type: 'log', id: requestId++, name: args[0], tail });
       if (res['error']) {
         process.stderr.write(String(res['message']) + '\n');
         process.exit(1);
