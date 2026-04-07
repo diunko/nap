@@ -18,6 +18,7 @@ Usage: nap3 <command> [options]
 
 Commands:
   init                          Bootstrap a project for agent collaboration
+  setup [flags]                 Add capabilities to an existing project
   open                          Launch Nap.app (walks up to find .nap/)
   dev                           Launch in dev mode (HMR) for current project
   create napkin|agent|arch|nepic  Create an entity
@@ -41,6 +42,16 @@ Flags:
 `;
 
 const COMMAND_HELP: Record<string, string> = {
+  setup: `Usage: nap3 setup [--guardian] [--skills [--user]] [--import]
+
+Add capabilities to an existing project. Requires .nap/ to exist.
+
+  --guardian         Add guardian agent + permission hook config
+  --skills           Copy napkin skills to .claude/skills/
+  --user             With --skills: install to ~/.claude/skills/ instead
+  --import           Scan project, create markers for unmarked entities
+  --help             Show this help
+`,
   init: `Usage: nap3 init [--name <name>] [--template <name>] [--add-skills [--user]]
 
 Bootstrap a project for agent collaboration.
@@ -348,6 +359,195 @@ function copyDirRecursive(src: string, dest: string): void {
   }
 }
 
+// --- Setup functions (shared between init and setup commands) ---
+
+/** Read active nepic from ui-state.json, return its directory path. */
+function getActiveNepicDir(cwd: string): string {
+  const napDir = path.join(cwd, '.nap');
+  const uiStatePath = path.join(napDir, 'ui-state.json');
+  let activeNepicId = '01-v1';
+  if (fs.existsSync(uiStatePath)) {
+    try {
+      const uiState = JSON.parse(fs.readFileSync(uiStatePath, 'utf-8'));
+      if (uiState.activeNepicId) activeNepicId = uiState.activeNepicId;
+    } catch {
+      // Use default
+    }
+  }
+  return path.join(napDir, 'nepics', activeNepicId);
+}
+
+/** Infer role from dir name: strip numeric prefix + first dash. */
+function inferRole(dirName: string): string {
+  return dirName.replace(/^\d+-/, '');
+}
+
+/** Create guardian agent + PermissionRequest hook config. Idempotent. */
+function setupGuardian(cwd: string, nepicDir: string, templatesDir: string): void {
+  const guardianDir = path.join(nepicDir, '20-architects', '002-guardian');
+  const markerPath = path.join(guardianDir, '.agent.nap.json');
+
+  if (!fs.existsSync(markerPath)) {
+    fs.mkdirSync(guardianDir, { recursive: true });
+
+    const guardianMarker = {
+      cc_session_uuid: crypto.randomUUID(),
+      role: 'guardian',
+      name: '002-guardian',
+      nepic: path.basename(nepicDir),
+      created_at: Date.now(),
+      started: false,
+    };
+    fs.writeFileSync(markerPath, JSON.stringify(guardianMarker, null, 2));
+
+    const guardianPromptSrc = path.join(
+      templatesDir, 'nepic', '20-architects', '002-guardian', 'prompt.md',
+    );
+    if (fs.existsSync(guardianPromptSrc)) {
+      fs.copyFileSync(guardianPromptSrc, path.join(guardianDir, 'prompt.md'));
+    }
+  }
+
+  // Ensure .claude/settings.json has PermissionRequest hook
+  const claudeDir = path.join(cwd, '.claude');
+  fs.mkdirSync(claudeDir, { recursive: true });
+  const settingsPath = path.join(claudeDir, 'settings.json');
+  let settings: Record<string, unknown> = {};
+  if (fs.existsSync(settingsPath)) {
+    try {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    } catch {
+      // Start fresh
+    }
+  }
+  settings.hooks = {
+    ...(settings.hooks as Record<string, unknown> || {}),
+    PermissionRequest: [{
+      type: 'command',
+      command: 'nap3 hook permission-request',
+    }],
+  };
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+}
+
+/** Copy napkin skills to project or user dir. Overwrites existing. */
+function setupSkills(cwd: string, templatesDir: string, user: boolean): void {
+  const skillsSrc = path.join(templatesDir, 'skills');
+  const skillsDest = user
+    ? path.join(os.homedir(), '.claude', 'skills')
+    : path.join(cwd, '.claude', 'skills');
+
+  for (const skillName of ['napkin', 'napkin-format']) {
+    const src = path.join(skillsSrc, skillName);
+    if (!fs.existsSync(src)) continue;
+    const dest = path.join(skillsDest, skillName);
+    if (fs.existsSync(dest)) {
+      fs.rmSync(dest, { recursive: true, force: true });
+    }
+    copyDirRecursive(src, dest);
+  }
+}
+
+/** Scan project for unmarked napkins/agents/architects, create markers. Additive only. */
+function setupImport(cwd: string): void {
+  const nepicsDir = path.join(cwd, '.nap', 'nepics');
+  if (!fs.existsSync(nepicsDir)) return;
+
+  const nepicDirs = fs.readdirSync(nepicsDir, { withFileTypes: true })
+    .filter(d => d.isDirectory());
+
+  for (const nepicEntry of nepicDirs) {
+    const nepicSlug = nepicEntry.name;
+    const nepicPath = path.join(nepicsDir, nepicSlug);
+
+    // Scan 30-napkins/*/
+    const napkinsDir = path.join(nepicPath, '30-napkins');
+    if (fs.existsSync(napkinsDir)) {
+      const napkinDirs = fs.readdirSync(napkinsDir, { withFileTypes: true })
+        .filter(d => d.isDirectory());
+
+      for (const napkinEntry of napkinDirs) {
+        const napkinSlug = napkinEntry.name;
+        const napkinPath = path.join(napkinsDir, napkinSlug);
+        const napkinMarkerPath = path.join(napkinPath, '.napkin.nap.json');
+
+        // Create napkin marker if missing
+        if (!fs.existsSync(napkinMarkerPath)) {
+          const marker = { status: 'backlog', nepic: nepicSlug };
+          fs.writeFileSync(napkinMarkerPath, JSON.stringify(marker, null, 2));
+        }
+
+        // Scan agents/*/
+        const agentsDir = path.join(napkinPath, 'agents');
+        if (fs.existsSync(agentsDir)) {
+          const agentDirs = fs.readdirSync(agentsDir, { withFileTypes: true })
+            .filter(d => d.isDirectory());
+
+          for (const agentDir of agentDirs) {
+            const agentPath = path.join(agentsDir, agentDir.name);
+            const agentMarkerPath = path.join(agentPath, '.agent.nap.json');
+
+            if (fs.existsSync(agentMarkerPath)) continue;
+
+            // Skip empty dirs
+            const files = fs.readdirSync(agentPath);
+            if (files.length === 0) continue;
+
+            const hasResponse = fs.existsSync(path.join(agentPath, 'response.md'));
+
+            const marker = {
+              cc_session_uuid: crypto.randomUUID(),
+              role: inferRole(agentDir.name),
+              name: agentDir.name,
+              napkin: napkinSlug,
+              nepic: nepicSlug,
+              started: false,
+              done: hasResponse,
+              exited: false,
+              archived: false,
+              created_at: Date.now(),
+            };
+            fs.writeFileSync(agentMarkerPath, JSON.stringify(marker, null, 2));
+          }
+        }
+      }
+    }
+
+    // Scan 20-architects/*/
+    const architectsDir = path.join(nepicPath, '20-architects');
+    if (fs.existsSync(architectsDir)) {
+      const archDirs = fs.readdirSync(architectsDir, { withFileTypes: true })
+        .filter(d => d.isDirectory());
+
+      for (const archDir of archDirs) {
+        const archPath = path.join(architectsDir, archDir.name);
+        const archMarkerPath = path.join(archPath, '.agent.nap.json');
+
+        if (fs.existsSync(archMarkerPath)) continue;
+
+        // Skip empty dirs
+        const files = fs.readdirSync(archPath);
+        if (files.length === 0) continue;
+
+        const hasResponse = fs.existsSync(path.join(archPath, 'response.md'));
+
+        const marker = {
+          cc_session_uuid: crypto.randomUUID(),
+          role: inferRole(archDir.name),
+          name: archDir.name,
+          nepic: nepicSlug,
+          started: false,
+          done: hasResponse,
+          exited: false,
+          archived: false,
+          created_at: Date.now(),
+        };
+        fs.writeFileSync(archMarkerPath, JSON.stringify(marker, null, 2));
+      }
+    }
+  }
+}
+
 // ── Claude command construction ──
 
 export function shellEscape(s: string): string {
@@ -481,26 +681,7 @@ async function main(): Promise<void> {
 
       // Handle --add-skills
       if (flags['add-skills']) {
-        const skillsSrc = path.join(templatesDir, 'skills');
-        let skillsDest: string;
-        if (flags['user']) {
-          skillsDest = path.join(os.homedir(), '.claude', 'skills');
-        } else {
-          skillsDest = path.join(cwd, '.claude', 'skills');
-        }
-
-        if (fs.existsSync(path.join(skillsSrc, 'napkin'))) {
-          copyDirRecursive(
-            path.join(skillsSrc, 'napkin'),
-            path.join(skillsDest, 'napkin'),
-          );
-        }
-        if (fs.existsSync(path.join(skillsSrc, 'napkin-format'))) {
-          copyDirRecursive(
-            path.join(skillsSrc, 'napkin-format'),
-            path.join(skillsDest, 'napkin-format'),
-          );
-        }
+        setupSkills(cwd, templatesDir, !!flags['user']);
       }
 
       // Handle --template: copy seed mega-napkin into the project
@@ -537,54 +718,44 @@ async function main(): Promise<void> {
 
       // Handle --guardian: create guardian agent + PermissionRequest hook config
       if (flags['guardian']) {
-        const guardianDir = path.join(nepicDir, '20-architects', '002-guardian');
-        fs.mkdirSync(guardianDir, { recursive: true });
-
-        const guardianId = crypto.randomUUID();
-        const guardianMarker = {
-          cc_session_uuid: guardianId,
-          role: 'guardian',
-          name: '002-guardian',
-          nepic: '01-v1',
-          created_at: Date.now(),
-          started: false,
-        };
-        fs.writeFileSync(
-          path.join(guardianDir, '.agent.nap.json'),
-          JSON.stringify(guardianMarker, null, 2),
-        );
-
-        // Copy guardian prompt from templates
-        const guardianPromptSrc = path.join(
-          templatesDir, 'nepic', '20-architects', '002-guardian', 'prompt.md',
-        );
-        if (fs.existsSync(guardianPromptSrc)) {
-          fs.copyFileSync(guardianPromptSrc, path.join(guardianDir, 'prompt.md'));
-        }
-
-        // Write .claude/settings.json with PermissionRequest hook
-        const claudeDir = path.join(cwd, '.claude');
-        fs.mkdirSync(claudeDir, { recursive: true });
-        const settingsPath = path.join(claudeDir, 'settings.json');
-        let settings: Record<string, unknown> = {};
-        if (fs.existsSync(settingsPath)) {
-          try {
-            settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-          } catch {
-            // Start fresh
-          }
-        }
-        settings.hooks = {
-          ...(settings.hooks as Record<string, unknown> || {}),
-          PermissionRequest: [{
-            type: 'command',
-            command: 'nap3 hook permission-request',
-          }],
-        };
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+        setupGuardian(cwd, nepicDir, templatesDir);
       }
 
       process.stdout.write('Initialized NAP project in .nap/\n');
+      break;
+    }
+
+    case 'setup': {
+      const cwd = process.cwd();
+      const napDir = path.join(cwd, '.nap');
+
+      if (!fs.existsSync(napDir)) {
+        process.stderr.write('Not a nap project (run nap3 init first)\n');
+        process.exit(1);
+      }
+
+      const hasFlags = flags['guardian'] || flags['skills'] || flags['import'];
+      if (!hasFlags) {
+        process.stderr.write(COMMAND_HELP['setup']);
+        process.exit(1);
+      }
+
+      const templatesDir = findTemplatesDir();
+
+      if (flags['guardian']) {
+        const nepicDir = getActiveNepicDir(cwd);
+        setupGuardian(cwd, nepicDir, templatesDir);
+      }
+
+      if (flags['skills']) {
+        setupSkills(cwd, templatesDir, !!flags['user']);
+      }
+
+      if (flags['import']) {
+        setupImport(cwd);
+      }
+
+      process.stdout.write('Setup complete.\n');
       break;
     }
 
@@ -1060,12 +1231,6 @@ async function main(): Promise<void> {
       }
 
       let imported = 0;
-
-      // Infer role from dir name: strip numeric prefix + first dash
-      // "001-test-arch" → "test-arch", "002-fs-eng" → "fs-eng"
-      function inferRole(dirName: string): string {
-        return dirName.replace(/^\d+-/, '');
-      }
 
       // Scan 30-napkins/*/agents/*/
       const napkinsDir = path.join(nepicDir, '30-napkins');
