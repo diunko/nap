@@ -33,6 +33,8 @@ Commands:
   log <name>                    Dump terminal scrollback
   stop <name>                   Stop an agent
   import-agents <nepic-dir>     Import existing agent dirs as archived
+  hook permission-request       CC PermissionRequest hook handler
+  permission-response           Resolve a pending permission request
 
 Flags:
   --help                        Show help
@@ -167,6 +169,22 @@ Import existing agent dirs (with prompt.md/response.md but no markers) as archiv
   nepic-dir         Path to nepic directory (e.g. .nap/nepics/01-v1)
   --help            Show this help
 `,
+  hook: `Usage: nap3 hook <event>
+
+Handle a CC hook event. Currently supported:
+  permission-request   Handle PermissionRequest hook (reads stdin JSON)
+
+Reads NAP_SESSION_ID and NAP_SOCKET from environment.
+  --help            Show this help
+`,
+  'permission-response': `Usage: nap3 permission-response --agent <id> --decision allow|deny
+
+Resolve a pending permission request for an agent.
+
+  --agent <id>      Agent session ID
+  --decision        "allow" or "deny"
+  --help            Show this help
+`,
 };
 
 // --- Arg parsing ---
@@ -222,6 +240,47 @@ function send(
 
     const parser = new NdjsonParser((msg) => {
       resolve(msg as Record<string, unknown>);
+      conn.destroy();
+    });
+
+    conn.on('data', (chunk) => parser.feed(chunk.toString()));
+    conn.on('connect', () => {
+      conn.write(serialize(request));
+    });
+  });
+}
+
+/**
+ * Send request and wait for a non-ping response (for long-lived connections).
+ * Ignores keepalive pings from the server.
+ */
+function sendLongLived(
+  socketPath: string,
+  request: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const conn = net.createConnection(socketPath);
+    const timer = setTimeout(() => {
+      conn.destroy();
+      resolve({});  // pass-through on timeout
+    }, timeoutMs);
+
+    conn.on('error', (err: NodeJS.ErrnoException) => {
+      clearTimeout(timer);
+      if (err.code === 'ENOENT' || err.code === 'ECONNREFUSED') {
+        process.stderr.write('nap3 is not running (run nap3 open)\n');
+        process.exit(1);
+      }
+      reject(err);
+    });
+
+    const parser = new NdjsonParser((msg) => {
+      const obj = msg as Record<string, unknown>;
+      // Ignore keepalive pings
+      if (obj.type === 'ping') return;
+      clearTimeout(timer);
+      resolve(obj);
       conn.destroy();
     });
 
@@ -1039,6 +1098,108 @@ async function main(): Promise<void> {
       }
 
       process.stdout.write(`Imported ${imported} agent(s) as archived.\n`);
+      break;
+    }
+
+    case 'hook': {
+      const subcommand = args[0];
+      if (subcommand !== 'permission-request') {
+        process.stderr.write(`Unknown hook event: ${subcommand ?? '(none)'}\n`);
+        process.stderr.write(COMMAND_HELP['hook']);
+        process.exit(1);
+      }
+
+      // Read NAP_SESSION_ID from env
+      const sessionId = process.env['NAP_SESSION_ID'];
+      if (!sessionId) {
+        process.stderr.write('NAP_SESSION_ID not set\n');
+        process.exit(1);
+      }
+
+      // Resolve socket
+      const hookSocket = process.env['NAP_SOCKET'];
+      if (!hookSocket) {
+        const found = findSocketPath(process.cwd());
+        if (!found) {
+          process.stderr.write('nap3 is not running\n');
+          process.exit(1);
+        }
+      }
+      const sock = hookSocket || findSocketPath(process.cwd())!;
+
+      // Read hook payload from stdin
+      let stdinData = '';
+      for await (const chunk of process.stdin) {
+        stdinData += chunk;
+      }
+
+      let payload: Record<string, unknown> = {};
+      try {
+        payload = JSON.parse(stdinData);
+      } catch {
+        // If stdin isn't valid JSON, continue with empty payload
+      }
+
+      const tool = (payload.tool_name as string) || '';
+      const toolInput = (payload.tool_input as Record<string, unknown>) || {};
+      const command = (toolInput.command as string) || '';
+
+      // Send to socket and block until resolved (10 min timeout)
+      const TIMEOUT_MS = 10 * 60 * 1000;
+      const res = await sendLongLived(sock, {
+        type: 'hook-permission-request',
+        id: requestId++,
+        agentId: sessionId,
+        tool,
+        command,
+        payload,
+      }, TIMEOUT_MS);
+
+      // Format CC-compatible output
+      const decision = res.decision as string | undefined;
+      if (decision === 'allow') {
+        process.stdout.write(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: 'PermissionRequest',
+            decision: { behavior: 'allow' },
+          },
+        }));
+      } else if (decision === 'deny') {
+        process.stdout.write(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: 'PermissionRequest',
+            decision: { behavior: 'deny', message: 'denied by guardian', interrupt: true },
+          },
+        }));
+      }
+      // No decision = pass-through (exit 0, CC shows its own dialog)
+      break;
+    }
+
+    case 'permission-response': {
+      const agentId = flags['agent'] as string;
+      const decision = flags['decision'] as string;
+
+      if (!agentId) {
+        process.stderr.write('--agent is required\n');
+        process.exit(1);
+      }
+      if (decision !== 'allow' && decision !== 'deny') {
+        process.stderr.write('invalid decision — use "allow" or "deny"\n');
+        process.exit(1);
+      }
+
+      const sock = resolveSocketOrDie();
+      const res = await send(sock, {
+        type: 'permission-response',
+        id: requestId++,
+        agentId,
+        decision,
+      });
+      if (res['error']) {
+        process.stderr.write(String(res['message']) + '\n');
+        process.exit(1);
+      }
       break;
     }
 
