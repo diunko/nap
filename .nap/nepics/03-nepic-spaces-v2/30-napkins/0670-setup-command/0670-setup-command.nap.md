@@ -75,10 +75,3 @@
   * `nap3 init --add-skills` = init + setup --skills
   * init flags are sugar for init + setup in one command
 
-* testing
-  * small: import creates correct markers for napkins, agents, architects
-  * small: import skips empty dirs, skips existing markers
-  * small: import infers role from dir name correctly
-  * small: setup --guardian idempotent (second run = no-op)
-  * small: setup --skills copies files correctly
-  * medium: import → open app → sidebar shows all imported entities
