@@ -1064,6 +1064,78 @@ describe('0650 — CLI: hook + permission-response', () => {
     expect(stderrOutput).toContain('invalid decision');
   });
 
+  // T-0650-16b: allow + --interrupt → error
+  it('T-0650-16b: allow + --interrupt → exit 1', () => {
+    const { execFileSync } = require('child_process') as typeof import('child_process');
+    const cliPath = path.join(__dirname, '..', 'out', 'cli', 'cli', 'nap.js');
+
+    let exitCode = 0;
+    let stderrOutput = '';
+    try {
+      execFileSync('node', [
+        cliPath, 'permission-response',
+        '--agent', 'uuid-fs',
+        '--decision', 'allow',
+        '--interrupt',
+      ], { env: process.env, encoding: 'utf8', timeout: 5000 });
+    } catch (err: unknown) {
+      const e = err as { status?: number; stderr?: string };
+      exitCode = e.status || 1;
+      stderrOutput = e.stderr || '';
+    }
+
+    expect(exitCode).toBe(1);
+    expect(stderrOutput).toContain('--interrupt');
+  });
+
+  // T-0650-16c: allow + --message → error
+  it('T-0650-16c: allow + --message → exit 1', () => {
+    const { execFileSync } = require('child_process') as typeof import('child_process');
+    const cliPath = path.join(__dirname, '..', 'out', 'cli', 'cli', 'nap.js');
+
+    let exitCode = 0;
+    let stderrOutput = '';
+    try {
+      execFileSync('node', [
+        cliPath, 'permission-response',
+        '--agent', 'uuid-fs',
+        '--decision', 'allow',
+        '--message', 'some reason',
+      ], { env: process.env, encoding: 'utf8', timeout: 5000 });
+    } catch (err: unknown) {
+      const e = err as { status?: number; stderr?: string };
+      exitCode = e.status || 1;
+      stderrOutput = e.stderr || '';
+    }
+
+    expect(exitCode).toBe(1);
+    expect(stderrOutput).toContain('--message');
+  });
+
+  // T-0650-16d: deny + --interrupt without --message → error
+  it('T-0650-16d: deny + --interrupt without --message → exit 1', () => {
+    const { execFileSync } = require('child_process') as typeof import('child_process');
+    const cliPath = path.join(__dirname, '..', 'out', 'cli', 'cli', 'nap.js');
+
+    let exitCode = 0;
+    let stderrOutput = '';
+    try {
+      execFileSync('node', [
+        cliPath, 'permission-response',
+        '--agent', 'uuid-fs',
+        '--decision', 'deny',
+        '--interrupt',
+      ], { env: process.env, encoding: 'utf8', timeout: 5000 });
+    } catch (err: unknown) {
+      const e = err as { status?: number; stderr?: string };
+      exitCode = e.status || 1;
+      stderrOutput = e.stderr || '';
+    }
+
+    expect(exitCode).toBe(1);
+    expect(stderrOutput).toContain('--message');
+  });
+
   // T-0650-28: hook config format — .claude/settings.json structure
   it('T-0650-28: init --guardian writes correct hook config', () => {
     const { execFileSync } = require('child_process') as typeof import('child_process');

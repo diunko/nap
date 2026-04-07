@@ -1447,6 +1447,20 @@ async function main(): Promise<void> {
 
       const message = flags['message'] as string | undefined;
       const interrupt = flags['interrupt'] === true;
+
+      // Validate flag combinations
+      if (decision === 'allow' && interrupt) {
+        process.stderr.write('--interrupt only applies to deny (allow + interrupt is contradictory)\n');
+        process.exit(1);
+      }
+      if (decision === 'allow' && message) {
+        process.stderr.write('--message only applies to deny\n');
+        process.exit(1);
+      }
+      if (interrupt && !message) {
+        process.stderr.write('--interrupt requires --message — explain why you are stopping the agent\n');
+        process.exit(1);
+      }
       const sock = resolveSocketOrDie();
       const res = await send(sock, {
         type: 'permission-response',
