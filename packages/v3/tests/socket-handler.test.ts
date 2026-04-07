@@ -207,4 +207,35 @@ describe('Socket handlers', () => {
     expect(res['error']).toBe(true);
     expect(String(res['message'])).toContain('already exists');
   });
+
+  // T-0660-20: key → direct pty write, bypasses message queue
+  it('key handler → direct pty write', async () => {
+    await setupF10();
+    const res = await send(sockPath, {
+      type: 'key', id: 1, name: '001-test-arch', data: '\r',
+    });
+    expect(res['error']).toBeUndefined();
+    expect(ptySpawner.writes).toEqual([{ id: 'uuid-ta', data: '\r' }]);
+  });
+
+  // T-0660-21: key with unknown agent → error with suggestions
+  it('key handler — unknown agent → error with suggestions', async () => {
+    await setupF10();
+    const res = await send(sockPath, {
+      type: 'key', id: 1, name: 'test-arch', data: '\r',
+    });
+    expect(res['error']).toBe(true);
+    expect(String(res['message'])).toContain('did you mean');
+  });
+
+  // T-0660-30: key vs poke — key has no 3-step delivery
+  it('key sends exact bytes, no Escape/CR wrapping', async () => {
+    await setupF10();
+    const res = await send(sockPath, {
+      type: 'key', id: 1, name: '001-test-arch', data: '1',
+    });
+    expect(res['error']).toBeUndefined();
+    // key: exactly 1 write of "1"
+    expect(ptySpawner.writes).toEqual([{ id: 'uuid-ta', data: '1' }]);
+  });
 });
