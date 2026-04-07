@@ -534,6 +534,55 @@ async function main(): Promise<void> {
         }
       }
 
+      // Handle --guardian: create guardian agent + PermissionRequest hook config
+      if (flags['guardian']) {
+        const guardianDir = path.join(nepicDir, '20-architects', '002-guardian');
+        fs.mkdirSync(guardianDir, { recursive: true });
+
+        const guardianId = crypto.randomUUID();
+        const guardianMarker = {
+          cc_session_uuid: guardianId,
+          role: 'guardian',
+          name: '002-guardian',
+          nepic: '01-v1',
+          created_at: Date.now(),
+          started: false,
+        };
+        fs.writeFileSync(
+          path.join(guardianDir, '.agent.nap.json'),
+          JSON.stringify(guardianMarker, null, 2),
+        );
+
+        // Copy guardian prompt from templates
+        const guardianPromptSrc = path.join(
+          templatesDir, 'nepic', '20-architects', '002-guardian', 'prompt.md',
+        );
+        if (fs.existsSync(guardianPromptSrc)) {
+          fs.copyFileSync(guardianPromptSrc, path.join(guardianDir, 'prompt.md'));
+        }
+
+        // Write .claude/settings.json with PermissionRequest hook
+        const claudeDir = path.join(cwd, '.claude');
+        fs.mkdirSync(claudeDir, { recursive: true });
+        const settingsPath = path.join(claudeDir, 'settings.json');
+        let settings: Record<string, unknown> = {};
+        if (fs.existsSync(settingsPath)) {
+          try {
+            settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+          } catch {
+            // Start fresh
+          }
+        }
+        settings.hooks = {
+          ...(settings.hooks as Record<string, unknown> || {}),
+          PermissionRequest: [{
+            type: 'command',
+            command: 'nap3 hook permission-request',
+          }],
+        };
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      }
+
       process.stdout.write('Initialized NAP project in .nap/\n');
       break;
     }
