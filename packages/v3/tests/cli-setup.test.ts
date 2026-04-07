@@ -222,6 +222,61 @@ describe.skipIf(!cliBuilt)('nap3 setup', () => {
     }
   });
 
+  // T-0670-09
+  it('setup --skills --user installs to ~/.claude/skills/', () => {
+    const tmpDir = makeTmpDir();
+    const globalSkillsDir = path.join(os.homedir(), '.claude', 'skills');
+    const napkinSkillGlobal = path.join(globalSkillsDir, 'napkin');
+    const napkinFormatSkillGlobal = path.join(globalSkillsDir, 'napkin-format');
+
+    // Snapshot existing global skills so we can restore after
+    const napkinExisted = fs.existsSync(napkinSkillGlobal);
+    const napkinFormatExisted = fs.existsSync(napkinFormatSkillGlobal);
+    let napkinBackup: string | null = null;
+    let napkinFormatBackup: string | null = null;
+
+    try {
+      // Back up existing global skills if present
+      if (napkinExisted) {
+        napkinBackup = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-skill-bak-'));
+        fs.cpSync(napkinSkillGlobal, path.join(napkinBackup, 'napkin'), { recursive: true });
+      }
+      if (napkinFormatExisted) {
+        napkinFormatBackup = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-skill-bak-'));
+        fs.cpSync(napkinFormatSkillGlobal, path.join(napkinFormatBackup, 'napkin-format'), { recursive: true });
+      }
+
+      runNapInit(tmpDir);
+      runNapSetup(tmpDir, ['--skills', '--user']);
+
+      // Global skills should exist
+      expect(fs.existsSync(napkinSkillGlobal)).toBe(true);
+      expect(fs.existsSync(napkinFormatSkillGlobal)).toBe(true);
+      expect(fs.readdirSync(napkinSkillGlobal).length).toBeGreaterThan(0);
+
+      // Project-local skills should NOT have been created by this call
+      const localSkills = path.join(tmpDir, '.claude', 'skills', 'napkin');
+      expect(fs.existsSync(localSkills)).toBe(false);
+    } finally {
+      // Restore or clean up global skills
+      if (napkinExisted && napkinBackup) {
+        fs.rmSync(napkinSkillGlobal, { recursive: true, force: true });
+        fs.cpSync(path.join(napkinBackup, 'napkin'), napkinSkillGlobal, { recursive: true });
+        fs.rmSync(napkinBackup, { recursive: true, force: true });
+      } else if (!napkinExisted) {
+        fs.rmSync(napkinSkillGlobal, { recursive: true, force: true });
+      }
+      if (napkinFormatExisted && napkinFormatBackup) {
+        fs.rmSync(napkinFormatSkillGlobal, { recursive: true, force: true });
+        fs.cpSync(path.join(napkinFormatBackup, 'napkin-format'), napkinFormatSkillGlobal, { recursive: true });
+        fs.rmSync(napkinFormatBackup, { recursive: true, force: true });
+      } else if (!napkinFormatExisted) {
+        fs.rmSync(napkinFormatSkillGlobal, { recursive: true, force: true });
+      }
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   // T-0670-10
   it('setup --import creates napkin markers for unmarked napkins', () => {
     const tmpDir = makeTmpDir();
