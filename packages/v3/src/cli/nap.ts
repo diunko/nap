@@ -423,8 +423,11 @@ function setupGuardian(cwd: string, nepicDir: string, templatesDir: string): voi
   settings.hooks = {
     ...(settings.hooks as Record<string, unknown> || {}),
     PermissionRequest: [{
-      type: 'command',
-      command: 'nap3 hook permission-request',
+      matcher: '',
+      hooks: [{
+        type: 'command',
+        command: 'nap3 hook permission-request',
+      }],
     }],
   };
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));

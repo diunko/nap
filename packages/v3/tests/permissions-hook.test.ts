@@ -928,7 +928,7 @@ describe('0650 — CLI: hook + permission-response', () => {
       expect(settings.hooks).toBeDefined();
       expect(settings.hooks.PermissionRequest).toBeDefined();
       expect(settings.hooks.PermissionRequest).toEqual([
-        { type: 'command', command: 'nap3 hook permission-request' },
+        { matcher: '', hooks: [{ type: 'command', command: 'nap3 hook permission-request' }] },
       ]);
 
       // Also verify guardian agent was created

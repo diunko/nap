@@ -134,7 +134,7 @@ describe.skipIf(!cliBuilt)('nap3 setup', () => {
       const settingsPath = path.join(tmpDir, '.claude', 'settings.json');
       expect(fs.existsSync(settingsPath)).toBe(true);
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      expect(settings.hooks.PermissionRequest[0].command).toBe('nap3 hook permission-request');
+      expect(settings.hooks.PermissionRequest[0].hooks[0].command).toBe('nap3 hook permission-request');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
