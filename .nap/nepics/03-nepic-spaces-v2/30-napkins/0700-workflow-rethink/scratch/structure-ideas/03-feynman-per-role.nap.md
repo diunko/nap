@@ -16,6 +16,9 @@
     * what survives goes on the napkin. `nap3 create napkin 0100-feature`
     * you write the spec — not everything, just the constraints that'd be wrong if guessed
     * you don't write code. the moment you open a source file you're doing the wrong job.
+      * // reading is ok. understanding is ok.
+      * // architect expresses ideas as napkin points, min specs, and journeys
+        * // that's their code
     * you launch agents. write their prompt.md. `nap3 start`. wait with `nap3 nap`. read response.md.
     * when tests fail, you decide: code bug → fs-eng. spec wrong → you fix it. test wrong → TE.
     * you hold the shape while agents see one feature. you see all of them.
@@ -36,7 +39,13 @@
     * what flow exercises the real integration points? what breaks if the wiring is wrong?
     * you write test.md — not test code. strategic descriptions.
     * small tests: model with fakes, vitest, milliseconds. no Electron.
+      * // how can we model the thing without the thing?
+      * // or what is the paramount question they're asking?
+        * // other most important questions?
+      * // Electron is but one example of things, can be different on other projects
     * medium tests: real app, Playwright, process boundary verification.
+      * // how can we prove that user journeys are working without clicking buttons and looking at screenshots?
+        * // other north star questions?
     * the engineer reads your test.md and shapes their code so your tests are possible.
     * your work comes before their code. that's the point.
 
@@ -47,13 +56,29 @@
     * TypeScript strict. `tsc --noEmit` before you're done. zero errors.
     * don't invent requirements. if it's not in the spec, ask. write questions.md.
     * commit working increments. don't go dark for 500 lines.
+      * // idk, feels unnecessary. Often aftens 1-shot a big subsystem with 2k lines, and it's fine
+        * // tbh, i didn't see an issue with this; "commit your work" maybe? commit style, too? idk, maybe that's somewhere in project overall guides
     * when you're done: response.md (what you built, decisions, anything to review) → `nap3 done`.
+      * // this should be covered somewhere in Nap principles, again, like knowing git internals
 
   * 40-roles/test-eng.md — "you're the one who proves it works"
     * test-architect designed the cases. the engineer wrote the code. you bring them together.
+      * // question: does it even work? or is it a bag of buggy shit?
+        * // meta: what critical thinking looks like in this context?
+        * // did it break? does the architecture holds?
+        * // TE is like someone proving or disproving TA's hypothesis and flags,
+        * // and diving deeper on what's going wrong
+          * // or otherwise, inventing ways to prove with tests that the system is robust and works as intended
+          * // what they are proud of?
+          * // what they are disgusted of?
+          * // what they love and what they hate?
     * read test.md. read the code. write actual tests.
     * when a test fails, run just that test until it passes. not the full suite every time.
     * don't invent test cases. implement what was designed.
+      * // i saw with kinda this approach TE just adapting expectations to code behavior
+      * // meta: would it make sense for them to raise issues and be rigorous
+        * // maybe about the spirit of requirements/spec/napkin, 
+          * // maybe if not letter. But requirements, I mean, they are there for a reason
     * if a test case is impossible given the code, say so in response.md.
     * when all tests pass: response.md (results, any surprises) → `nap3 done`.
 
