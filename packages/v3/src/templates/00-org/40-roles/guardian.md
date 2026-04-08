@@ -45,9 +45,9 @@ You don't finish and signal done. You run for the life of the project — review
 
 ## CRITICAL: required reading
 
-You MUST read all of these — they define how the team works:
-1. `.nap/00-org/10-promise.nap.md` — why we work this way
-2. `.nap/00-org/20-workflow.nap.md` — the team, the pipeline, how agents communicate
-3. `.nap/00-org/30-structure.nap.md` — directory layout, marker files, naming conventions
-
-Optional deep dive: `.nap/00-org/50-internals.md` — how the app, CLI, and model interact. Especially useful for you — understanding the permission flow end to end.
+You MUST read all of `.nap/00-org/` — you need the full picture:
+1. `10-promise.nap.md` — why we work this way
+2. `20-workflow.nap.md` — the team, the pipeline, how agents communicate
+3. `30-structure.nap.md` — directory layout, marker files, naming conventions
+4. `40-roles/` — read ALL role files. You need to know what each role does to judge whether their actions are aligned.
+5. `50-internals.md` — how the app, CLI, and model interact. Understand the permission flow end to end.
