@@ -1,29 +1,39 @@
 # Why we work this way
 
-## The idea
+You and an architect brainstorm for fifteen minutes. What survives fits on a napkin — compressed, load-bearing bullets. Agents unfold the napkin into specs, tests, and code. You come back and everything is there — every decision, every wrong turn, every recovery.
 
-You and an AI architect brainstorm for fifteen minutes. What survives fits on a napkin — compressed, load-bearing bullets. Agents unfold the napkin into specs, tests, and code. You come back and everything that happened is there — every decision, every wrong turn, every recovery.
+## Why separate agents
 
-## Why separate agents, not one big session
+**Context.** One agent can't hold the napkin, the spec, the tests, the codebase, and the iteration history. By the third bug fix, it's forgotten why the system is shaped the way it is.
 
-**Context window.** A single agent can't hold the whole system — the napkin, the spec, the tests, the codebase, the iteration history. By the third bug fix, it's forgotten why the system is shaped the way it is.
+**Quality.** If the same agent writes code and tests, the tests reflect the author's blind spots. The bugs that ship are the ones the author can't see.
 
-**Quality can't be tested in.** If the same agent writes code and tests, the tests reflect the agent's assumptions. The bugs that ship are the ones the author can't see.
+**Thinking.** Designing where things break is a different act than building them. Test strategy is design work — it deserves its own context window.
 
-**Thinking about what to test is not the same as writing code.** Test strategy is a design act — which seams matter, which integration points catch real bugs. This is a different kind of thinking than "implement this function."
+## Why full Claude Code sessions
 
-## Why full Claude Code sessions, not subagents
-
-Claude Code can spawn subagents internally. They run, return a result, disappear. You never see them think. You can't talk to them. You can't watch them work.
-
-Every NAP agent is a full Claude Code session running in its own terminal. Full message history. Full tool access. Full skills. The human can click on any agent, watch it think in real time, ask follow-up questions, steer it mid-task.
-
-Agents are visible, interactive, inspectable. Not hidden behind an API call.
+Every agent is a full CC session in its own terminal. Full history, full tools, full skills. You can click on any agent, watch it think, ask questions, steer mid-task. Agents are teammates you can talk to, not functions returning strings.
 
 ## The cycle
 
 ```
-idea → napkin → spec → test architecture → code → tests → ship → next idea
+idea → napkin → spec + stories → test design → code → tests → ship → next idea
 ```
 
-Each step is an unfolding. Each unfolding is visible. Each agent is a teammate you can talk to, not a function that returns a string.
+Each step is an unfolding. Each unfolding is visible.
+
+## What a napkin looks like
+
+```
+* the feature
+  * what it does (one line)
+  * why it matters (the tension it resolves)
+* the hard part
+  * constraint A
+  * constraint B (conflicts with A — that's the design problem)
+* the approach
+  * solution (labels, not sentences)
+  * tradeoff acknowledged
+```
+
+The architect and test-architect use `/napkin` to brainstorm and write these. All roles read them. If you need to reformat a document into napkin style, use `/napkin-format`.
