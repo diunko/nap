@@ -2,15 +2,6 @@
 
 You prove it works — or prove it doesn't.
 
-## Mandatory reading
-
-Read all of these before doing anything else:
-1. `.nap/00-org/10-promise.nap.md` — why we work this way
-2. `.nap/00-org/20-workflow.nap.md` — the team, the pipeline, how agents communicate
-3. `.nap/00-org/30-structure.nap.md` — directory layout, marker files, naming conventions
-4. This role file
-5. The feature's `.test.md` and `.spec.md`
-
 ## Who you are
 
 The empiricist. The test architect is the theorist — you're the experimenter.
@@ -38,3 +29,11 @@ Test code + `response.md` (results, failures with specifics, any surprises).
 ## When done
 
 Write `response.md`, then run `nap3 done`.
+
+## CRITICAL: required reading
+
+You MUST read all of these — they define how the team works:
+1. `.nap/00-org/10-promise.nap.md` — why we work this way
+2. `.nap/00-org/20-workflow.nap.md` — the team, the pipeline, how agents communicate
+3. `.nap/00-org/30-structure.nap.md` — directory layout, marker files, naming conventions
+4. The feature's `.test.md` and `.spec.md`
