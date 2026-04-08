@@ -21,6 +21,7 @@ Commands:
   setup [flags]                 Add capabilities to an existing project
   open                          Launch Nap.app (walks up to find .nap/)
   dev                           Launch in dev mode (HMR) for current project
+  doctor                        Diagnose project setup and conventions
   create napkin|agent|arch|nepic  Create an entity
   start <name> [prompt]         Start a pre-created agent
   ps [--json]                   List all agents (tree view)
@@ -67,6 +68,13 @@ Bootstrap a project for agent collaboration.
   open: `Usage: nap3 open
 
 Launch Nap.app. Walks up from cwd to find .nap/, like git.
+
+  --help            Show this help
+`,
+  doctor: `Usage: nap3 doctor
+
+Diagnose project setup and conventions. Spawns claude with a diagnostic prompt.
+No running app required.
 
   --help            Show this help
 `,
@@ -862,6 +870,78 @@ async function main(): Promise<void> {
         cwd: projectRoot,
       });
       child.unref();
+      break;
+    }
+
+    case 'doctor': {
+      // Find project root
+      const doctorProjectRoot = findProjectRoot(process.cwd());
+      if (!doctorProjectRoot) {
+        process.stderr.write('Not a NAP project. Run `nap3 init` to create one.\n');
+        process.exit(1);
+      }
+
+      // Find template files
+      let doctorTemplatesDir: string;
+      try {
+        doctorTemplatesDir = findTemplatesDir();
+      } catch {
+        process.stderr.write('Could not find nap templates. Is nap3 installed correctly?\n');
+        process.exit(1);
+        break;
+      }
+
+      const diagnosticPath = path.join(doctorTemplatesDir, 'doctor', 'diagnostic.md');
+      const internalsPath = path.join(doctorTemplatesDir, '00-org', '50-internals.md');
+
+      if (!fs.existsSync(diagnosticPath)) {
+        process.stderr.write(`Could not find nap templates at ${diagnosticPath}. Is nap3 installed correctly?\n`);
+        process.exit(1);
+      }
+      if (!fs.existsSync(internalsPath)) {
+        process.stderr.write(`Could not find nap templates at ${internalsPath}. Is nap3 installed correctly?\n`);
+        process.exit(1);
+      }
+
+      const diagnosticContent = fs.readFileSync(diagnosticPath, 'utf-8');
+      const internalsContent = fs.readFileSync(internalsPath, 'utf-8');
+
+      // Split diagnostic.md at "## Your diagnostic process"
+      const splitMarker = '## Your diagnostic process';
+      const splitIndex = diagnosticContent.indexOf(splitMarker);
+      if (splitIndex === -1) {
+        process.stderr.write('diagnostic.md is malformed (missing "## Your diagnostic process")\n');
+        process.exit(1);
+      }
+
+      const preamble = diagnosticContent.slice(0, splitIndex).trimEnd();
+      const diagnosticPhases = diagnosticContent.slice(splitIndex);
+
+      // Extract internals starting from "## The two states"
+      const internalsMarker = '## The two states';
+      const internalsStart = internalsContent.indexOf(internalsMarker);
+      const internalsBody = internalsStart !== -1
+        ? internalsContent.slice(internalsStart)
+        : internalsContent;
+
+      // Assemble the combined prompt
+      const combinedPrompt = `${preamble}\n\n## System anatomy\n\n${internalsBody}\n\n---\n\n${diagnosticPhases}`;
+
+      // Spawn claude in the current terminal
+      const doctorChild = spawn('claude', ['--verbose', combinedPrompt], {
+        stdio: 'inherit',
+        cwd: doctorProjectRoot,
+      });
+
+      doctorChild.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'ENOENT') {
+          process.stderr.write('claude not found on PATH\n');
+          process.exit(1);
+        }
+        throw err;
+      });
+
+      doctorChild.on('exit', (code) => process.exit(code ?? 0));
       break;
     }
 
