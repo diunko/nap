@@ -18,6 +18,39 @@ The app is either **STOPPED** (files on disk, nothing in memory) or **RUNNING** 
 
 No database. No server state file. No reconciliation. Files are truth.
 
+## The big picture
+
+Three actors, two communication channels:
+
+```
+Main process                          Renderer process
+┌─────────────────────┐              ┌──────────────────────┐
+│  Model              │   bridge     │  Store (zustand)     │
+│  (business state)   │ ──────────→ │  (UI state)          │
+│                     │  snapshots   │                      │
+│  PTY manager        │              │  Sidebar, Terminal,  │
+│  Socket server      │ ←────────── │  Kanban, Gutter      │
+│  File watcher       │   intents   │                      │
+└─────────────────────┘              └──────────────────────┘
+        ▲
+        │ socket (.nap/sock)
+        │ ndjson request/response
+        ▼
+┌─────────────────────┐
+│  CLI (nap3)         │
+│  runs in terminal   │
+│  no Electron deps   │
+└─────────────────────┘
+```
+
+**Main process** owns the model — napkins, agents, statuses, file I/O, pty lifecycle. When the model changes, it pushes a full snapshot to the renderer through the bridge (Electron IPC).
+
+**Renderer process** is a view client. Receives snapshots, stores in zustand, renders React. Sends intents back (e.g., "switch terminal") but never modifies the model directly.
+
+**CLI** is a separate process. Talks to the app through the socket. Every command goes: CLI → socket → model → marker files + bridge snapshot → renderer updates.
+
+**Agents** are Claude Code sessions in ptys managed by the main process. They communicate through files (prompt.md in, response.md out) and `nap3 done` (through CLI → socket → model).
+
 ## Complete filesystem layout
 
 ```
