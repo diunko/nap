@@ -370,6 +370,25 @@ export function createModel(fs: FileSystem): NapModel {
     }
     nepicList = loadedNepics;
 
+    // Guardian cross-load: if no guardian in active nepic, load from first nepic
+    if (nepicList.length > 0 && !architects.some(a => a.role === 'guardian')) {
+      const firstNepicId = nepicList[0].id;
+      if (firstNepicId !== defaultNepicId) {
+        const firstArchDir = nepicsBase + '/' + firstNepicId + '/20-architects';
+        if (await fs.isDirectory(firstArchDir)) {
+          const firstArchAgents = await loadAgents(firstArchDir, firstNepicId, null);
+          const guardian = firstArchAgents.find(a => a.role === 'guardian');
+          if (guardian) {
+            if (runningAgents.has(guardian.id)) guardian.running = true;
+            if (doneAgents.has(guardian.id)) guardian.done = true;
+            const pa = pendingApprovals.get(guardian.id);
+            if (pa) guardian.pendingApproval = pa;
+            architects.push(guardian);
+          }
+        }
+      }
+    }
+
     notify();
   }
 

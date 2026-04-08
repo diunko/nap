@@ -793,3 +793,148 @@ export function createMixedLifecycleFixture(): MemoryFileSystem {
     },
   });
 }
+
+// ── F19: guardian cross-load fixture (2 nepics, guardian in first only) ──
+export function createGuardianCrossLoadFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    // First nepic: has architect + guardian
+    'nepics/01-v1/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepics/01-v1/30-napkins/0100-explore/agents/001-fs-eng/.agent.nap.json': {
+      cc_session_uuid: 'uuid-v1-fs',
+      role: 'fs-eng',
+      name: '001-fs-eng',
+      created_at: 1711700000000,
+      started: true,
+    },
+    'nepics/01-v1/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-v1-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: '01-v1',
+      created_at: 1711600000000,
+      started: true,
+    },
+    'nepics/01-v1/20-architects/002-guardian/.agent.nap.json': {
+      cc_session_uuid: 'uuid-guardian',
+      role: 'guardian',
+      name: '002-guardian',
+      nepic: '01-v1',
+      created_at: 1711600100000,
+      started: true,
+    },
+    'nepics/01-v1/20-architects/002-guardian/prompt.md': 'You are the guardian.',
+
+    // Second nepic: has architect only, no guardian
+    'nepics/02-spaces/30-napkins/0100-design/.napkin.nap.json': { status: 'doing' },
+    'nepics/02-spaces/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-s-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: '02-spaces',
+      created_at: 1711600000000,
+      started: true,
+    },
+  });
+}
+
+// F19 variant: guardian in BOTH nepics
+export function createGuardianBothNepicsFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepics/01-v1/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepics/01-v1/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-v1-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: '01-v1',
+      created_at: 1711600000000,
+    },
+    'nepics/01-v1/20-architects/002-guardian/.agent.nap.json': {
+      cc_session_uuid: 'uuid-v1-guardian',
+      role: 'guardian',
+      name: '002-guardian',
+      nepic: '01-v1',
+      created_at: 1711600100000,
+    },
+
+    'nepics/02-spaces/30-napkins/0100-design/.napkin.nap.json': { status: 'doing' },
+    'nepics/02-spaces/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-s-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: '02-spaces',
+      created_at: 1711600000000,
+    },
+    'nepics/02-spaces/20-architects/002-guardian/.agent.nap.json': {
+      cc_session_uuid: 'uuid-s-guardian',
+      role: 'guardian',
+      name: '002-guardian',
+      nepic: '02-spaces',
+      created_at: 1711600200000,
+    },
+  });
+}
+
+// F19 variant: neither nepic has guardian
+export function createNoGuardianFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepics/01-v1/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepics/01-v1/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-v1-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: '01-v1',
+      created_at: 1711600000000,
+    },
+
+    'nepics/02-spaces/30-napkins/0100-design/.napkin.nap.json': { status: 'doing' },
+    'nepics/02-spaces/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-s-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: '02-spaces',
+      created_at: 1711600000000,
+    },
+  });
+}
+
+// F19 variant: three nepics, guardian in first only
+export function createThreeNepicGuardianFixture(): MemoryFileSystem {
+  return new MemoryFileSystem({
+    'nepics/01-v1/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
+    'nepics/01-v1/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-v1-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: '01-v1',
+      created_at: 1711600000000,
+    },
+    'nepics/01-v1/20-architects/002-guardian/.agent.nap.json': {
+      cc_session_uuid: 'uuid-guardian',
+      role: 'guardian',
+      name: '002-guardian',
+      nepic: '01-v1',
+      created_at: 1711600100000,
+    },
+    'nepics/01-v1/20-architects/002-guardian/prompt.md': 'You are the guardian.',
+
+    'nepics/02-spaces/30-napkins/0100-design/.napkin.nap.json': { status: 'doing' },
+    'nepics/02-spaces/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-s-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: '02-spaces',
+      created_at: 1711600000000,
+    },
+
+    'nepics/03-kanban/30-napkins/0100-board/.napkin.nap.json': { status: 'backlog' },
+    'nepics/03-kanban/20-architects/001-architect/.agent.nap.json': {
+      cc_session_uuid: 'uuid-k-arch',
+      role: 'architect',
+      name: '001-architect',
+      nepic: '03-kanban',
+      created_at: 1711600000000,
+    },
+  });
+}
+
+export const F19_NEPIC_DIR = 'nepics/02-spaces';
