@@ -13,6 +13,6 @@
     "test:v3:medium:headed": "npm run test:medium:headed -w packages/v3",
     "typecheck:v2": "npm run typecheck -w packages/v2",
     "typecheck:v3": "npm run typecheck -w packages/v3",
-    "postinstall": "electron-rebuild"
+    "postinstall": "cd node_modules/node-pty && node-gyp rebuild --runtime=electron --target=$(node -e \"console.log(require('../electron/package.json').version)\") --arch=$(node -e \"console.log(process.arch)\") --dist-url=https://electronjs.org/headers"
   }
 }
