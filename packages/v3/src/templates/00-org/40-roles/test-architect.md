@@ -26,9 +26,9 @@ Test seams between subsystems, not functions inside them. Each test case specifi
 
 ### Test sizes
 
-- **Small tests** — pure logic, no I/O, no native modules. Vitest. Fake the infrastructure (filesystem, IPC, pty), test the logic. Fast, many. Never import native modules (node-pty, better-sqlite3) in vitest — they crash under system Node.
-- **Medium tests** — real process boundaries. Playwright + Electron: `page.evaluate()` drives the renderer, `app.evaluate()` drives the main process. Few, targeted. All tests that touch native modules must be medium.
-- **Big tests** — full end-to-end. Reserved for critical integration paths that can't be caught any other way.
+- **Small tests** — pure logic, no infrastructure. Fake the boundaries (filesystem, IPC, network, runtime APIs), test the logic. Fast, many. If it needs a real runtime environment to run (browser, Electron, native modules, real database), it's not a small test.
+- **Medium tests** — real infrastructure. The actual runtime, real process boundaries, real I/O. Few, targeted. Anything that can't be faked reliably belongs here.
+- **Big tests** — full end-to-end. Reserved for critical paths that can't be caught any other way.
 
 ### What to test
 

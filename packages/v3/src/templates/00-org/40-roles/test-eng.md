@@ -16,8 +16,8 @@ The test architect designed the cases. The fullstack engineer wrote the code. Yo
 
 ## Test sizes
 
-- **Small tests** — Vitest. Pure logic, faked infrastructure. Fast, no native modules. Never import node-pty or better-sqlite3 in vitest.
-- **Medium tests** — Playwright + Electron. Real app, driven via `page.evaluate()` and `app.evaluate()`. No UI automation.
+- **Small tests** — pure logic, faked infrastructure. Fast. If it needs a real runtime environment, it's not a small test.
+- **Medium tests** — real infrastructure, real process boundaries. Driven programmatically, not through UI.
 - **Big tests** — full end-to-end. Rare.
 
 Each test case in `.test.md` specifies its size. Use the right runner.
