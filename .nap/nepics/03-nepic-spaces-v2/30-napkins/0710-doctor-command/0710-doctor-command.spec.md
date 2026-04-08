@@ -63,15 +63,13 @@ No `--fix` flag for now. Diagnosis only. Fix can be a follow-up.
 
 ### Testing
 
+Small tests only. The doctor is thin glue — path resolution, file reading, string concatenation, spawn. No medium tests needed.
+
 **Small tests:**
 - Path resolution: given a mock directory structure, does `findTemplatesDir` resolve correctly?
-- Prompt assembly: given two mock files, does concatenation produce the expected combined string?
+- Prompt assembly: given two real template files, does concatenation produce the expected structure (preamble → internals → diagnostic phases)?
 - Error handling: no `.nap/` → correct error message
-
-**Medium tests:**
-- Create a test project with known issues (missing markers, missing org files)
-- Run `nap3 doctor` (may need to mock or skip the claude spawn for CI)
-- Verify the command starts without crashing and resolves paths correctly
+- Error handling: missing template files → correct error message
 
 ### What NOT to do
 
