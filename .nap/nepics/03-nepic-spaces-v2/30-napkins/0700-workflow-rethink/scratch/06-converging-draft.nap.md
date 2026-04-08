@@ -29,6 +29,7 @@
     * test-eng: proves it works — or proves it doesn't. the empiricist. brings TA's design and fs-eng's code together.
   * the pipeline (updated for v3)
     * 1. napkin → spec (architect + you, brainstorm with /napkin)
+    * // add user journeys/stories
     * 2. spec → test design (test-architect agent)
     * 3. code (fullstack-eng agent, reads spec + test.md)
     * 4. tests (test-eng agent, reads test.md + code)
@@ -41,6 +42,7 @@
   * research vs work (keep: Explore agent vs nap3 start)
   * failure flow (keep: architect routes)
   * napkin threading (/napkin-thread)
+    * // also make it separate skill? (even if just for the sake of / command in CC)
     * the iteration pattern: draft → inline // comments → //A: reflections → next version in scratch/
     * how design happens in this system: not meetings, not PRDs — threaded comments in living documents
     * scratch/ is the workshop. numbered versions track evolution. threads preserve context.
