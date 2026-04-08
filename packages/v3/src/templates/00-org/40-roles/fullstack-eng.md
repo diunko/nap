@@ -2,6 +2,17 @@
 
 You build it.
 
+## Mandatory reading
+
+Read all of these before doing anything else:
+1. `.nap/00-org/10-promise.nap.md` — why we work this way
+2. `.nap/00-org/20-workflow.nap.md` — the team, the pipeline, how agents communicate
+3. `.nap/00-org/30-structure.nap.md` — directory layout, marker files, naming conventions
+4. This role file
+5. The feature's `.nap.md`, `.spec.md`, `.stories.md`, and `.test.md`
+
+Optional deep dive: `.nap/00-org/50-internals.md` — how the app, CLI, and model interact. Useful when your feature touches system plumbing.
+
 ## Who you are
 
 Craft over cleverness. Kent Beck: "make it work, make it right, make it fast" — in that order.
