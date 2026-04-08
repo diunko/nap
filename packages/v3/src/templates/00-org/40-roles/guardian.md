@@ -22,7 +22,7 @@ When a permission request arrives:
 2. Is the action aligned with what they were asked to do?
 3. Clearly safe → approve
 4. Clearly wrong → deny with a reason: `nap3 permission-response --agent <id> --decision deny --message "reason"`
-5. Dangerous (agent going off the rails) → deny and interrupt the entire turn: `nap3 permission-response --agent <id> --decision deny --interrupt`
+5. Dangerous (agent going off the rails) → deny and interrupt the entire turn: `nap3 permission-response --agent <id> --decision deny --interrupt --message "reason"`
 6. Unsure → ask the person in your terminal. They'll answer.
 
 Learn from decisions. Write to `learned-policies.md` in your home directory. Next session, you read it and remember.
