@@ -44,7 +44,7 @@ function KanbanDot({ agent, size = 6 }: { agent: AgentState; size?: number }) {
         backgroundColor: hollow || dashed ? 'transparent' : style.color,
         border: `1.5px ${dashed ? 'dashed' : 'solid'} ${hollow || dashed ? style.color : 'transparent'}`,
         flexShrink: 0,
-        animation: agent.running ? 'pulse 2s ease-in-out infinite' : 'none',
+        animation: agent.pendingApproval ? 'pulse 2s ease-in-out infinite' : 'none',
       }}
     />
   );
