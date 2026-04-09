@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNapStore } from './store';
 import type { CardViewMode } from './store';
 import type { NapkinState, AgentState, NapkinStatus, Entry, FileEntry, DirEntry } from '../shared/bridge-types';
@@ -541,6 +541,37 @@ export function Sidebar() {
   const extendCard = useNapStore((s) => s.extendCard);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Resizable width ──
+  const [width, setWidth] = useState(300);
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(300);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    dragging.current = true;
+    startX.current = e.clientX;
+    startWidth.current = width;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const delta = e.clientX - startX.current;
+      setWidth(Math.max(180, Math.min(600, startWidth.current + delta)));
+    };
+
+    const onMouseUp = () => {
+      dragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [width]);
+
   // Cmd+K handler
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -582,8 +613,8 @@ export function Sidebar() {
     <div
       data-testid="sidebar"
       style={{
-        width: 300,
-        minWidth: 300,
+        width,
+        minWidth: 180,
         height: '100%',
         background: '#252526',
         borderRight: '1px solid #3c3c3c',
@@ -594,8 +625,24 @@ export function Sidebar() {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        position: 'relative',
       }}
     >
+      {/* Drag handle — right edge */}
+      <div
+        onMouseDown={onMouseDown}
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          width: 4,
+          height: '100%',
+          cursor: 'col-resize',
+          zIndex: 10,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#007acc')}
+        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+      />
       {/* Filter bar */}
       <div style={{ padding: '10px 12px', borderBottom: '1px solid #3c3c3c' }}>
         <input
