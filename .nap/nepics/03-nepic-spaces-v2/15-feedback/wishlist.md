@@ -109,3 +109,11 @@ Ideas with energy.
 * removing it simplifies the monorepo: one xterm version, cleaner hoisting, fewer deps
 * blocks on: v3 reaching feature parity with anything still used from v2
 * if v2 is removed, the xterm 6.0 migration for v2 becomes unnecessary
+
+## guardian should initialize on app open
+
+* when reopening a project, the guardian doesn't seem to start until the user clicks on it
+* this breaks the permission flow — if an agent triggers a permission request before the guardian is clicked, there's nobody to resolve it
+* other agents can afford lazy init (user clicks when they want to see them), but the guardian must be running from the moment the app opens
+* guardian is always-on by design — the marker should auto-resume it like any other started agent, but it also needs to be reliably started on first open even if no one has ever clicked it
+* check: does guardian get `started: true` after `nap3 init --guardian`? does auto-resume pick it up?
