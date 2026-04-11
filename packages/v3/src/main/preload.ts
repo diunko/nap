@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   switchNepic: (id: string) => ipcRenderer.invoke('nepic:switch', id),
   createNepic: (name: string) => ipcRenderer.invoke('nepic:create', name),
 
+  // ── Napkin status ──
+  setNapkinStatus: (slug: string, status: string) => ipcRenderer.invoke('napkin:set-status', slug, status),
+
   // ── Agent successor (0620) ──
   spawnSuccessor: (id: string) => ipcRenderer.invoke('agent:spawn-successor', id),
 });

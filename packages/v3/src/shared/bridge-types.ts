@@ -1,6 +1,6 @@
 // ── State types shared between main and renderer ──
 
-export type NapkinStatus = 'backlog' | 'todo' | 'doing' | 'review' | 'done';
+export type NapkinStatus = 'backlog' | 'todo' | 'doing' | 'review' | 'done' | 'archived';
 
 // ── File tree entry types for focused/extended views ──
 

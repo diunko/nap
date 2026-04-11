@@ -12,6 +12,7 @@ const PHASE_COLORS: Record<NapkinStatus, string> = {
   doing: '#22c55e',
   todo: '#a3a3a3',
   backlog: '#525252',
+  archived: '#3c3c3c',
 };
 
 // ── Agent dot (role color + status shape) ──
@@ -603,11 +604,15 @@ export function Sidebar() {
 
   if (!sidebarVisible) return null;
 
+  // Separate archived napkins from active ones
+  const activeNapkins = napkins.filter((n) => n.status !== 'archived');
+  const archivedCount = napkins.length - activeNapkins.length;
+
   const filteredNapkins = browserFilterText
-    ? napkins.filter((n) =>
+    ? activeNapkins.filter((n) =>
         n.slug.toLowerCase().includes(browserFilterText.toLowerCase()),
       )
-    : napkins;
+    : activeNapkins;
 
   return (
     <div
@@ -707,6 +712,20 @@ export function Sidebar() {
             viewMode={cardViewMode}
           />
         ))}
+
+        {/* Archived count */}
+        {archivedCount > 0 && (
+          <div
+            style={{
+              padding: '4px 12px 4px 21px',
+              color: '#525252',
+              fontSize: 12,
+              cursor: 'default',
+            }}
+          >
+            {archivedCount} archived
+          </div>
+        )}
       </div>
     </div>
   );

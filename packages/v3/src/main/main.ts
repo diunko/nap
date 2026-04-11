@@ -181,6 +181,12 @@ app.whenReady().then(async () => {
     return { ok: true, newId };
   });
 
+  // Set napkin status (archive/unarchive from kanban)
+  ipcMain.handle('napkin:set-status', async (_event, slug: string, status: string) => {
+    await model.setNapkinStatus(slug, status);
+    return { ok: true };
+  });
+
   // Open file in default editor
   ipcMain.on('open-file-path', (_event, filePath: string) => {
     shell.openPath(filePath);

@@ -12,7 +12,11 @@ const resumeSpawnTimes = new Map<string, number>();
  * STOP→RUN: compute resume decisions, spawn ptys, update model.
  */
 export async function startAgents(model: NapModel, ptySpawner: PtySpawner): Promise<void> {
-  const agents = model.getAllAgents();
+  // Skip agents belonging to archived napkins — they should not get PTYs
+  const archivedNapkinIds = new Set(
+    model.getNapkins().filter(n => n.status === 'archived').map(n => n.id),
+  );
+  const agents = model.getAllAgents().filter(a => !a.napkinId || !archivedNapkinIds.has(a.napkinId));
   const decisions = computeResumeActions(agents);
 
   for (const decision of decisions) {

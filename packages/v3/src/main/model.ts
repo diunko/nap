@@ -1121,5 +1121,5 @@ You have full context. The human may ask you questions about the work, ask you t
 }
 
 function isValidStatus(s: unknown): s is NapkinStatus {
-  return s === 'backlog' || s === 'todo' || s === 'doing' || s === 'review' || s === 'done';
+  return s === 'backlog' || s === 'todo' || s === 'doing' || s === 'review' || s === 'done' || s === 'archived';
 }

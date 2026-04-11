@@ -7,7 +7,7 @@ import { enqueue } from './message-queue';
 import { LONG_LIVED } from './socket-server';
 import { serialize } from '../shared/ndjson';
 
-const VALID_PHASES = ['backlog', 'todo', 'doing', 'review', 'done'] as const;
+const VALID_PHASES = ['backlog', 'todo', 'doing', 'review', 'done', 'archived'] as const;
 
 // ── Pending approvals registry ──
 // Maps agentId → { resolve callback, connection }

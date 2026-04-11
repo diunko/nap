@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNapStore } from './store';
 import type { NapkinState, AgentState, NapkinStatus } from '../shared/bridge-types';
 import { dotStyle } from '../shared/dot-style';
 
-type KanbanColumn = 'backlog' | 'doing' | 'done';
+type KanbanColumn = 'backlog' | 'doing' | 'done' | 'archived';
 
 const COLUMNS: { key: KanbanColumn; label: string; statuses: NapkinStatus[] }[] = [
   { key: 'backlog', label: 'BACKLOG', statuses: ['backlog', 'todo'] },
   { key: 'doing', label: 'DOING', statuses: ['doing', 'review'] },
   { key: 'done', label: 'DONE', statuses: ['done'] },
+  { key: 'archived', label: 'ARCHIVED', statuses: ['archived'] },
 ];
 
 const KNOWN_BADGES = ['nap', 'spec', 'test', 'journeys'] as const;
@@ -119,11 +120,17 @@ function NapkinContentLines({ content }: { content: string }) {
 function KanbanCard({
   napkin,
   onNavigate,
+  onArchive,
+  cmdHeld,
 }: {
   napkin: NapkinState;
   onNavigate: (slug: string) => void;
+  onArchive: (slug: string) => void;
+  cmdHeld: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const isDone = napkin.status === 'done';
+  const isArchived = napkin.status === 'archived';
 
   // Badge presence — derive from file entries
   const presentBadges = new Set<string>();
@@ -181,24 +188,57 @@ function KanbanCard({
             <KanbanDot key={i} agent={a} />
           ))}
         </span>
-        <span
-          data-testid="kanban-card-navigate"
-          onClick={(e) => {
-            e.stopPropagation();
-            onNavigate(napkin.slug);
-          }}
-          style={{
-            color: '#6b7280',
-            fontSize: 13,
-            cursor: 'pointer',
-            padding: '0 2px',
-            flexShrink: 0,
-            transition: 'color 0.1s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#007acc')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-        >
-          &rarr;
+        {/* Action zone — one arrow, meaning shifts with Cmd */}
+        <span style={{ display: 'inline-flex', flexShrink: 0, alignItems: 'center', minWidth: 20, justifyContent: 'flex-end' }}>
+          {isArchived ? (
+            // Archived: ↑ always visible — single action, no need to hide
+            <span
+              data-testid="kanban-card-unarchive"
+              title="Unarchive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive(napkin.slug);
+              }}
+              style={{
+                color: '#6b7280',
+                fontSize: 13,
+                cursor: 'pointer',
+                padding: '0 2px',
+                transition: 'color 0.1s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#007acc')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+            >
+              &uarr;
+            </span>
+          ) : (
+            // Active + Done: → normally, ↓ when Cmd held on done cards
+            <span
+              data-testid={isDone && cmdHeld ? 'kanban-card-archive' : 'kanban-card-navigate'}
+              title={isDone && cmdHeld ? 'Archive' : undefined}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isDone && cmdHeld) {
+                  onArchive(napkin.slug);
+                } else {
+                  onNavigate(napkin.slug);
+                }
+              }}
+              style={{
+                color: '#6b7280',
+                fontSize: 13,
+                cursor: 'pointer',
+                padding: '0 2px',
+                transition: 'transform 0.15s, color 0.1s',
+                display: 'inline-block',
+                transform: isDone && cmdHeld ? 'rotate(90deg)' : 'none',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#007acc')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+            >
+              &rarr;
+            </span>
+          )}
         </span>
       </div>
 
@@ -301,6 +341,27 @@ export function KanbanOverlay() {
   const focusCard = useNapStore((s) => s.focusCard);
   const setActive = useNapStore((s) => s.setActiveTerminal);
 
+  // Track Cmd/Ctrl held — transforms done arrows to ↓, archived to ↑
+  const [cmdHeld, setCmdHeld] = useState(false);
+  useEffect(() => {
+    if (!kanbanVisible) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey) setCmdHeld(true);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!e.metaKey && !e.ctrlKey) setCmdHeld(false);
+    };
+    const onBlur = () => setCmdHeld(false);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [kanbanVisible]);
+
   function handleNavigate(slug: string) {
     // 1. Dismiss kanban
     toggleKanban();
@@ -324,11 +385,19 @@ export function KanbanOverlay() {
     }
   }
 
-  // Group napkins into 3 display columns (internal statuses unchanged)
+  function handleArchive(slug: string) {
+    const napkin = napkins.find((n) => n.slug === slug);
+    if (!napkin) return;
+    const newStatus = napkin.status === 'archived' ? 'done' : 'archived';
+    window.electronAPI?.setNapkinStatus(slug, newStatus);
+  }
+
+  // Group napkins into display columns
   const grouped: Record<KanbanColumn, NapkinState[]> = {
     backlog: [],
     doing: [],
     done: [],
+    archived: [],
   };
   for (const n of napkins) {
     const col = COLUMNS.find((c) => c.statuses.includes(n.status));
@@ -368,7 +437,7 @@ export function KanbanOverlay() {
           project board
         </span>
         <span style={{ color: '#6b7280', fontSize: 12 }}>
-          click card to expand &middot; &rarr; to navigate &middot; &#x2318;` to close
+          click card to expand &middot; &rarr; to navigate &middot; hold &#x2318; to archive &middot; &#x2318;` to close
         </span>
       </div>
 
@@ -431,6 +500,8 @@ export function KanbanOverlay() {
                   key={napkin.slug}
                   napkin={napkin}
                   onNavigate={handleNavigate}
+                  onArchive={handleArchive}
+                  cmdHeld={cmdHeld}
                 />
               ))}
             </div>

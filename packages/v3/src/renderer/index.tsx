@@ -29,6 +29,7 @@ declare global {
       openFilePath: (filePath: string) => void;
       saveUiState: (state: unknown) => void;
       loadUiState: () => Promise<unknown>;
+      setNapkinStatus: (slug: string, status: string) => Promise<unknown>;
       switchNepic: (id: string) => Promise<unknown>;
       createNepic: (name: string) => Promise<unknown>;
       spawnSuccessor: (id: string) => Promise<{ ok?: boolean; newId?: string; error?: boolean; message?: string }>;
