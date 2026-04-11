@@ -53,7 +53,7 @@ Add capabilities to an existing project. Requires .nap/ to exist.
   --import           Scan project, create markers for unmarked entities
   --help             Show this help
 `,
-  init: `Usage: nap3 init [--name <name>] [--template <name>] [--add-skills [--user]]
+  init: `Usage: nap3 init [--name <name>] [--template <name>] [--guardian] [--add-skills [--user]]
 
 Bootstrap a project for agent collaboration.
 
@@ -61,6 +61,7 @@ Bootstrap a project for agent collaboration.
   --template <name>   Use a project template (copies seed mega-napkin)
   --template random   Pick a random template
   --list-templates    List available project templates
+  --guardian          Add guardian agent + permission hook config
   --add-skills        Copy napkin skills to .claude/skills/
   --user              With --add-skills: install to ~/.claude/skills/ instead
   --help              Show this help
