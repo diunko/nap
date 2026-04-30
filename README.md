@@ -14,7 +14,7 @@ npm link -w packages/v3
 
 # Create a project
 mkdir ~/my-project && cd ~/my-project
-nap3 init --template raft-viz    # or: --template random, --list-templates
+nap3 init --template raft-viz --guardian   # or: --template random, --list-templates
 nap3 open                        # launches the app
 
 # Or with hot-reload for development
