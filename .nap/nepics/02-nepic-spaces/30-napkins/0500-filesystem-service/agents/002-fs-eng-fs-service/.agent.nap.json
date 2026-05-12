@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "9f94236c-5e25-4634-861d-ea0be2689834",
+  "role": "fs-eng-fs-service",
+  "name": "002-fs-eng-fs-service",
+  "napkin": "0500-filesystem-service",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795716
+}

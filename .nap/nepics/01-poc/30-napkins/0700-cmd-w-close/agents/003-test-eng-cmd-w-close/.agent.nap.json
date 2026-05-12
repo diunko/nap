@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "720498b1-d6f9-4091-9e8f-7996a7baa414",
+  "role": "test-eng-cmd-w-close",
+  "name": "003-test-eng-cmd-w-close",
+  "napkin": "0700-cmd-w-close",
+  "nepic": "01-poc",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795712
+}

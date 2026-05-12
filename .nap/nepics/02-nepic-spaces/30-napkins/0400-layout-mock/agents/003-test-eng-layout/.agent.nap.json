@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "ef4ff148-c6a6-476a-9548-79514d91ffc8",
+  "role": "test-eng-layout",
+  "name": "003-test-eng-layout",
+  "napkin": "0400-layout-mock",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795716
+}

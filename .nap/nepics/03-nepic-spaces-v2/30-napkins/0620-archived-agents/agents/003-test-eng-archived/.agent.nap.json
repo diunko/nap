@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "1c42dd20-e12b-48a1-91f3-16a29fe6a239",
+  "role": "test-eng-archived",
+  "name": "003-test-eng-archived",
+  "napkin": "0620-archived-agents",
+  "nepic": "03-nepic-spaces-v2",
+  "started": true,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795725
+}

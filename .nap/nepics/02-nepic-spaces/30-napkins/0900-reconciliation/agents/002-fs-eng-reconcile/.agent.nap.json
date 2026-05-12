@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "f50e5b89-e5bb-435a-8a2d-2bf6d3d16079",
+  "role": "fs-eng-reconcile",
+  "name": "002-fs-eng-reconcile",
+  "napkin": "0900-reconciliation",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795718
+}

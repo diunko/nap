@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "2e71dcf5-c8de-44ec-9d80-9034b967c95e",
+  "role": "test-eng-sqlite",
+  "name": "003-test-eng-sqlite",
+  "napkin": "0200-sqlite-setup",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795715
+}

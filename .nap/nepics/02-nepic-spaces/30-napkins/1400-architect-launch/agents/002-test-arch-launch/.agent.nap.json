@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "de0b22e7-ef2d-4838-b6a1-efa6dfbcd6f9",
+  "role": "test-arch-launch",
+  "name": "002-test-arch-launch",
+  "napkin": "1400-architect-launch",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795720
+}

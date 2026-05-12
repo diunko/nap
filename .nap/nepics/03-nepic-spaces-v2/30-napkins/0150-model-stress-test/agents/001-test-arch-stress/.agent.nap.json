@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "12aa73fa-9050-4dc3-a1ba-a5a300ff105f",
+  "role": "test-arch-stress",
+  "name": "001-test-arch-stress",
+  "napkin": "0150-model-stress-test",
+  "nepic": "03-nepic-spaces-v2",
+  "started": true,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795722
+}

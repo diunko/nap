@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "55356eac-2fed-42d9-8c08-671c399f7597",
+  "role": "test-arch-scroll-lock",
+  "name": "002-test-arch-scroll-lock",
+  "napkin": "1000-scroll-lock",
+  "nepic": "01-poc",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795713
+}

@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "d705bad0-dc60-4379-9089-5d3657d12552",
+  "role": "test-arch-init",
+  "name": "001-test-arch-init",
+  "napkin": "1300-nap-init",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": false,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795720
+}

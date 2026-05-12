@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "aa2f61b9-3ae8-4972-b5d3-3d13ddb8f968",
+  "role": "test-eng-snapshot",
+  "name": "003-test-eng-snapshot",
+  "napkin": "1200-napkin-store-redesign",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795719
+}

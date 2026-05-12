@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "2b365f2d-5186-45da-9eab-39dea5101bcb",
+  "role": "test-arch-switch",
+  "name": "001-test-arch-switch",
+  "napkin": "1100-nepic-switching",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": false,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795719
+}

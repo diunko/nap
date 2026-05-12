@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "cb20f53b-853a-4b89-9e19-0f8472bb05a6",
+  "role": "test-arch-keys",
+  "name": "001-test-arch-keys",
+  "napkin": "0660-raw-keys",
+  "nepic": "03-nepic-spaces-v2",
+  "started": true,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795726
+}

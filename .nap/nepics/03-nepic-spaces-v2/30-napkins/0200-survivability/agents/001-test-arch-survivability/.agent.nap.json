@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "61020d6d-4c7c-413a-abd0-6588cf822084",
+  "role": "test-arch-survivability",
+  "name": "001-test-arch-survivability",
+  "napkin": "0200-survivability",
+  "nepic": "03-nepic-spaces-v2",
+  "started": true,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795722
+}

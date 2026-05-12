@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "4e623dbc-823d-475a-8b0c-1972d447bceb",
+  "role": "test-arch-status",
+  "name": "001-test-arch-status",
+  "napkin": "0300-status-api",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": false,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795715
+}

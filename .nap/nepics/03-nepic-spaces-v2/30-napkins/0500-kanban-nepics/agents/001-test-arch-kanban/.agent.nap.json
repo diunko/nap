@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "64ef7e85-78a4-4794-b413-257221c3d3be",
+  "role": "test-arch-kanban",
+  "name": "001-test-arch-kanban",
+  "napkin": "0500-kanban-nepics",
+  "nepic": "03-nepic-spaces-v2",
+  "started": true,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795724
+}

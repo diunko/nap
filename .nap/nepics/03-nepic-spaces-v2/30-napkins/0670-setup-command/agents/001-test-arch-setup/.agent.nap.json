@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "54a9b1d9-a279-44df-bed6-aaed59d48140",
+  "role": "test-arch-setup",
+  "name": "001-test-arch-setup",
+  "napkin": "0670-setup-command",
+  "nepic": "03-nepic-spaces-v2",
+  "started": true,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795726
+}

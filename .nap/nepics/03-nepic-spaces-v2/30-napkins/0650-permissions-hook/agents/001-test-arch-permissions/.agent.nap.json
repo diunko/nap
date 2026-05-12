@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "7a96cabb-10c1-46ad-a854-d72352dd4b02",
+  "role": "test-arch-permissions",
+  "name": "001-test-arch-permissions",
+  "napkin": "0650-permissions-hook",
+  "nepic": "03-nepic-spaces-v2",
+  "started": true,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795725
+}

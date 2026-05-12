@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "799d878b-d9ab-4ffa-a08c-c85d94bd9df2",
+  "role": "fs-eng-integration-stress",
+  "name": "001-fs-eng-integration-stress",
+  "napkin": "0500-integration-stress",
+  "nepic": "01-poc",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795711
+}

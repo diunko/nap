@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "4b125f93-2ea2-4adc-bd0a-9883e14f49e5",
+  "role": "test-arch-fs-service",
+  "name": "001-test-arch-fs-service",
+  "napkin": "0500-filesystem-service",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": false,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795716
+}

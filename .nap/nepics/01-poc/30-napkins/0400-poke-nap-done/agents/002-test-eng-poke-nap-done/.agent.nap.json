@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "b3e2decb-178b-469e-895e-d78d401cca1b",
+  "role": "test-eng-poke-nap-done",
+  "name": "002-test-eng-poke-nap-done",
+  "napkin": "0400-poke-nap-done",
+  "nepic": "01-poc",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795711
+}

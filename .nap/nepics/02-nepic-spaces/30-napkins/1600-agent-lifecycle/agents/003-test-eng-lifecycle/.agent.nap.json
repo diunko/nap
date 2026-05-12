@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "b2b4da8d-32ac-428a-bc49-6da9b06edff7",
+  "role": "test-eng-lifecycle",
+  "name": "003-test-eng-lifecycle",
+  "napkin": "1600-agent-lifecycle",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795721
+}

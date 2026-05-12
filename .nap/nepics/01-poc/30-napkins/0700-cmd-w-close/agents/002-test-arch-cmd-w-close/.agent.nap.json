@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "8c257115-0c29-473b-aeb7-9bcdd1a4645d",
+  "role": "test-arch-cmd-w-close",
+  "name": "002-test-arch-cmd-w-close",
+  "napkin": "0700-cmd-w-close",
+  "nepic": "01-poc",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795712
+}

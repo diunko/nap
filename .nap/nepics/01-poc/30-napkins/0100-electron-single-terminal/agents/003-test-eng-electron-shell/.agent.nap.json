@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "18020dcf-5074-4028-8828-2b53b46692c7",
+  "role": "test-eng-electron-shell",
+  "name": "003-test-eng-electron-shell",
+  "napkin": "0100-electron-single-terminal",
+  "nepic": "01-poc",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795710
+}

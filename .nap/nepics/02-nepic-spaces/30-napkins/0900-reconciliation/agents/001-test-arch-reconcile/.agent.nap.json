@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "3f77a770-afad-4bde-9a5d-35e5d3ddb43c",
+  "role": "test-arch-reconcile",
+  "name": "001-test-arch-reconcile",
+  "napkin": "0900-reconciliation",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": false,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795718
+}

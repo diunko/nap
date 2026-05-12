@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "829502b1-3d99-4b98-a31e-a3679ce3e77d",
+  "role": "test-eng-init",
+  "name": "003-test-eng-init",
+  "napkin": "1300-nap-init",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795720
+}

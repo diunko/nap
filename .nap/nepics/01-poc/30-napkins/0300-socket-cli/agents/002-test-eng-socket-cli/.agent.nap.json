@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "0249e002-f4a4-43be-ac23-9027a34805cc",
+  "role": "test-eng-socket-cli",
+  "name": "002-test-eng-socket-cli",
+  "napkin": "0300-socket-cli",
+  "nepic": "01-poc",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795711
+}

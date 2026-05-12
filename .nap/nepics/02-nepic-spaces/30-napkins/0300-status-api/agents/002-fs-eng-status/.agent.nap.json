@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "34add08f-cdcf-42ae-8b97-d20ef5ab2f8f",
+  "role": "fs-eng-status",
+  "name": "002-fs-eng-status",
+  "napkin": "0300-status-api",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795715
+}

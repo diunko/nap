@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "ca35ce3e-b4a6-4894-b82d-4025957e6bce",
+  "role": "test-arch-model",
+  "name": "001-test-arch-model",
+  "napkin": "0100-model-layer",
+  "nepic": "03-nepic-spaces-v2",
+  "started": true,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795722
+}

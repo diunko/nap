@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "4fc857de-6d62-4e38-81c3-270b8a13093d",
+  "role": "test-eng-wiring",
+  "name": "003-test-eng-wiring",
+  "napkin": "0600-live-wiring",
+  "nepic": "02-nepic-spaces",
+  "started": false,
+  "done": true,
+  "exited": false,
+  "archived": false,
+  "created_at": 1778628795716
+}
