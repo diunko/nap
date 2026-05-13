@@ -2,8 +2,6 @@
 
 Scratch a napkin with AI in 15 minutes. Spawn agents. Take a nap. Wake up to a working system.
 
-![NAP three-pane layout](docs/nap-three-pane.png)
-
 ## Quick start
 
 ```bash
@@ -24,6 +22,8 @@ nap3 dev
 ```
 
 ## What it does
+
+![NAP three-pane layout](docs/nap-three-pane.png)
 
 NAP is an Electron app for reading, writing, and building with AI agents. You brainstorm ideas into napkins — compressed bullet docs — then agents unfold those napkins into specs, tests, and code.
 
