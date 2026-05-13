@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { join } from 'path';
 import * as nodeFs from 'fs';
 import * as nodeFsPromises from 'fs/promises';
+import { execFile } from 'child_process';
 import { createModel } from './model';
 import { NodeFileSystem } from './filesystem';
 import { NodePtySpawner } from './node-pty-spawner';
@@ -11,6 +12,7 @@ import { createRequestHandler } from './socket-handler';
 import { setWriter } from './message-queue';
 import { getServerSocketPath } from '../shared/constants';
 import { ContentWatcher } from './content-watcher';
+import { parseGitDiff } from './git-diff-parser';
 import type { AppSnapshot } from '../shared/bridge-types';
 
 let ptySpawner: NodePtySpawner | null = null;
@@ -195,6 +197,11 @@ app.whenReady().then(async () => {
     shell.openPath(filePath);
   });
 
+  // Open URL in default browser
+  ipcMain.on('shell:open-external', (_event, url: string) => {
+    shell.openExternal(url);
+  });
+
   // ── File content IPC (0100 — content pane) ──
 
   ipcMain.handle('file:read', async (_event, filePath: string) => {
@@ -232,6 +239,64 @@ app.whenReady().then(async () => {
 
   ipcMain.on('file:watch', (_event, filePath: string | null) => {
     contentWatcher.watch(filePath);
+  });
+
+  // ── File exists check (0200 — link fallback resolution) ──
+
+  ipcMain.handle('file:exists', async (_event, filePath: string) => {
+    try {
+      await nodeFsPromises.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  // ── Git diff (0200 — git gutter) ──
+
+  ipcMain.handle('file:git-diff', async (_event, filePath: string) => {
+    return new Promise<ReturnType<typeof parseGitDiff>>((resolve) => {
+      // Check if file is tracked
+      execFile('git', ['ls-files', '--error-unmatch', filePath], { cwd: projectCwd }, (lsErr) => {
+        if (lsErr) {
+          // Untracked file — all lines are "added"
+          nodeFsPromises.readFile(filePath, 'utf-8').then((content) => {
+            const lineCount = content.split('\n').length;
+            resolve(lineCount > 0 ? [{ type: 'add', startLine: 1, endLine: lineCount }] : []);
+          }).catch(() => resolve([]));
+          return;
+        }
+
+        // Tracked file — run git diff
+        execFile(
+          'git',
+          ['diff', '--unified=0', 'HEAD', '--', filePath],
+          { cwd: projectCwd, maxBuffer: 1024 * 1024 },
+          (err, stdout) => {
+            if (err && !stdout) {
+              resolve([]);
+              return;
+            }
+            resolve(parseGitDiff(stdout));
+          },
+        );
+      });
+    });
+  });
+
+  // ── Code file watcher (0200 — right pane) ──
+
+  const codeWatcher = new ContentWatcher({
+    onChange: (filePath, content) => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('code:changed', filePath, content);
+      }
+    },
+    isPendingWrite: () => false, // Code pane is read-only, no echo suppression
+  });
+
+  ipcMain.on('code:watch', (_event, filePath: string | null) => {
+    codeWatcher.watch(filePath);
   });
 
   // UI state persistence (debug panel collapse/tab, sidebar visible)

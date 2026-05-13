@@ -38,6 +38,11 @@ declare global {
       fileWrite: (filePath: string, content: string) => Promise<{ ok?: boolean; error?: boolean; message?: string }>;
       onFileChanged: (cb: (filePath: string, content: string) => void) => () => void;
       fileWatch: (filePath: string | null) => void;
+      fileExists: (filePath: string) => Promise<boolean>;
+      fileGitDiff: (filePath: string) => Promise<Array<{ type: 'add' | 'modify' | 'delete'; startLine: number; endLine: number }>>;
+      onCodeChanged: (cb: (filePath: string, content: string) => void) => () => void;
+      codeWatch: (filePath: string | null) => void;
+      shellOpenExternal: (url: string) => void;
     };
   }
 }
@@ -180,7 +185,7 @@ function App() {
     }
   });
 
-  // Cmd+B → toggle sidebar, Cmd+D → toggle debug panel, Cmd+` → toggle kanban
+  // Cmd+B → toggle sidebar, Cmd+D → toggle debug panel, Cmd+` → toggle kanban, Cmd+W → close tab
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
@@ -194,6 +199,15 @@ function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === '`') {
         e.preventDefault();
         toggleKanban();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
+        e.preventDefault();
+        // Close active tab in the focused pane (heuristic: if code pane has focus, close right; else close left)
+        const state = useNapStore.getState();
+        // Try closing in the pane that has an active tab
+        if (state.activeLeftTabId) {
+          state.closeActiveTab('left');
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown);

@@ -76,4 +76,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('file:changed', handler);
   },
   fileWatch: (filePath: string | null) => ipcRenderer.send('file:watch', filePath),
+
+  // ── File operations (0200 — link routing, git gutter, code pane) ──
+  fileExists: (filePath: string) => ipcRenderer.invoke('file:exists', filePath),
+  fileGitDiff: (filePath: string) => ipcRenderer.invoke('file:git-diff', filePath),
+  onCodeChanged: (cb: (filePath: string, content: string) => void) => {
+    const handler = (_event: IpcRendererEvent, filePath: string, content: string) =>
+      cb(filePath, content);
+    ipcRenderer.on('code:changed', handler);
+    return () => ipcRenderer.removeListener('code:changed', handler);
+  },
+  codeWatch: (filePath: string | null) => ipcRenderer.send('code:watch', filePath),
+  shellOpenExternal: (url: string) => ipcRenderer.send('shell:open-external', url),
 });

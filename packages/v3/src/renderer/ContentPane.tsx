@@ -1,7 +1,11 @@
 import { useEffect, useRef } from 'react';
 import * as monaco from 'monaco-editor';
 import { useNapStore } from './store';
-import { registerNapkinMarkdown } from './napkin-markdown';
+import { TabBar } from './TabBar';
+import { registerNapkinMarkdown, registerShiftEnter } from './napkin-markdown';
+import { handleLinkClick } from './content-link-provider';
+import { applyGitGutter } from './git-gutter';
+import type { LinkResult } from './routing-rules';
 
 // Register language + theme once
 let registered = false;
@@ -25,11 +29,15 @@ self.MonacoEnvironment = {
 
 export function ContentPane() {
   const activeFilePath = useNapStore((s) => s.activeFilePath);
+  const leftTabs = useNapStore((s) => s.leftTabs);
+  const activeLeftTabId = useNapStore((s) => s.activeLeftTabId);
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const modelRef = useRef<monaco.editor.ITextModel | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const suppressExternalRef = useRef(false);
+  const gutterDecorationsRef = useRef<string[]>([]);
+  const shiftEnterDisposableRef = useRef<monaco.IDisposable | null>(null);
 
   // Create editor once
   useEffect(() => {
@@ -51,13 +59,16 @@ export function ContentPane() {
       overviewRulerLanes: 0,
       hideCursorInOverviewRuler: true,
       folding: false,
-      glyphMargin: false,
-      lineDecorationsWidth: 0,
+      glyphMargin: true,
+      lineDecorationsWidth: 8,
       lineNumbersMinChars: 0,
       padding: { top: 12, bottom: 12 },
     });
 
     editorRef.current = editor;
+
+    // Register shift-enter keybinding
+    shiftEnterDisposableRef.current = registerShiftEnter(editor);
 
     // Auto-save on change (1s debounce)
     editor.onDidChangeModelContent(() => {
@@ -65,12 +76,17 @@ export function ContentPane() {
       const filePath = useNapStore.getState().activeFilePath;
       if (!filePath) return;
 
+      // Pin ephemeral tab on first edit
+      useNapStore.getState().pinActiveEphemeral('left');
+
       suppressExternalRef.current = true;
       saveTimerRef.current = setTimeout(async () => {
         const content = editor.getValue();
         await window.electronAPI?.fileWrite(filePath, content);
         // Keep suppress active briefly for watcher echo
         setTimeout(() => { suppressExternalRef.current = false; }, 500);
+        // Re-run git diff after save
+        refreshGitGutter(filePath);
       }, 1000);
     });
 
@@ -82,10 +98,111 @@ export function ContentPane() {
 
     return () => {
       clearTimeout(saveTimerRef.current);
+      shiftEnterDisposableRef.current?.dispose();
       observer.disconnect();
       editor.dispose();
       editorRef.current = null;
     };
+  }, []);
+
+  // Refresh git gutter decorations
+  async function refreshGitGutter(filePath: string) {
+    const editor = editorRef.current;
+    if (!editor || !window.electronAPI?.fileGitDiff) return;
+    const hunks = await window.electronAPI.fileGitDiff(filePath);
+    gutterDecorationsRef.current = applyGitGutter(editor, hunks, gutterDecorationsRef.current);
+  }
+
+  // Handle link clicks from Monaco
+  function handleResult(result: LinkResult) {
+    const store = useNapStore.getState();
+    if (result.action === 'openCode') {
+      // Resolve with fallback if needed
+      if (result.fallbackPath) {
+        window.electronAPI?.fileExists(result.path).then((exists: boolean) => {
+          if (exists) {
+            store.openCode({ path: result.path, line: result.line, col: result.col });
+          } else {
+            store.openCode({ path: result.fallbackPath!, line: result.line, col: result.col });
+          }
+        });
+      } else {
+        store.openCode({ path: result.path, line: result.line, col: result.col });
+      }
+    } else if (result.action === 'openDoc') {
+      store.openDoc(result.path);
+    } else if (result.action === 'openExternal') {
+      window.electronAPI?.shellOpenExternal(result.url);
+    }
+  }
+
+  // Wire up link click handling via Monaco's opener service
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    // Override the default opener to handle our links
+    const disposable = (editor as any).getContribution?.('editor.linkDetector');
+
+    // Alternative: intercept via onMouseDown
+    const mouseDisposable = editor.onMouseDown((e) => {
+      if (e.target.type === monaco.editor.MouseTargetType.CONTENT_TEXT && e.event.ctrlKey || e.event.metaKey) {
+        // Cmd/Ctrl+Click on text — check if there's a link
+        const position = e.target.position;
+        if (!position) return;
+        const model = editor.getModel();
+        if (!model) return;
+        const lineContent = model.getLineContent(position.lineNumber);
+        const sourceFilePath = useNapStore.getState().activeFilePath;
+        if (!sourceFilePath) return;
+
+        // Find if click position is within a detected link
+        const col = position.column;
+        // Check markdown links
+        const mdRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+        let match: RegExpExecArray | null;
+        while ((match = mdRegex.exec(lineContent)) !== null) {
+          const start = match.index + 1;
+          const end = match.index + match[0].length + 1;
+          if (col >= start && col < end) {
+            e.event.preventDefault();
+            handleLinkClick(match[2], sourceFilePath, handleResult);
+            return;
+          }
+        }
+
+        // Check bare URLs
+        const urlRegex = /https?:\/\/[^\s)>\]]+/g;
+        while ((match = urlRegex.exec(lineContent)) !== null) {
+          const start = match.index + 1;
+          const end = match.index + match[0].length + 1;
+          if (col >= start && col < end) {
+            e.event.preventDefault();
+            handleLinkClick(match[0], sourceFilePath, handleResult);
+            return;
+          }
+        }
+
+        // Check bare file paths
+        const pathRegex = /(?<!\w)(?:\.\/|\.\.\/|\/)?(?:[\w.-]+\/)*[\w.-]+\.\w+(?::\d+(?::\d+)?)?/g;
+        while ((match = pathRegex.exec(lineContent)) !== null) {
+          const start = match.index + 1;
+          const end = match.index + match[0].length + 1;
+          if (col >= start && col < end) {
+            // Skip if inside URL
+            let i = match.index - 1;
+            while (i >= 0 && lineContent[i] !== ' ' && lineContent[i] !== '\t') i--;
+            const token = lineContent.slice(i + 1);
+            if (/^https?:\/\//.test(token)) continue;
+            e.event.preventDefault();
+            handleLinkClick(match[0], sourceFilePath, handleResult);
+            return;
+          }
+        }
+      }
+    });
+
+    return () => mouseDisposable.dispose();
   }, []);
 
   // Load file when activeFilePath changes
@@ -100,6 +217,7 @@ export function ContentPane() {
         modelRef.current = null;
       }
       editor.setModel(null);
+      gutterDecorationsRef.current = [];
       // Tell main to stop watching
       window.electronAPI?.fileWatch(null);
       return;
@@ -117,9 +235,13 @@ export function ContentPane() {
       const model = monaco.editor.createModel(content, 'napkin-markdown');
       modelRef.current = model;
       editor.setModel(model);
+      gutterDecorationsRef.current = [];
 
       // Start watching this file
       window.electronAPI?.fileWatch(activeFilePath);
+
+      // Load git gutter
+      refreshGitGutter(activeFilePath);
     })();
 
     return () => {
@@ -143,7 +265,6 @@ export function ContentPane() {
       const position = editor?.getPosition();
       const scrollTop = editor?.getScrollTop();
 
-      // Use applyEdits to preserve undo stack
       model.setValue(content);
 
       if (editor && position) {
@@ -152,6 +273,9 @@ export function ContentPane() {
       if (editor && scrollTop !== undefined) {
         editor.setScrollTop(scrollTop);
       }
+
+      // Refresh git gutter
+      if (filePath) refreshGitGutter(filePath);
     });
 
     return unsub;
@@ -169,8 +293,19 @@ export function ContentPane() {
         minWidth: 200,
       }}
     >
+      {/* Tab bar */}
+      <TabBar
+        tabs={leftTabs}
+        activeTabId={activeLeftTabId}
+        onActivate={(tabId) => {
+          const tab = leftTabs.find((t) => t.id === tabId);
+          if (tab) useNapStore.getState().openDoc(tab.path);
+        }}
+        onClose={(tabId) => useNapStore.getState().closeTab('left', tabId)}
+        onPin={(tabId) => useNapStore.getState().pinTab('left', tabId)}
+      />
       {/* Placeholder — visible when no file open */}
-      {!activeFilePath && (
+      {!activeFilePath && leftTabs.length === 0 && (
         <div
           style={{
             flex: 1,
@@ -183,25 +318,6 @@ export function ContentPane() {
           }}
         >
           no file open
-        </div>
-      )}
-      {/* Breadcrumb — visible when file open */}
-      {activeFilePath && (
-        <div
-          style={{
-            padding: '8px 16px',
-            borderBottom: '1px solid #3c3c3c',
-            background: '#252526',
-            flexShrink: 0,
-            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
-            fontSize: 13,
-            color: '#6b7280',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {activeFilePath.split('/').slice(-2).join('/')}
         </div>
       )}
       {/* Editor container — always mounted so useEffect can attach Monaco */}

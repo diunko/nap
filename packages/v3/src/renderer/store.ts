@@ -3,6 +3,15 @@ import type { AppSnapshot, NapkinState, AgentState, NepicInfo, WatcherEvent } fr
 
 export type CardViewMode = 'collapsed' | 'focused' | 'extended';
 
+export interface Tab {
+  id: string;
+  path: string;
+  type: 'file' | 'terminal';
+  ephemeral: boolean;
+  scrollPos?: number;
+  cursorPos?: { lineNumber: number; column: number };
+}
+
 export interface NapStore {
   // ── Model state (from main process snapshots) ──
   napkins: NapkinState[];
@@ -23,10 +32,26 @@ export interface NapStore {
   debugPanelTab: 'model' | 'filesystem' | 'events';
   kanbanVisible: boolean;
 
+  // ── Tab + right pane state ──
+  rightPaneMode: 'terminal' | 'code';
+  rightFilePath: string | null;
+  rightFileLine: number | null;
+  leftTabs: Tab[];
+  activeLeftTabId: string | null;
+  rightTabs: Tab[];
+  activeRightTabId: string | null;
+
   // ── Actions ──
   applySnapshot: (snapshot: AppSnapshot) => void;
   setActiveTerminal: (id: string) => void;
   openFile: (path: string) => void;
+  openCode: (opts: { path: string; line?: number; col?: number }) => void;
+  openDoc: (path: string) => void;
+  closeTab: (pane: 'left' | 'right', tabId: string) => void;
+  closeActiveTab: (pane: 'left' | 'right') => void;
+  pinTab: (pane: 'left' | 'right', tabId: string) => void;
+  pinActiveEphemeral: (pane: 'left' | 'right') => void;
+  saveTabScroll: (pane: 'left' | 'right', tabId: string, scrollPos: number, cursorPos?: Tab['cursorPos']) => void;
   expandCard: (slug: string) => void;
   focusCard: (slug: string) => void;
   extendCard: () => void;
@@ -44,12 +69,63 @@ export interface NapStore {
 const nepicTerminalMemory = new Map<string, string>();
 const nepicFocusedCardMemory = new Map<string, string>();
 const nepicFilePathMemory = new Map<string, string>();
+const nepicLeftTabsMemory = new Map<string, { tabs: Tab[]; activeId: string | null }>();
+const nepicRightTabsMemory = new Map<string, { tabs: Tab[]; activeId: string | null }>();
 
 /** Test-only: clear per-nepic memory between tests */
 export function _resetNepicTerminalMemory(): void {
   nepicTerminalMemory.clear();
   nepicFocusedCardMemory.clear();
   nepicFilePathMemory.clear();
+  nepicLeftTabsMemory.clear();
+  nepicRightTabsMemory.clear();
+}
+
+let tabIdCounter = 0;
+function nextTabId(): string {
+  return `tab-${++tabIdCounter}`;
+}
+
+/** Find or create a tab for a path in a tab array. Returns [updatedTabs, tabId]. */
+function upsertTab(
+  tabs: Tab[],
+  path: string,
+  type: 'file' | 'terminal',
+  ephemeral: boolean,
+): [Tab[], string] {
+  // Existing tab with same path?
+  const existing = tabs.find((t) => t.path === path && t.type === type);
+  if (existing) return [tabs, existing.id];
+
+  // Reuse ephemeral slot?
+  if (ephemeral) {
+    const ephIdx = tabs.findIndex((t) => t.ephemeral);
+    if (ephIdx !== -1) {
+      const updated = [...tabs];
+      updated[ephIdx] = { ...updated[ephIdx], path, type };
+      return [updated, updated[ephIdx].id];
+    }
+  }
+
+  // Create new tab (ephemeral goes rightmost)
+  const tab: Tab = { id: nextTabId(), path, type, ephemeral };
+  return [[...tabs, tab], tab.id];
+}
+
+/** Remove a tab and pick the next active. */
+function removeTab(
+  tabs: Tab[],
+  tabId: string,
+  activeId: string | null,
+): [Tab[], string | null] {
+  const idx = tabs.findIndex((t) => t.id === tabId);
+  if (idx === -1) return [tabs, activeId];
+  const newTabs = tabs.filter((t) => t.id !== tabId);
+  if (newTabs.length === 0) return [newTabs, null];
+  if (activeId !== tabId) return [newTabs, activeId];
+  // Pick neighbor: prefer left, then right
+  const nextIdx = Math.min(idx, newTabs.length - 1);
+  return [newTabs, newTabs[nextIdx].id];
 }
 
 export const useNapStore = create<NapStore>((set, get) => ({
@@ -70,6 +146,14 @@ export const useNapStore = create<NapStore>((set, get) => ({
   debugPanelTab: 'model' as const,
   kanbanVisible: false,
 
+  rightPaneMode: 'terminal' as const,
+  rightFilePath: null,
+  rightFileLine: null,
+  leftTabs: [],
+  activeLeftTabId: null,
+  rightTabs: [],
+  activeRightTabId: null,
+
   // Snapshot only updates model state — renderer-only state preserved
   applySnapshot: (snapshot: AppSnapshot) => {
     const prev = get();
@@ -86,6 +170,9 @@ export const useNapStore = create<NapStore>((set, get) => ({
       if (prev.activeFilePath) {
         nepicFilePathMemory.set(prev.activeNepicId, prev.activeFilePath);
       }
+      // Save tab state
+      nepicLeftTabsMemory.set(prev.activeNepicId, { tabs: prev.leftTabs, activeId: prev.activeLeftTabId });
+      nepicRightTabsMemory.set(prev.activeNepicId, { tabs: prev.rightTabs, activeId: prev.activeRightTabId });
     }
 
     const updates: Partial<NapStore> = {
@@ -120,17 +207,120 @@ export const useNapStore = create<NapStore>((set, get) => ({
         updates.focusedCardSlug = arch?.id ?? null;
         updates.cardViewMode = arch ? 'focused' : 'collapsed';
       }
+
+      // Restore tab state
+      const savedLeft = nepicLeftTabsMemory.get(snapshot.activeNepicId);
+      updates.leftTabs = savedLeft?.tabs ?? [];
+      updates.activeLeftTabId = savedLeft?.activeId ?? null;
+      const savedRight = nepicRightTabsMemory.get(snapshot.activeNepicId);
+      updates.rightTabs = savedRight?.tabs ?? [];
+      updates.activeRightTabId = savedRight?.activeId ?? null;
+      // Derive rightPaneMode from active right tab
+      const activeRTab = (savedRight?.tabs ?? []).find((t: Tab) => t.id === savedRight?.activeId);
+      updates.rightPaneMode = activeRTab?.type === 'file' ? 'code' : 'terminal';
+      updates.rightFilePath = activeRTab?.type === 'file' ? activeRTab.path : null;
+      updates.rightFileLine = null;
     }
 
     set(updates);
   },
 
   setActiveTerminal: (id: string) => {
-    set({ activeTerminalId: id });
+    const prev = get();
+    // Ensure terminal tab exists in right pane
+    const [tabs, tabId] = upsertTab(prev.rightTabs, id, 'terminal', false);
+    set({
+      activeTerminalId: id,
+      rightPaneMode: 'terminal',
+      rightTabs: tabs,
+      activeRightTabId: tabId,
+    });
   },
 
   openFile: (path: string) => {
-    set({ activeFilePath: path });
+    // Delegate to openDoc for backward compat (sidebar clicks)
+    get().openDoc(path);
+  },
+
+  openCode: (opts: { path: string; line?: number; col?: number }) => {
+    const prev = get();
+    const [tabs, tabId] = upsertTab(prev.rightTabs, opts.path, 'file', true);
+    set({
+      rightPaneMode: 'code',
+      rightFilePath: opts.path,
+      rightFileLine: opts.line ?? null,
+      rightTabs: tabs,
+      activeRightTabId: tabId,
+    });
+  },
+
+  openDoc: (path: string) => {
+    const prev = get();
+    const [tabs, tabId] = upsertTab(prev.leftTabs, path, 'file', true);
+    set({
+      activeFilePath: path,
+      leftTabs: tabs,
+      activeLeftTabId: tabId,
+    });
+  },
+
+  closeTab: (pane: 'left' | 'right', tabId: string) => {
+    const prev = get();
+    if (pane === 'left') {
+      const [tabs, nextActive] = removeTab(prev.leftTabs, tabId, prev.activeLeftTabId);
+      const activeTab = tabs.find((t) => t.id === nextActive);
+      set({
+        leftTabs: tabs,
+        activeLeftTabId: nextActive,
+        activeFilePath: activeTab?.path ?? null,
+      });
+    } else {
+      // Don't close terminal tabs for running agents
+      const tab = prev.rightTabs.find((t) => t.id === tabId);
+      if (tab?.type === 'terminal') {
+        const allAgents = [...prev.napkins.flatMap((n) => n.agents), ...prev.architects];
+        const agent = allAgents.find((a) => a.id === tab.path);
+        if (agent?.running) return;
+      }
+      const [tabs, nextActive] = removeTab(prev.rightTabs, tabId, prev.activeRightTabId);
+      const activeTab = tabs.find((t) => t.id === nextActive);
+      set({
+        rightTabs: tabs,
+        activeRightTabId: nextActive,
+        rightPaneMode: activeTab?.type === 'file' ? 'code' : 'terminal',
+        rightFilePath: activeTab?.type === 'file' ? activeTab.path : null,
+        rightFileLine: null,
+        activeTerminalId: activeTab?.type === 'terminal' ? activeTab.path : prev.activeTerminalId,
+      });
+    }
+  },
+
+  closeActiveTab: (pane: 'left' | 'right') => {
+    const state = get();
+    const activeId = pane === 'left' ? state.activeLeftTabId : state.activeRightTabId;
+    if (activeId) state.closeTab(pane, activeId);
+  },
+
+  pinTab: (pane: 'left' | 'right', tabId: string) => {
+    const tabs = pane === 'left' ? get().leftTabs : get().rightTabs;
+    const updated = tabs.map((t) => (t.id === tabId ? { ...t, ephemeral: false } : t));
+    set(pane === 'left' ? { leftTabs: updated } : { rightTabs: updated });
+  },
+
+  pinActiveEphemeral: (pane: 'left' | 'right') => {
+    const state = get();
+    const tabs = pane === 'left' ? state.leftTabs : state.rightTabs;
+    const activeId = pane === 'left' ? state.activeLeftTabId : state.activeRightTabId;
+    const tab = tabs.find((t) => t.id === activeId);
+    if (tab?.ephemeral) state.pinTab(pane, tab.id);
+  },
+
+  saveTabScroll: (pane: 'left' | 'right', tabId: string, scrollPos: number, cursorPos?: Tab['cursorPos']) => {
+    const tabs = pane === 'left' ? get().leftTabs : get().rightTabs;
+    const updated = tabs.map((t) =>
+      t.id === tabId ? { ...t, scrollPos, ...(cursorPos ? { cursorPos } : {}) } : t,
+    );
+    set(pane === 'left' ? { leftTabs: updated } : { rightTabs: updated });
   },
 
   // Click card → focused. Click same card → collapsed.
