@@ -29,7 +29,7 @@ NAP is an Electron app for reading, writing, and building with AI agents. You br
 
 Three panes: nav on the left, your documents in the middle, agent terminals and code on the right. Each agent is a full Claude Code session. You can watch any agent think, talk to them, steer them mid-task.
 
-The middle pane is a Monaco editor with napkin-markdown styling — role-colored `//` comments, bullet formatting, inline code. Toggle to rendered mode (Cmd+Shift+H) for a clean reading view with proper tables, headers, and links. Click any file:line reference in a document and the source opens in the right pane.
+The middle pane is a Monaco editor with napkin-markdown styling — role-colored `//` comments, bullet formatting, inline code. Toggle to rendered mode (Cmd+J) for a clean reading view with proper tables, headers, and links. Click any file:line reference in a document and the source opens in the right pane.
 
 ## The three panes
 
@@ -73,7 +73,7 @@ Cmd+T cycles through themes. Ships with dark + 4 light variants (cream, gray, se
 
 ## Rendered mode
 
-Cmd+Shift+H toggles between raw edit and rendered view in the left pane. Rendered mode shows proper tables, headers, styled links, and role-colored comment blocks. Read-only — Cmd+click any element to jump back to edit mode at that line.
+Cmd+J toggles between raw edit and rendered view in the left pane. Rendered mode shows proper tables, headers, styled links, and role-colored comment blocks. Read-only — Cmd+click any element to jump back to edit mode at that line.
 
 ## CLI
 
@@ -108,7 +108,7 @@ nap3 permission-response --agent <id> --decision allow|deny
 | Cmd+K | Filter napkins |
 | Cmd+E | Toggle focused/extended view |
 | Cmd+T | Cycle theme |
-| Cmd+Shift+H | Toggle rendered mode |
+| Cmd+J | Toggle rendered mode |
 | Cmd+W | Close active tab |
 | Cmd+G | Toggle follow mode (terminal) |
 | Cmd+D | Toggle debug panel |

@@ -198,7 +198,7 @@ function App() {
   });
 
   // Cmd+B → toggle sidebar, Cmd+D → toggle debug panel, Cmd+` → toggle kanban, Cmd+W → close tab
-  // Cmd+T → cycle theme, Cmd+Shift+H → toggle render mode
+  // Cmd+T → cycle theme, Cmd+Shift+J → toggle render mode
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
@@ -224,7 +224,7 @@ function App() {
         e.preventDefault();
         useNapStore.getState().cycleTheme();
       }
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
         e.preventDefault();
         useNapStore.getState().toggleRenderMode();
       }
