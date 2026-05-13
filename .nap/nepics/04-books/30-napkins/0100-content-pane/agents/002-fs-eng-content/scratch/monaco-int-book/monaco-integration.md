@@ -2,9 +2,11 @@
 
 ## The Problem
 
-You have an Electron app that shows agent terminals -- AI agents running in PTY sessions, doing work. Now you want to add a reading and editing surface for `.nap` files alongside those terminals. Monaco is the obvious choice: it is VS Code's editor, it runs in the browser, it has a tokenizer engine. But Monaco is a heavyweight component. It weighs around 5MB, it spawns web workers, and it has its own imperative DOM lifecycle that does not play well with React's virtual DOM. It wants to own a `<div>` and manage everything inside it. React wants to own all the DOM.
+You have an Electron app running AI agents in PTY sessions. Now you want to add two editing surfaces -- a read-write napkin editor on the left, a read-only code viewer on the right -- plus five themes, a git gutter, link routing between panes, rendered markdown preview, shift-enter continuation, and tabs with ephemeral/pinned semantics. All of this has to coexist without re-rendering the world on every keystroke.
 
-This chapter explains how the integration works end to end: how Monaco's imperative lifecycle is reconciled with React, how file content flows between the editor, the filesystem, and external agents, and how a custom Monarch tokenizer gives `.nap` files role-colored syntax highlighting. After reading it, you should be able to modify the auto-save pipeline, add new token types, or restructure the pane layout without guessing.
+Monaco is the obvious choice for both editors. But Monaco is a heavyweight imperative component that spawns web workers and wants to own its DOM. React wants to own all the DOM. And now you are asking for TWO Monaco instances in the same window, each with different configurations, different lifecycles, and different filesystem watchers feeding them. The integration problem is not "make Monaco work in React" -- it is "make two Monaco editors, five themes, a link router, and a file-watching pipeline all coexist in a React component tree without any of them stepping on each other."
+
+This chapter explains how that works end to end.
 
 ---
 
@@ -12,51 +14,64 @@ This chapter explains how the integration works end to end: how Monaco's imperat
 
 ### The Core Tension
 
-Monaco is imperative. You call `monaco.editor.create(domElement, options)` and get back an editor object. You call methods on that object -- `setModel()`, `getValue()`, `layout()`. React is declarative. You describe what the UI should look like, and React figures out the DOM mutations. These two philosophies do not naturally compose.
+Monaco is imperative. You call `monaco.editor.create(domElement, options)` and get back an editor object. You call methods on that object -- `setModel()`, `getValue()`, `layout()`. React is declarative. You describe what the UI should look like, and React figures out the DOM mutations.
 
-The standard React mistake is to put the editor instance in state or to conditionally render the container element. Both are wrong. Putting the editor in state means every `setModel()` call triggers a re-render, which triggers React to diff the DOM, which potentially interferes with Monaco's DOM ownership. Conditionally rendering the container means the `<div>` disappears and reappears, forcing you to destroy and recreate the entire editor (expensive -- hundreds of milliseconds, visible flicker).
+The standard React mistake is to put the editor instance in state or to conditionally render the container. Both are wrong. Putting the editor in state means every `setModel()` call triggers a re-render, which interferes with Monaco's DOM ownership. Conditionally rendering the container means the `<div>` disappears and reappears, forcing you to destroy and recreate the entire editor (hundreds of milliseconds, visible flicker).
 
-The solution is refs. The **`ContentPane`** component ([ContentPane.tsx:26](/packages/v3/src/renderer/ContentPane.tsx#L26)) uses five refs and exactly one store subscription:
+The solution is refs. The **`ContentPane`** component ([ContentPane.tsx:37](/packages/v3/src/renderer/ContentPane.tsx#L37)) uses nine refs and four store subscriptions:
 
 ```typescript
 export function ContentPane() {
-  const activeFilePath = useNapStore((s) => s.activeFilePath); // Only re-render trigger
+  // ── Store subscriptions — the ONLY things that trigger re-renders ──
+  const activeFilePath = useNapStore((s) => s.activeFilePath);
+  const leftTabs = useNapStore((s) => s.leftTabs);
+  const activeLeftTabId = useNapStore((s) => s.activeLeftTabId);
+  const leftPaneRenderMode = useNapStore((s) => s.leftPaneRenderMode);
 
-  const containerRef = useRef<HTMLDivElement>(null);                          // The DOM element Monaco owns
-  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null); // The editor instance
-  const modelRef = useRef<monaco.editor.ITextModel | null>(null);            // The current text model
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();   // Auto-save debounce handle
+  // ── Refs — imperative state that never triggers re-renders ──
+  const containerRef = useRef<HTMLDivElement>(null);                          // DOM element Monaco owns
+  const renderedRef = useRef<HTMLDivElement>(null);                           // Rendered markdown overlay
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null); // Editor instance
+  const modelRef = useRef<monaco.editor.ITextModel | null>(null);            // Current text model
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();   // Auto-save debounce
   const suppressExternalRef = useRef(false);                                  // Echo suppression flag
-  // ...
+  const gutterDecorationsRef = useRef<string[]>([]);                         // Git gutter decoration IDs
+  const shiftEnterDisposableRef = useRef<monaco.IDisposable | null>(null);   // Shift-enter keybinding handle
+  const gutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(); // Git gutter refresh debounce
+  const focusGutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(); // Focus-triggered gutter
 }
 ```
 
-The component re-renders when and only when the user opens a different file. Typing, saving, receiving external changes, resizing -- all of that happens imperatively through refs. React never knows about it, and that is the point.
+The ratio is 9:4. Nine imperative handles, four reactive subscriptions. That ratio tells you where the complexity lives. Typing, saving, receiving external changes, refreshing git gutter decorations, applying link clicks -- all of it happens imperatively through refs. React re-renders when the user opens a different file, switches tabs, or toggles rendered mode. Everything else, React never knows about. That is the point.
 
 ### One-Time Registration
 
-Before the editor can be created, the custom language and theme need to be registered with Monaco's global registry. This happens exactly once, gated by a module-level boolean.
+Before the editor can be created, the custom language, themes, and initial theme need to be registered with Monaco's global registries. This happens exactly once, gated by a module-level boolean.
 
-**`ensureRegistered()`:** [ContentPane.tsx:8](/packages/v3/src/renderer/ContentPane.tsx#L8)
+**`ensureRegistered()`:** [ContentPane.tsx:15](/packages/v3/src/renderer/ContentPane.tsx#L15)
 
 ```typescript
 let registered = false;
 function ensureRegistered(): void {
   if (registered) return;
   registered = true;
-  registerNapkinMarkdown();
-  // Expose Monaco for medium tests (same pattern as window.__napStore__)
-  (window as any).__monaco__ = monaco;
+  registerNapkinMarkdown();                              // Monarch tokenizer for napkin-markdown
+  registerThemes();                                      // All 5 themes: defineTheme() for each
+  const themeName = useNapStore.getState().currentThemeName;
+  applyTheme(findTheme(themeName));                      // Apply persisted theme BEFORE editor creation
+  (window as any).__monaco__ = monaco;                   // Expose for Playwright medium tests
 }
 ```
 
-Why a module-level boolean instead of, say, a `useRef`? Because the flag needs to survive component unmount/remount cycles. A ref dies with the component instance. A module-level variable lives for the lifetime of the JavaScript module -- which, in this Electron app, means the lifetime of the renderer process. The `__monaco__` test exposure follows the same pattern as `window.__napStore__` (set in [index.tsx:45](/packages/v3/src/renderer/index.tsx#L45)): Playwright tests need to reach into the Monaco API via `page.evaluate()`, and there is no other way to get there.
+Why a module-level boolean instead of a `useRef`? Because the flag needs to survive component unmount/remount cycles. A ref dies with the component instance. A module-level variable lives for the lifetime of the renderer process.
+
+Notice the theme is applied before the editor is created. This matters because Monaco reads the current theme name during `create()`. If you create the editor first and apply the theme second, there is a visible flash of the wrong theme on first render.
 
 ### The Worker Setup
 
-Monaco needs web workers for background tasks like diff computation. The traditional approach uses a webpack plugin to emit the worker files. But nap v3 uses electron-vite (Vite-based), and Vite handles this natively -- when it sees `new URL('...', import.meta.url)`, it emits the referenced file as a separate asset. No plugin needed.
+Monaco needs web workers for background tasks like diff computation. nap v3 uses electron-vite (Vite-based), and Vite handles worker bundling natively -- when it sees `new URL('...', import.meta.url)`, it emits the referenced file as a separate asset. No plugin needed.
 
-**`MonacoEnvironment`:** [ContentPane.tsx:17](/packages/v3/src/renderer/ContentPane.tsx#L17)
+**`MonacoEnvironment`:** [ContentPane.tsx:28](/packages/v3/src/renderer/ContentPane.tsx#L28)
 
 ```typescript
 self.MonacoEnvironment = {
@@ -69,15 +84,13 @@ self.MonacoEnvironment = {
 };
 ```
 
-The `_label` parameter is ignored. Monaco can spawn specialized workers for different languages (CSS, TypeScript, JSON), but napkin-markdown only needs the base editor worker -- Monarch tokenization runs synchronously in the main thread. The `{ type: 'module' }` flag loads the worker as an ES module.
+The `_label` parameter is ignored. Monaco can spawn specialized workers for CSS, TypeScript, JSON, but napkin-markdown only needs the base editor worker -- Monarch tokenization runs synchronously in the main thread. The electron-vite config ([electron.vite.config.ts](/packages/v3/electron.vite.config.ts)) has no special Monaco configuration. The renderer section is just `plugins: [react()]`. This is one of those cases where the simplest approach works if you pick the right tools.
 
-The electron-vite config ([electron.vite.config.ts](/packages/v3/electron.vite.config.ts)) has no special Monaco configuration at all -- no rollup plugin, no manual asset handling. The renderer section is just `plugins: [react()]` with a root pointing at `src/renderer`. This is one of those cases where the simplest approach works if you pick the right tools.
+### Editor Creation: Once, Model Swap on Switch
 
-### Editor Creation: Once, Never Destroyed
+The editor is created in a `useEffect` with an empty dependency array. It runs once on mount and the cleanup runs only on unmount. The editor instance lives for the lifetime of the component.
 
-The editor is created in a `useEffect` with an empty dependency array -- it runs once on mount and the cleanup runs only on unmount.
-
-**Editor creation `useEffect`:** [ContentPane.tsx:35](/packages/v3/src/renderer/ContentPane.tsx#L35)
+**Editor creation:** [ContentPane.tsx:54](/packages/v3/src/renderer/ContentPane.tsx#L54)
 
 ```typescript
 useEffect(() => {
@@ -86,98 +99,159 @@ useEffect(() => {
 
   const editor = monaco.editor.create(containerRef.current, {
     language: 'napkin-markdown',
-    theme: 'napkin-dark',
+    theme: useNapStore.getState().currentThemeName,
     wordWrap: 'on',
     minimap: { enabled: false },
-    lineNumbers: 'off',
-    // ... more options
+    lineNumbers: 'off',           // Napkin is prose, not code
+    quickSuggestions: false,       // No autocomplete popups
+    folding: false,                // No code folding
+    glyphMargin: true,             // Needed for git gutter decorations
+    lineDecorationsWidth: 8,       // Space for the gutter stripe
     padding: { top: 12, bottom: 12 },
+    // ... more options suppressed
   });
 
   editorRef.current = editor;
+  shiftEnterDisposableRef.current = registerShiftEnter(editor); // Shift-enter continuation
+
+  // Focus-triggered git gutter refresh
+  editor.onDidFocusEditorText(() => {
+    clearTimeout(focusGutterTimerRef.current);
+    focusGutterTimerRef.current = setTimeout(() => {
+      const filePath = useNapStore.getState().activeFilePath;
+      if (filePath) refreshGitGutter(filePath);
+    }, 300);
+  });
+
   // ... auto-save handler, ResizeObserver ...
-
-  return () => {
-    clearTimeout(saveTimerRef.current);
-    observer.disconnect();
-    editor.dispose();
-    editorRef.current = null;
-  };
-}, []);  // Empty deps: create once
+}, []);
 ```
 
-The editor configuration philosophy is "disable everything that makes it feel like an IDE." Minimap, line numbers, code suggestions, folding, glyph margin, overview ruler, line highlight -- all off. What remains is a clean writing surface with word wrap and comfortable padding. More like a prose editor than a code editor. The full option list is at [ContentPane.tsx:39-57](/packages/v3/src/renderer/ContentPane.tsx#L39) if you need to tweak it.
+The configuration disables everything that makes it feel like an IDE: minimap, line numbers, code suggestions, folding, overview ruler, line highlight. But `glyphMargin: true` is on -- it provides the gutter column where git decorations (added/modified/deleted) appear as colored stripes.
 
-Inside this same effect, a `ResizeObserver` watches the container for size changes and calls `editor.layout()`. Monaco does not automatically resize when its container changes dimensions -- without this observer, dragging the resize handle would leave Monaco rendering at its old size with clipped content.
+Inside this same effect, a `ResizeObserver` watches the container and calls `editor.layout()`. Monaco does not automatically resize when its container changes. Without the observer, dragging the resize handle would leave Monaco rendering at its old dimensions.
 
-### The Always-Mounted Container
+### The Always-Mounted Container (Now With a Double Role)
 
-Here is a subtlety that matters. Look at the render output:
+The editor container is ALWAYS in the DOM, hidden with `display: 'none'` when not visible. It serves double duty: hidden when no file is open, AND hidden when rendered mode is active.
 
-**Container element:** [ContentPane.tsx:207](/packages/v3/src/renderer/ContentPane.tsx#L207)
+**Container element:** [ContentPane.tsx:419](/packages/v3/src/renderer/ContentPane.tsx#L419)
 
 ```typescript
-{/* Editor container -- always mounted so useEffect can attach Monaco */}
-<div
-  ref={containerRef}
-  style={{
-    flex: 1,
-    minHeight: 0,
-    display: activeFilePath ? 'block' : 'none',  // Hidden, not unmounted
-  }}
-/>
+{/* Editor -- always mounted, hidden in rendered mode */}
+<div ref={containerRef} style={{
+  flex: 1,
+  display: activeFilePath && leftPaneRenderMode === 'edit' ? 'block' : 'none',
+}} />
+{/* Rendered view -- visible only in rendered mode */}
+{activeFilePath && leftPaneRenderMode === 'rendered' && (
+  <div ref={renderedRef} data-testid="rendered-view" className="nap-rendered"
+       onClick={handleRenderedClick} style={{ /* ... */ }} />
+)}
 ```
 
-When no file is open, the container is hidden with `display: 'none'`, not removed from the DOM. This is critical. The `useEffect([], [])` that creates the editor runs once and needs the DOM element to exist at that moment. If the container were conditionally rendered (`{activeFilePath && <div ref={containerRef} />}`), the ref would be null on first mount (before any file is opened), and the editor would never be created.
+The editor container is `display: 'none'` in two cases: no file open, or rendered mode active. The rendered view is conditionally rendered (mounts/unmounts). This asymmetry is deliberate: the editor must always exist in the DOM because the creation `useEffect` needs the element at mount time. The rendered view has no such constraint -- it is just an HTML div.
 
-Meanwhile, a placeholder shows `"no file open"` in the same space, and a breadcrumb bar appears when a file is loaded, showing the last two path segments (e.g., `0100-explore/0100-explore.nap.md`).
+---
 
-### Model Swap on File Switch
+## Two Editors, Two Purposes
 
-When the user opens a different file, the editor stays put. What changes is the *model* -- Monaco's abstraction for the text buffer.
+This is the key architectural insight that is easy to miss: nap v3 has TWO Monaco editor instances, and they are configured for fundamentally different purposes.
 
-**File switch `useEffect`:** [ContentPane.tsx:92](/packages/v3/src/renderer/ContentPane.tsx#L92)
+### The Left Pane: A Writing Surface
+
+The left pane editor in **`ContentPane`** ([ContentPane.tsx:58](/packages/v3/src/renderer/ContentPane.tsx#L58)) is configured for napkin authoring:
 
 ```typescript
-useEffect(() => {
-  const editor = editorRef.current;
-  if (!editor) return;
+const editor = monaco.editor.create(containerRef.current, {
+  language: 'napkin-markdown',   // Custom Monarch tokenizer
+  theme: useNapStore.getState().currentThemeName,
+  wordWrap: 'on',               // Prose wraps
+  lineNumbers: 'off',           // No line numbers -- it's not code
+  quickSuggestions: false,       // No autocomplete
+  folding: false,                // No folding
+  glyphMargin: true,             // For git gutter
+  lineDecorationsWidth: 8,       // Gutter stripe width
+  padding: { top: 12, bottom: 12 },
+  tabSize: 2,
+  insertSpaces: true,
+  // readOnly: (not set -- defaults to false)
+});
+```
 
-  if (!activeFilePath) {
-    // No file -- clear model, stop watching
-    if (modelRef.current) {
-      modelRef.current.dispose();
-      modelRef.current = null;
+### The Right Pane: A Code Viewer
+
+The right pane editor in **`CodeEditor`** ([TerminalPane.tsx:65](/packages/v3/src/renderer/TerminalPane.tsx#L65)) is configured for code reading:
+
+```typescript
+const editor = monaco.editor.create(containerRef.current, {
+  readOnly: true,                // Can't edit -- it's a viewer
+  theme: useNapStore.getState().currentThemeName,
+  lineNumbers: 'on',            // Code needs line numbers
+  folding: true,                 // Code has structure worth folding
+  glyphMargin: true,             // Same gutter capability
+  minimap: { enabled: false },
+  padding: { top: 8, bottom: 8 }, // Less breathing room (8 vs 12)
+  // wordWrap: (not set -- defaults to off)
+  // language: (set dynamically per file)
+});
+```
+
+The contrast is the design. The left pane disables everything that says "IDE" and enables everything that says "writing tool." The right pane enables structure (line numbers, folding) because code is structured, and is read-only because you are following a link to LOOK at something, not to edit it.
+
+### Language Detection and Line Highlight
+
+The right pane auto-detects language from file extension via **`detectLanguage()`** ([TerminalPane.tsx:9](/packages/v3/src/renderer/TerminalPane.tsx#L9)) -- a 30-entry extension map covering TypeScript, Python, Rust, Go, and more, falling back to `'plaintext'`.
+
+When the store's `openCode()` action includes a line number, the **`CodeEditor`** file-load effect ([TerminalPane.tsx:108](/packages/v3/src/renderer/TerminalPane.tsx#L108)) does two things: scrolls to center that line, and applies a yellow highlight decoration that fades out over 1.5 seconds:
+
+```typescript
+if (rightFileLine) {
+  editor.revealLineInCenter(rightFileLine);
+  decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [
+    {
+      range: new monaco.Range(rightFileLine, 1, rightFileLine, 1),
+      options: { isWholeLine: true, className: 'nap-line-highlight' },
+    },
+  ]);
+  // Remove decoration after animation completes
+  setTimeout(() => {
+    if (editorRef.current) {
+      decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, []);
     }
-    editor.setModel(null);
-    window.electronAPI?.fileWatch(null);
-    return;
-  }
-
-  (async () => {
-    const content = await window.electronAPI?.fileRead(activeFilePath);
-    if (content === null || content === undefined) return;
-
-    // Dispose old model, create new
-    if (modelRef.current) modelRef.current.dispose();
-    const model = monaco.editor.createModel(content, 'napkin-markdown');
-    modelRef.current = model;
-    editor.setModel(model);
-
-    // Start watching this file for external changes
-    window.electronAPI?.fileWatch(activeFilePath);
-  })();
-
-  return () => { clearTimeout(saveTimerRef.current); };
-}, [activeFilePath]);
+  }, 1600); // Slightly longer than the 1.5s CSS animation
+}
 ```
 
-Three things happen atomically on file switch:
-1. The old model is disposed (prevents memory leaks -- Monaco models are not garbage-collected).
-2. A new model is created from the file content and attached to the editor.
-3. The main process is told to watch the new file (and implicitly stop watching the old one).
+The CSS animation is injected once via **`ensureCss()`** ([TerminalPane.tsx:25](/packages/v3/src/renderer/TerminalPane.tsx#L25)) -- a module-level function that creates a `<style>` element containing the `nap-line-fade` keyframes plus the git gutter CSS classes. Same `let injected = false` guard pattern as `ensureRegistered()`.
 
-The cleanup function clears the save timer -- preventing a save from firing for the OLD file after you have already switched to a new one. There is only ever one model, one watcher. The editor is ephemeral, not tabbed.
+### The Terminal Stays Alive
+
+The **`TerminalPane`** layout ([TerminalPane.tsx:187](/packages/v3/src/renderer/TerminalPane.tsx#L187)) switches between terminal and code view. But the terminal is hidden via `display: 'none'`, while the CodeEditor is conditionally rendered:
+
+```typescript
+{/* Terminal -- keep alive but hidden when code is active */}
+<div style={{
+  display: rightPaneMode === 'terminal' && activeTerminalId ? 'flex' : 'none',
+}}>
+  {activeTerminalId && <Terminal />}
+</div>
+{/* Code -- mount/unmount on mode switch */}
+{rightPaneMode === 'code' && rightFilePath && <CodeEditor />}
+```
+
+Same asymmetry as the left pane's editor/rendered toggle. Terminal uses `display: 'none'` because xterm.js has its own imperative state (scroll buffer, cursor position) that would be lost on unmount. CodeEditor mounts fresh each time because it is a viewer -- there is no state to preserve.
+
+### The Sentinel Terminal Tab
+
+How does the tab bar handle one terminal that updates in-place? The store uses a sentinel ID pattern. **`TERMINAL_TAB_ID`** ([store.ts:7](/packages/v3/src/renderer/store.ts#L7)) is `'__terminal__'`. When you switch agents, the terminal tab is UPDATED (path and title change), not replaced. There is always exactly zero or one terminal tab, and it can never be closed:
+
+```typescript
+// In closeTab() — store.ts line 298
+if (tab?.id === TERMINAL_TAB_ID) return; // Can never be closed
+```
+
+This is tested explicitly in `terminal-tab-refactor.test.ts` (TT-04).
 
 ---
 
@@ -185,9 +259,9 @@ The cleanup function clears the save timer -- preventing a save from firing for 
 
 ### What Happens When You Type
 
-The auto-save pipeline is a chain of three independent debounce timers. Understanding this chain is understanding the entire content pipeline.
+The auto-save pipeline is a chain of debounce timers with echo suppression. Understanding this chain is understanding the entire content pipeline.
 
-**Auto-save handler:** [ContentPane.tsx:63](/packages/v3/src/renderer/ContentPane.tsx#L63)
+**Auto-save handler:** [ContentPane.tsx:96](/packages/v3/src/renderer/ContentPane.tsx#L96)
 
 ```typescript
 editor.onDidChangeModelContent(() => {
@@ -195,484 +269,488 @@ editor.onDidChangeModelContent(() => {
   const filePath = useNapStore.getState().activeFilePath;
   if (!filePath) return;
 
+  useNapStore.getState().pinActiveEphemeral('left');    // First edit auto-pins ephemeral tab
   suppressExternalRef.current = true;                    // Immediately suppress external changes
   saveTimerRef.current = setTimeout(async () => {
     const content = editor.getValue();
     await window.electronAPI?.fileWrite(filePath, content);
-    // Keep suppress active briefly for watcher echo
-    setTimeout(() => { suppressExternalRef.current = false; }, 500);
+    setTimeout(() => { suppressExternalRef.current = false; }, 500); // 500ms suppress tail
+    refreshGitGutter(filePath);                          // Git diff after save
   }, 1000);                                              // 1s debounce before write
 });
 ```
 
-Notice: `suppressExternalRef.current = true` is set *immediately* on every keystroke, before the 1-second debounce fires. This is deliberate. If an agent writes to the same file while the user is typing (between keystrokes, before the save), the external change would be ignored. The user's uncommitted edits are protected. The suppress flag stays true until 500ms after the write completes.
+Three things to notice. First, `pinActiveEphemeral('left')` -- typing auto-pins the ephemeral tab. This matches VS Code's behavior where previewing a file keeps it ephemeral, but editing it commits the tab. Second, `suppressExternalRef` is set immediately on every keystroke, before the 1-second debounce fires. If an agent writes to the same file while the user is typing, the external change is ignored -- the user's uncommitted edits are protected. Third, `refreshGitGutter` is called after the write completes, updating the gutter decorations to reflect the new diff state.
 
-Here is the full timeline for a user edit:
+### The Git Gutter and the Model Identity Guard
 
-```
-t=0       User types
-          suppressExternalRef = true (immediate)
-          debounce timer reset to 1000ms
+After every save, the git gutter needs to refresh. But the refresh is async -- it involves an IPC round trip to the main process which shells out to `git diff`. What if the user switches tabs during that round trip?
 
-t=1000    Debounce fires
-          editor.getValue() → fileWrite IPC to main
-
-t=1000    Main process:
-          pendingContentWrites.add(path)
-          writeFile(path, content)
-
-t=~1050   fs.watch fires in main (macOS kqueue, ~50ms)
-          pendingContentWrites.has(path) → true → SUPPRESSED at main layer
-
-t=1300    Main: pendingContentWrites.delete(path) (300ms echo window)
-
-t=1500    Renderer: suppressExternalRef = false (500ms after write)
-          System ready for external changes again
-```
-
-### The Four IPC Channels
-
-The content pipeline uses four IPC channels between renderer and main, each with a different communication pattern:
-
-| Channel | Direction | Pattern | Purpose |
-|---------|-----------|---------|---------|
-| `file:read` | renderer -> main | `invoke` (request/response) | Read file content |
-| `file:write` | renderer -> main | `invoke` (request/response) | Write file content |
-| `file:watch` | renderer -> main | `send` (fire-and-forget) | Start/stop watching a file |
-| `file:changed` | main -> renderer | `on` (event stream) | Notify renderer of external changes |
-
-These are defined in the preload script ([preload.ts:70](/packages/v3/src/main/preload.ts#L70)):
+**`refreshGitGutter()`:** [ContentPane.tsx:133](/packages/v3/src/renderer/ContentPane.tsx#L133)
 
 ```typescript
-fileRead: (filePath: string) => ipcRenderer.invoke('file:read', filePath),
-fileWrite: (filePath: string, content: string) => ipcRenderer.invoke('file:write', filePath, content),
-onFileChanged: (cb: (filePath: string, content: string) => void) => {
-  const handler = (_event: IpcRendererEvent, filePath: string, content: string) =>
-    cb(filePath, content);
-  ipcRenderer.on('file:changed', handler);
-  return () => ipcRenderer.removeListener('file:changed', handler);  // Unsubscribe function
-},
-fileWatch: (filePath: string | null) => ipcRenderer.send('file:watch', filePath),
-```
-
-`fileRead` and `fileWrite` use `invoke` because the caller needs a response (the content, or an ok/error). `fileWatch` uses `send` because the renderer does not care about a response -- it is a command, not a query. `onFileChanged` returns an unsubscribe function, following the same pattern as `pty.onData` and `pty.onExit`.
-
-### What Happens When an Agent Edits the File
-
-The other direction. An AI agent writes to a `.nap` file that the user is currently viewing.
-
-**Main process watcher:** [main.ts:223](/packages/v3/src/main/main.ts#L223)
-
-```typescript
-let contentWatcher: (() => void) | null = null;
-let contentDebounceTimer: ReturnType<typeof setTimeout> | undefined;
-
-ipcMain.on('file:watch', (_event, filePath: string | null) => {
-  // Clean up previous watcher
-  if (contentWatcher) { contentWatcher(); contentWatcher = null; }
-  clearTimeout(contentDebounceTimer);
-
-  if (!filePath) return;
-
-  try {
-    const watcher = nodeFs.watch(filePath, (eventType) => {
-      if (eventType !== 'change') return;
-      if (pendingContentWrites.has(filePath)) return; // Echo suppression (main layer)
-
-      clearTimeout(contentDebounceTimer);
-      contentDebounceTimer = setTimeout(async () => {
-        const content = await nodeFsPromises.readFile(filePath, 'utf-8');
-        if (!win.isDestroyed()) {
-          win.webContents.send('file:changed', filePath, content);
-        }
-      }, 200);  // 200ms debounce: coalesce rapid agent writes
-    });
-    contentWatcher = () => watcher.close();
-  } catch {
-    // File may not exist yet
-  }
-});
-```
-
-**Renderer handler:** [ContentPane.tsx:132](/packages/v3/src/renderer/ContentPane.tsx#L132)
-
-```typescript
-useEffect(() => {
-  if (!window.electronAPI?.onFileChanged) return;
-
-  const unsub = window.electronAPI.onFileChanged((filePath, content) => {
-    if (suppressExternalRef.current) return;           // Guard 1: our own echo
-    if (filePath !== useNapStore.getState().activeFilePath) return; // Guard 2: wrong file
-
-    const model = modelRef.current;
-    if (!model) return;
-
+function refreshGitGutter(filePath: string) {
+  clearTimeout(gutterTimerRef.current);
+  gutterTimerRef.current = setTimeout(async () => {
     const editor = editorRef.current;
-    const position = editor?.getPosition();      // Save cursor
-    const scrollTop = editor?.getScrollTop();    // Save scroll
-
-    model.setValue(content);                     // Replace buffer
-
-    if (editor && position) editor.setPosition(position);     // Restore cursor
-    if (editor && scrollTop !== undefined) editor.setScrollTop(scrollTop); // Restore scroll
-  });
-
-  return unsub;
-}, []);
+    if (!editor || !window.electronAPI?.fileGitDiff) return;
+    const model = editor.getModel();                         // Capture identity BEFORE async
+    const hunks = await window.electronAPI.fileGitDiff(filePath);
+    if (editor.getModel() !== model) return;                 // Guard: model changed → discard
+    gutterDecorationsRef.current = applyGitGutter(editor, hunks, gutterDecorationsRef.current);
+  }, 200);
+}
 ```
 
-The external change timeline:
+This is the MODEL IDENTITY GUARD pattern. It captures `editor.getModel()` before the async IPC call, then checks reference identity (`!==`) after. If the user switched files during the round trip, the model reference will be different, and the stale decorations are discarded. This is tested in `git-gutter-race.test.ts` (GG-04).
 
-```
-t=0       Agent writes file
-t=~50     fs.watch fires (macOS kqueue, eventType: 'change')
-          pendingContentWrites check → NOT in set → proceed
-          contentDebounceTimer set for 200ms
+The **`applyGitGutter()`** function itself ([git-gutter.ts:21](/packages/v3/src/renderer/git-gutter.ts#L21)) is 15 lines of pure transformation -- it maps `GutterHunk[]` to Monaco `deltaDecorations`, using `linesDecorationsClassName` to apply CSS classes (`git-gutter-added`, `git-gutter-modified`, `git-gutter-deleted`). Returns the new decoration IDs for the next delta update.
 
-t=~250    Debounce fires → readFile → send 'file:changed' IPC to renderer
-
-t=~250    Renderer receives event
-          suppressExternalRef check → false → proceed
-          Save cursor position and scroll offset
-          model.setValue(content) — replaces entire buffer
-          Restore cursor and scroll
-```
-
-Note: there is a comment/code mismatch at line 146 -- the comment says "Use applyEdits to preserve undo stack" but the code uses `model.setValue()`, which replaces the entire undo stack. This means an external agent edit destroys the user's undo history. A future improvement would use `model.applyEdits()` with a computed diff, but that is more complex.
+The main process side is interesting too. **`file:git-diff`** ([main.ts:257](/packages/v3/src/main/main.ts#L257)) is a two-step operation: first `git ls-files --error-unmatch` to check if the file is tracked. If untracked, ALL lines are treated as "added" (the entire file lights up green). If tracked, `git diff --unified=0 HEAD` runs and the output is parsed by **`parseGitDiff()`** ([git-diff-parser.ts:22](/packages/v3/src/main/git-diff-parser.ts#L22)) into `DiffHunk[]` based on hunk line counts: `newCount=0` means delete, `oldCount=0` means add, both non-zero means modify.
 
 ### Two-Layer Echo Suppression
 
-Why does echo suppression exist in TWO places -- main process AND renderer?
+The same file is watched for external changes in the main process and for internal save-echoes in the renderer. Why does echo suppression exist in TWO places?
 
-Because timing is unpredictable. The `fs.watch` callback, the IPC message delivery, and JavaScript timer resolution all have variable latency. Consider the failure modes:
+Because timing is unpredictable. The `fs.watch` callback, IPC delivery, and JavaScript timer resolution all have variable latency.
 
-- **Without the main layer (`pendingContentWrites`):** The watcher fires ~50ms after the write, reads the file, and sends the content via IPC. The renderer gets a `file:changed` event for content it just wrote. If `suppressExternalRef` has already been cleared (timer fired early), the editor clobbers itself.
+```
+User types
+  t=0       suppressExternalRef = true (immediate, renderer layer)
+  t=1000    Debounce fires → fileWrite IPC
+            Main: pendingContentWrites.add(path) (main layer)
+            Main: writeFile(path, content)
+  t=~1050   fs.watch fires → pendingContentWrites.has(path) → SUPPRESSED at main layer
+  t=1300    Main: pendingContentWrites.delete(path)
+  t=1500    Renderer: suppressExternalRef = false
+```
 
-- **Without the renderer layer (`suppressExternalRef`):** The main layer's 300ms window might expire before the IPC message arrives (network/process scheduler jitter). Or the user might still be typing when the echo arrives -- the main layer only suppresses if there is a pending write, but the user's NEW keystrokes after the write are not "pending."
+Without the main layer, the watcher would fire, read the file, and send an IPC event. If the renderer's suppress flag has already cleared (timer jitter), the editor clobbers itself. Without the renderer layer, the main layer's 300ms window might expire before the IPC message arrives, or the user's NEW keystrokes after the write would not be "pending."
 
-Two layers, two timescales, independent checks. The main layer is a 300ms window after each write. The renderer layer is a flag that covers the entire typing session plus 500ms after the write. Together they handle the full range of timing scenarios.
+Two layers, two timescales, independent checks.
 
-### This Watcher is Not That Watcher
+### Two Watchers for Two Panes
 
-An important distinction: the content watcher described above is completely separate from the model's directory watcher. The model uses `NodeFileSystem.watch(dir, callback)` with `{ recursive: true }` ([filesystem.ts](/packages/v3/src/main/filesystem.ts)) to watch the entire nepic directory for structural changes -- new agents, changed napkin status, deleted files. That watcher is abstracted behind a `FileSystem` interface with a `MemoryFileSystem` for tests.
+The main process has TWO `ContentWatcher` instances ([main.ts:289](/packages/v3/src/main/main.ts#L289)):
 
-The content watcher uses raw `nodeFs.watch(filePath)` on a single file, inline in `main.ts`. It is not abstracted. It uses `nodeFsPromises.readFile()` and `writeFile()` directly, not the `FileSystem` interface. Different granularity (one file vs. a directory tree), different concerns (text content vs. directory structure), different mechanisms.
+```typescript
+// Left pane watcher — with echo suppression (read-write editor)
+const contentWatcher = new ContentWatcher({
+  onChange: (filePath, content) => {
+    win.webContents.send('file:changed', filePath, content);
+  },
+  isPendingWrite: (fp) => pendingContentWrites.has(fp),
+});
+
+// Right pane watcher — no echo suppression (read-only viewer)
+const codeWatcher = new ContentWatcher({
+  onChange: (filePath, content) => {
+    win.webContents.send('code:changed', filePath, content);
+  },
+  isPendingWrite: () => false, // Code pane is read-only — no echoes to suppress
+});
+```
+
+The `ContentWatcher` class ([content-watcher.ts](/packages/v3/src/main/content-watcher.ts)) watches the parent directory with `@parcel/watcher`, filters by basename (to handle atomic temp+rename writes), debounces at 200ms, and deduplicates by comparing content strings. The left pane watcher has real echo suppression. The right pane watcher passes `() => false` because the code pane is read-only -- it never writes, so there are no echoes to suppress.
+
+### What Happens When an Agent Edits the File
+
+The external change handler ([ContentPane.tsx:284](/packages/v3/src/renderer/ContentPane.tsx#L284)) receives `file:changed` from the left pane watcher, checks both suppression guards, preserves cursor and scroll, replaces the buffer, and refreshes the git gutter:
+
+```typescript
+const unsub = window.electronAPI.onFileChanged((filePath, content) => {
+  if (suppressExternalRef.current) return;                    // Guard 1: our own echo
+  if (filePath !== useNapStore.getState().activeFilePath) return; // Guard 2: wrong file
+
+  const editor = editorRef.current;
+  const position = editor?.getPosition();
+  const scrollTop = editor?.getScrollTop();
+
+  modelRef.current?.setValue(content);                       // Replace buffer
+
+  if (editor && position) editor.setPosition(position);
+  if (editor && scrollTop !== undefined) editor.setScrollTop(scrollTop);
+  if (filePath) refreshGitGutter(filePath);                  // Update gutter
+});
+```
+
+The right pane handler ([TerminalPane.tsx:161](/packages/v3/src/renderer/TerminalPane.tsx#L161)) is simpler -- no echo suppression, just scroll preservation. Read-only means no echoes.
 
 ---
 
-## The Monarch Tokenizer
+## The Monarch Tokenizer and Shift-Enter
 
-### How Monarch Works
+### The Tokenizer
 
-Monarch is Monaco's built-in tokenizer engine. It is a state machine driven by regex rules evaluated top-to-bottom within each state. You define states, each containing an ordered list of `[regex, token, nextState?]` rules. When Monarch processes a line, it tries each rule in order until one matches. The match consumes characters, emits a token, and optionally transitions to another state. Then it starts again from the current position.
-
-Rule order IS the logic. If two rules can match the same text, whichever comes first wins. This is not a bug -- it is the fundamental design principle.
-
-### The Full Tokenizer
-
-**`registerNapkinMarkdown()`:** [napkin-markdown.ts:22](/packages/v3/src/renderer/napkin-markdown.ts#L22)
+Monarch is Monaco's built-in tokenizer engine -- a state machine driven by regex rules evaluated top-to-bottom. The **`registerNapkinMarkdown()`** function ([napkin-markdown.ts:83](/packages/v3/src/renderer/napkin-markdown.ts#L83)) defines the complete tokenizer:
 
 ```typescript
 monaco.languages.setMonarchTokensProvider('napkin-markdown', {
   tokenizer: {
     root: [
-      // Headings: # at line start
       [/^#{1,6}\s.*$/, 'heading'],
 
-      // Role-prefixed comments -- MUST come before generic //
-      [/\/\/A:.*$/, 'comment.architect'],    // Architect (blue)
-      [/\/\/DU:.*$/, 'comment.user'],        // User/Dima (green)
-      [/\/\/FS:.*$/, 'comment.fs-eng'],      // Fullstack engineer (green)
-      [/\/\/TA:.*$/, 'comment.test-arch'],   // Test architect (orange)
-      [/\/\/TE:.*$/, 'comment.test-eng'],    // Test engineer (gray)
+      // Role-prefixed comments — MUST come before generic //
+      [/\/\/A:.*$/, 'comment.architect'],     // Architect (blue)
+      [/\/\/DU:.*$/, 'comment.user'],         // User/Dima (green)
+      [/\/\/FS:.*$/, 'comment.fs-eng'],       // Fullstack engineer (green)
+      [/\/\/TA:.*$/, 'comment.test-arch'],    // Test architect (orange)
+      [/\/\/TE:.*$/, 'comment.test-eng'],     // Test engineer (gray)
 
-      // Generic comment -- catches any // not matched above
-      [/\/\/.*$/, 'comment'],
+      [/\/\/.*$/, 'comment'],                  // Generic // — catches the rest
 
-      // Bold: **text** -- pushes into @bold state
-      [/\*\*/, 'bold.marker', '@bold'],
-
-      // Inline code: `text`
+      [/\*\*/, 'bold.marker', '@bold'],        // Bold: push into @bold state
       [/`[^`]+`/, 'inline-code'],
-
-      // Bullet marker: * at line start
       [/^(\s*\*)(\s)/, ['bullet.marker', 'white']],
-
-      // Everything else
       [/./, 'source'],
     ],
-
     bold: [
-      [/\*\*/, 'bold.marker', '@pop'],  // Closing ** -- pop back to root
-      [/[^*]+/, 'bold'],                // Non-asterisk content
-      [/\*/, 'bold'],                   // Single * inside bold (not a closing **)
+      [/\*\*/, 'bold.marker', '@pop'],        // Closing ** pops back to root
+      [/[^*]+/, 'bold'],
+      [/\*/, 'bold'],                          // Single * inside bold (not a closing **)
     ],
   },
 });
 ```
 
-### Why Rule Order Matters
+Rule order IS the logic. The five role-prefixed rules MUST precede `//.*$`, or Monarch would match `//A: architect note` as a generic comment and the role-specific rules would never fire. The source file has a comment documenting this: "Role-prefixed comment rules MUST come before generic //."
 
-The five role-prefixed comment rules (`//A:`, `//DU:`, `//FS:`, `//TA:`, `//TE:`) MUST come before the generic `//` comment rule. Monarch evaluates top-to-bottom. If `//.*$` came first, it would match `//A: some annotation` as a plain comment, and the role-specific rules would never fire. The source file has a comment at line 4 documenting this constraint explicitly: "Role-prefixed comment rules MUST come before generic //."
+The `bold` state handles `**text**` as a three-token construct: opening `**` (gray marker), content (bold font), closing `**` (gray marker, pops state). The third rule `[/\*/, 'bold']` handles a lone asterisk inside bold text, preventing it from being unmatched.
 
-Each role gets its own token type (`comment.architect`, `comment.user`, etc.), which maps to a unique color in the theme. This means agent annotations in napkin files are visually distinguishable by role at a glance -- the architect's comments are blue, the test architect's are orange, and so on.
+### Themes Extracted to `themes.ts`
 
-### The `@bold` State Machine
-
-The `bold` state is the cleanest example of how Monarch states work. It solves a problem that single-rule matching cannot: `**bold text**` spans multiple tokens, and Monarch cannot match across tokens in a single rule.
-
-When `**` is encountered in the root state, the rule `[/\*\*/, 'bold.marker', '@bold']` does three things: consumes the `**`, emits a `bold.marker` token (gray in the theme), and pushes the `@bold` state onto the state stack. Now Monarch is in the `bold` state. Inside bold:
-
-- `[/\*\*/, 'bold.marker', '@pop']` -- a closing `**` pops back to root.
-- `[/[^*]+/, 'bold']` -- runs of non-asterisk characters get the `bold` token (bold font style).
-- `[/\*/, 'bold']` -- a single `*` inside bold text. Without this rule, a lone asterisk would be unmatched, potentially causing tokenizer errors or falling through to unexpected behavior.
-
-### The Theme and the `.slice(1)` Trick
-
-**Theme definition:** [napkin-markdown.ts:59](/packages/v3/src/renderer/napkin-markdown.ts#L59)
+Theme definitions are no longer inline in napkin-markdown.ts. They live in **`themes.ts`** ([themes.ts:8](/packages/v3/src/renderer/themes.ts#L8)), which defines a `ThemeDef` interface with three layers:
 
 ```typescript
-const ROLE_COLORS = {
-  architect: '#3b82f6',   // blue
-  user: '#22c55e',        // green
-  'fs-eng': '#22c55e',    // green
-  'test-arch': '#f59e0b', // orange
-  'test-eng': '#6b7280',  // gray
+export interface ThemeDef {
+  name: string;
+  monacoTheme: monaco.editor.IStandaloneThemeData;  // For Monaco's setTheme()
+  shell: {
+    bg: string; bgSecondary: string; bgTertiary: string;
+    bgHover: string; border: string;
+    text: string; textSecondary: string; textMuted: string; textDim: string;
+    accent: string; link: string;
+  };                                                  // For CSS custom properties
+  roleColors: {
+    architect: string; user: string; 'fs-eng': string;
+    'test-arch': string; 'test-eng': string;
+  };                                                  // For both contexts
+}
+```
+
+The **`tokenRules()`** factory ([themes.ts:35](/packages/v3/src/renderer/themes.ts#L35)) generates Monaco token rules from role colors and option values. Every theme calls it with its own palette. The `.slice(1)` trick persists: Monaco's `foreground` field expects bare hex (`3b82f6`), not CSS hex (`#3b82f6`). Colors are stored with the `#` for CSS validity and stripped at the Monaco boundary.
+
+One design decision worth noting: `{ token: 'comment', foreground: roleColors.user.slice(1) }` -- generic `//` comments get the same color as `//DU:` user comments. This is explicit, not a bug. The comment in the source says: "comment foreground = comment.user foreground (tokenizer tweak)."
+
+### Shift-Enter Continuation
+
+When you are writing a napkin and you type `* //A: design note`, then press Shift+Enter, you want the next line to start with `* //A: ` already filled in. The **`registerShiftEnter()`** function ([napkin-markdown.ts:38](/packages/v3/src/renderer/napkin-markdown.ts#L38)) provides this.
+
+It starts with **`detectLinePattern()`** ([napkin-markdown.ts:22](/packages/v3/src/renderer/napkin-markdown.ts#L22)), a single regex that decomposes a line into four parts:
+
+```typescript
+export function detectLinePattern(line: string): LinePattern {
+  const match = line.match(/^(\s*)(\* )?(\/\/\w+: )?(.*?)$/);
+  //                         ^^^   ^^^   ^^^^^^^^^^   ^^^
+  //                       indent  bullet  prefix    content
+  return {
+    indent: match?.[1] || '',
+    bullet: match?.[2] || '',   // "* " or ""
+    prefix: match?.[3] || '',   // "//A: " or ""
+    content: match?.[4] || '',
+  };
+}
+```
+
+The regex uses `?` on the bullet and prefix groups -- they are independently optional. `\/\/\w+: ` requires the colon-space, so generic `// comments` do not false-positive as prefixes.
+
+Then the Shift+Enter handler has two modes:
+
+1. **Continue** -- if the current line has content, the new line gets the same indent + bullet + prefix. You type `* //A: idea`, Shift+Enter, and you get a new line `* //A: ` ready for the next thought.
+
+2. **Break-out** -- if the content is empty (you pressed Shift+Enter on a line that is just `* //A: ` with nothing after it), the bullet and prefix are stripped, and you get a plain indented line. This is how you END a bulleted annotation section -- press Shift+Enter on the empty bullet to escape.
+
+This matches the list continuation behavior from Notion and Obsidian. Two code paths, one regex, natural editing feel.
+
+---
+
+## Link Routing
+
+You are reading a napkin and it mentions `src/model.ts:42`. You Cmd+click it. What happens?
+
+### The Classification Cascade
+
+The pure function **`routeLink()`** ([routing-rules.ts:74](/packages/v3/src/renderer/routing-rules.ts#L74)) classifies every link into one of three actions:
+
+```typescript
+export function routeLink(ctx: LinkContext): LinkResult {
+  const { href, sourceFilePath } = ctx;
+
+  // External → open in system browser
+  if (href.startsWith('https://') || href.startsWith('http://')) {
+    return { action: 'openExternal', url: href };
+  }
+
+  const parsed = parseLinkHref(href);
+
+  // Extension wins: .md → openDoc (left pane)
+  const ext = getExtension(parsed.path);
+  if (ext === '.md') {
+    const resolved = resolveRelative(parsed.path, sourceFilePath);
+    return { action: 'openDoc', path: resolved };
+  }
+
+  // Everything else → openCode (right pane) with two-root resolution
+  // ... absolute, relative, and bare path handling ...
+}
+```
+
+The "extension wins" rule is important. `changelog.md:15` routes to `openDoc`, not `openCode`, despite having a line number suffix. The `.md` extension overrides the `:line` suffix. This is deliberate: markdown files belong in the left pane's napkin editor.
+
+### Two-Root Resolution for Bare Paths
+
+When a napkin at `/project/.nap/nepics/01/30-napkins/plan.nap.md` references `src/model.ts`, where does that resolve? It could be relative to the napkin's directory, or relative to the project root. The answer is: try both.
+
+```typescript
+// Bare path → primary = dirname(sourceFile), fallback = projectRoot
+const primary = resolveRelative(parsed.path, sourceFilePath);
+const fallback = normalizePath(projectRoot + '/' + parsed.path);
+return {
+  action: 'openCode',
+  path: primary,
+  fallbackPath: primary !== fallback ? fallback : undefined,
+  line: parsed.line,
+  col: parsed.col,
 };
-
-const COMMENT_COLOR = '#6A9955'; // VS Code's default comment color
-
-monaco.editor.defineTheme('napkin-dark', {
-  base: 'vs-dark',
-  inherit: true,
-  rules: [
-    { token: 'heading', foreground: 'e5e5e5', fontStyle: 'bold' },
-    { token: 'comment', foreground: COMMENT_COLOR.slice(1) },
-    { token: 'comment.architect', foreground: ROLE_COLORS.architect.slice(1) },
-    // ... one rule per role
-    { token: 'source', foreground: 'd4d4d4' },
-  ],
-  colors: {
-    'editor.background': '#1e1e1e',
-  },
-});
 ```
 
-The `.slice(1)` strips the leading `#` from hex color strings. Monaco's `foreground` field expects bare hex (`3b82f6`), not CSS hex (`#3b82f6`). The colors are stored with the hash so they are valid CSS elsewhere, and stripped at the Monaco boundary.
+The **`extractProjectRoot()`** function ([routing-rules.ts:154](/packages/v3/src/renderer/routing-rules.ts#L154)) finds the project root by locating `/.nap/` in the source file path and taking everything before it. So `/project/.nap/nepics/01/plan.nap.md` yields project root `/project`.
 
-**Maintenance hazard:** These `ROLE_COLORS` are duplicated from `dot-style.ts` ([dot-style.ts:16](/packages/v3/src/shared/dot-style.ts#L16)), not imported. The two copies have drifted -- `napkin-markdown.ts` has a `user` entry that `dot-style.ts` does not, and `dot-style.ts` has a `guardian` entry that `napkin-markdown.ts` does not. If colors change, both files must be updated manually. This is a known hazard, documented here rather than hidden.
+When the result has a `fallbackPath`, the renderer's **`handleResult()`** ([ContentPane.tsx:148](/packages/v3/src/renderer/ContentPane.tsx#L148)) checks the primary path on disk first via `fileExists` IPC. If it does not exist, the fallback is used:
+
+```typescript
+if (result.fallbackPath) {
+  window.electronAPI?.fileExists(result.path).then((exists: boolean) => {
+    if (exists) {
+      store.openCode({ path: result.path, line: result.line, col: result.col });
+    } else {
+      store.openCode({ path: result.fallbackPath!, line: result.line, col: result.col });
+    }
+  });
+}
+```
+
+### Link Format Parsing
+
+**`parseLinkHref()`** ([routing-rules.ts:125](/packages/v3/src/renderer/routing-rules.ts#L125)) understands two line-number formats:
+
+- `file.ts#L42` -- GitHub-style anchor, from `[text](file.ts#L42)` markdown links
+- `file.ts:42:17` -- terminal-style `path:line:col`, from bare text references
+
+Both are tried in that order. If neither matches, the href is treated as a plain path.
+
+### Cmd+Click Interception in the Editor
+
+The **link click `useEffect`** ([ContentPane.tsx:171](/packages/v3/src/renderer/ContentPane.tsx#L171)) intercepts Cmd+Click in the Monaco editor. It runs three regex passes in priority order against the clicked line:
+
+```
+Priority 1: Markdown links — [text](url)
+Priority 2: Bare URLs — https://...
+Priority 3: Bare file paths — src/model.ts:42
+```
+
+For each match, it checks whether the click column falls within the match range. The first match that contains the click position wins. Bare file paths check backwards to make sure they are not inside a URL (the `isUrl` backward-walk guard).
+
+### The `nap-link://` Protocol Hack
+
+Monaco also has its own link detection system (the `LinkProvider` API). The **`registerContentLinkProvider()`** function ([content-link-provider.ts:87](/packages/v3/src/renderer/content-link-provider.ts#L87)) hooks into this to provide clickable underlines on links. But Monaco's `resolveLink` API expects a URL -- it wants to OPEN something in a browser. The app needs to INTERCEPT clicks, not open URLs.
+
+The workaround: `resolveLink` stashes the serialized `LinkResult` into a custom protocol URL:
+
+```typescript
+resolveLink(link) {
+  const result = routeLink({ href, sourceFilePath });
+  link.url = `nap-link://${encodeURIComponent(JSON.stringify(result))}`;
+  return link;
+}
+```
+
+Then **`handleLinkClick()`** ([content-link-provider.ts:129](/packages/v3/src/renderer/content-link-provider.ts#L129)) checks for the `nap-link://` prefix, parses the JSON back out, and dispatches the action. This avoids fighting Monaco's built-in link opener.
+
+### Where Links Go
+
+The three actions route to different surfaces:
+
+- `openDoc` -- left pane. Calls `store.openDoc(path)` which upserts a tab in the left tab bar and sets `activeFilePath`. The napkin editor loads the file.
+- `openCode` -- right pane. Calls `store.openCode({path, line, col})` which sets `rightPaneMode: 'code'`, upserts a tab in the right tab bar, and the CodeEditor mounts with the file content and a yellow line highlight.
+- `openExternal` -- system browser. Calls `shell.openExternal(url)` via IPC.
+
+The same `routeLink()` function is used by THREE callers: Cmd+click in the editor, the Monaco link provider, and terminal link detection. Terminal links ([file-link-provider.ts](/packages/v3/src/renderer/file-link-provider.ts)) use the same `FILE_PATH_REGEX` and the same `routeLink()` classification.
 
 ---
 
-## Layout and Routing
+## The Theme System
 
-### The Three-Column Layout
+### Five Themes, Dual Application
 
-The main content area is a flex row with three children: **`ContentPane`**, **`ResizeHandle`**, and **`TerminalPane`**.
-
-**Layout structure:** [index.tsx:209](/packages/v3/src/renderer/index.tsx#L209)
+nap v3 has five themes: one dark and four light variants (cream, gray, sepia, blue). They are defined in **`THEMES`** ([themes.ts:270](/packages/v3/src/renderer/themes.ts#L270)):
 
 ```typescript
-<div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-  <ContentPane />
-  <ResizeHandle />
-  <TerminalPane />
-</div>
+export const THEMES: ThemeDef[] = [dark, lightCream, lightGray, lightSepia, lightBlue];
 ```
 
-Both panes have `flex: 1` and `minWidth: 200`. Both show a centered placeholder when empty (`"no file open"` vs `"no agent selected"`). Both use the same monospace font stack and gray color (`#6b7280`). This visual symmetry is intentional -- the two panes are peers, not primary/secondary.
+Array order equals rotation order. Cmd+T cycles through them. The comment in the source says: "comment out entries to remove from rotation."
 
-### ResizeHandle Mechanics
+Each theme has three layers: `monacoTheme` (editor-specific colors and token rules), `shell` (11 CSS custom properties for the app chrome), and `roleColors` (5 per-role colors used by both Monaco tokens and CSS). Why three layers? Because the app is not just a Monaco editor. The sidebar, tab bar, resize handle, gutter, debug panel -- all need to respond to theme changes. Monaco's `setTheme()` only affects Monaco editors.
 
-The resize handle is a 4px-wide `<div>` that turns blue on hover and supports mouse drag to resize panes.
-
-**`ResizeHandle`:** [index.tsx:47](/packages/v3/src/renderer/index.tsx#L47)
+The **`applyTheme()`** function ([themes.ts:296](/packages/v3/src/renderer/themes.ts#L296)) applies both:
 
 ```typescript
-function ResizeHandle() {
-  const handleRef = useRef<HTMLDivElement>(null);
+export function applyTheme(theme: ThemeDef): void {
+  monaco.editor.setTheme(theme.name);                    // Updates ALL Monaco editors
 
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    // ...
-    const leftPane = handle.previousElementSibling as HTMLElement;   // ContentPane
-    const rightPane = handle.nextElementSibling as HTMLElement;      // TerminalPane
-
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';                        // Prevent text selection during drag
-
-    const totalWidth = parentRect.width - 4;                        // Subtract handle width
-
-    const onMouseMove = (ev: MouseEvent) => {
-      const delta = ev.clientX - startX;
-      const newLeft = Math.max(200, Math.min(totalWidth - 200, leftStart + delta)); // 200px min each
-      const leftPct = (newLeft / totalWidth) * 100;
-      leftPane.style.flex = `0 0 ${leftPct}%`;
-      rightPane.style.flex = `0 0 ${100 - leftPct}%`;
-    };
-    // ...
-  }, []);
-
-  return (
-    <div
-      ref={handleRef}
-      onMouseDown={onMouseDown}
-      style={{ width: 4, cursor: 'col-resize', flexShrink: 0, background: 'transparent' }}
-      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#007acc')}
-      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-    />
-  );
-}
-```
-
-Key details:
-- Each pane has a 200px minimum width (`Math.max(200, Math.min(totalWidth - 200, ...))`).
-- The handle uses `previousElementSibling` / `nextElementSibling` to find the panes it controls -- no refs or IDs needed, because the DOM order is fixed.
-- During drag, `document.body.style.userSelect = 'none'` prevents the browser from selecting text as the mouse moves.
-- The resize directly mutates `style.flex` on the DOM elements. This is another case of bypassing React's declarative model for performance -- re-rendering both panes on every mousemove pixel would be noticeably janky.
-- The ResizeObserver inside ContentPane's creation effect picks up these size changes and calls `editor.layout()`.
-
-### The Routing Decision
-
-When the user clicks something in the sidebar, the pure function **`route()`** ([routing-rules.ts:26](/packages/v3/src/renderer/routing-rules.ts#L26)) decides where to send it:
-
-```typescript
-export function route(ctx: ClickContext): RouteResult {
-  if (ctx.agent) {
-    return { pane: 'right', surface: 'terminal' };
+  const root = document.documentElement;
+  for (const [key, value] of Object.entries(theme.shell)) {
+    root.style.setProperty(`--nap-${camelToKebab(key)}`, value);  // e.g., --nap-bg-secondary
   }
-  if (ctx.filePath && isNapPath(ctx.filePath)) {
-    return { pane: 'left', surface: 'monaco' };
-  }
-  return { pane: 'right', surface: 'terminal' };
-}
-
-function isNapPath(filePath: string): boolean {
-  const segments = filePath.split('/');
-  return segments.some((seg) => seg === '.nap');
-}
-```
-
-`isNapPath` splits on `/` and checks for an exact `.nap` segment. This prevents false positives: `kidnapper.txt`, `.nappy`, and `my-nap-notes.md` all correctly return false. Only paths with `.nap` as an actual directory component (like `/project/.nap/nepics/01/file.md`) route to Monaco. The routing-rules tests have explicit edge cases for all of these.
-
-The file at [routing-rules.ts](/packages/v3/src/renderer/routing-rules.ts) imports nothing from React or the store. It is a pure function -- easy to test, easy to reason about, easy to extend. The source file's own comment says it: "Keep this simple -- a sequence of if/else, no abstractions."
-
-### The electronAPI Type Declaration
-
-Electron's context bridge creates a runtime API that TypeScript cannot automatically discover. The renderer declares what it expects to find on `window.electronAPI` via a `declare global` block.
-
-**Type declaration:** [index.tsx:16](/packages/v3/src/renderer/index.tsx#L16)
-
-```typescript
-declare global {
-  interface Window {
-    __napStore__: typeof useNapStore;
-    electronAPI: {
-      // ... PTY APIs, snapshot APIs ...
-      fileRead: (filePath: string) => Promise<string | null>;
-      fileWrite: (filePath: string, content: string) =>
-        Promise<{ ok?: boolean; error?: boolean; message?: string }>;
-      onFileChanged: (cb: (filePath: string, content: string) => void) => () => void;
-      fileWatch: (filePath: string | null) => void;
-    };
+  for (const [role, color] of Object.entries(theme.roleColors)) {
+    root.style.setProperty(`--nap-role-${role}`, color);           // e.g., --nap-role-architect
   }
 }
 ```
 
-This is a manual type declaration that MUST be kept in sync with `preload.ts`. If someone adds a new IPC channel to `preload.ts` but forgets to update this declaration, TypeScript will not see the new API and calls will get type errors. If someone changes a return type in preload but not here, the renderer code will compile against the wrong types and fail at runtime. It is the kind of thing that begs for code generation, but at the current scale, manual sync is fine.
+`monaco.editor.setTheme()` is global -- it updates BOTH editors (left and right) in one call. CSS custom properties on `:root` cascade to everything. One function call themes the entire app.
+
+### Cycling and Persistence
+
+The store's **`cycleTheme()`** ([store.ts:420](/packages/v3/src/renderer/store.ts#L420)) is four lines:
+
+```typescript
+cycleTheme: () => {
+  const current = get().currentThemeName;
+  const idx = THEMES.findIndex((t) => t.name === current);
+  const next = THEMES[(idx + 1) % THEMES.length];     // Modulo wrap
+  set({ currentThemeName: next.name });
+  applyTheme(next);
+  persistUiState({ theme: next.name });                // Write to ui-state.json
+},
+```
+
+Modulo wrap means the 5th theme cycles back to the 1st. On app launch, the persisted theme name is loaded from `ui-state.json`. If the name is unrecognized (deleted theme?), **`findTheme()`** ([themes.ts:309](/packages/v3/src/renderer/themes.ts#L309)) falls back to `THEMES[0]`.
 
 ---
 
-## Two Flows, End to End
+## End-to-End Flows
 
 Now that you understand each piece, here is how they compose.
 
-### The Read Flow
-
-User clicks a `.nap` file in the sidebar:
+### The Read Flow: Sidebar Click to Loaded Editor
 
 ```
 Sidebar FileRow click
-  → route({ filePath: file.absPath })           [routing-rules.ts]
-  → returns { pane: 'left', surface: 'monaco' }
-  → store.openFile(file.absPath)                 [store.ts]
-  → set({ activeFilePath: path })
+  -> route({ filePath: file.absPath })             [routing-rules.ts:26]
+  -> isNapPath(path) -> true
+  -> returns { pane: 'left', surface: 'monaco' }
+  -> store.openDoc(file.absPath)                   [store.ts:288]
+  -> upsertTab(leftTabs, path, 'file', true)       ephemeral tab created
+  -> set({ activeFilePath, leftTabs, activeLeftTabId })
 
 ContentPane re-renders (activeFilePath changed)
-  → useEffect([activeFilePath]) fires            [ContentPane.tsx:92]
-  → fileRead(activeFilePath) IPC to main
-  → main: readFile(path, 'utf-8')               [main.ts:199]
-  → returns content string
+  -> useEffect([activeFilePath]) fires             [ContentPane.tsx:240]
+  -> fileRead(activeFilePath) IPC to main
+  -> main: readFile(path, 'utf-8')                 [main.ts:207]
+  -> returns content string
 
-  → dispose old model
-  → monaco.editor.createModel(content, 'napkin-markdown')
-  → editor.setModel(model)
-
-  → fileWatch(activeFilePath) IPC to main
-  → main: close old watcher, open new fs.watch   [main.ts:227]
+  -> dispose old model
+  -> createModel(content, 'napkin-markdown')
+  -> editor.setModel(model)
+  -> gutterDecorationsRef.current = []             clear stale decorations
+  -> fileWatch(activeFilePath) IPC to main         start watcher
+  -> refreshGitGutter(activeFilePath)              first gutter paint
 ```
 
-### The Write Flow
-
-User types in the editor:
+### The Link Click Flow: Cmd+Click to Code Viewer
 
 ```
-Keystroke
-  → onDidChangeModelContent fires                [ContentPane.tsx:63]
-  → suppressExternalRef = true
-  → clear previous debounce timer
-  → set new 1000ms debounce timer
+User Cmd+clicks "src/model.ts:42" in napkin
+  -> onMouseDown fires                             [ContentPane.tsx:179]
+  -> three regex passes: markdown links, URLs, bare paths
+  -> bare path regex matches "src/model.ts:42"
+  -> routeLink({ href: 'src/model.ts:42', sourceFilePath })
+  -> parseLinkHref -> { path: 'src/model.ts', line: 42 }
+  -> not .md -> openCode with two-root resolution
+  -> returns { action: 'openCode', path: primary, fallbackPath, line: 42 }
+
+handleResult dispatches:
+  -> fileExists(primary) IPC to main               [main.ts:246]
+  -> exists -> store.openCode({ path, line: 42 })  [store.ts:276]
+  -> upsertTab(rightTabs, path, 'file', true)
+  -> set({ rightPaneMode: 'code', rightFilePath, rightFileLine: 42 })
+
+TerminalPane re-renders (rightPaneMode changed)
+  -> CodeEditor mounts                             [TerminalPane.tsx:65]
+  -> detectLanguage('model.ts') -> 'typescript'
+  -> fileRead(path) IPC -> createModel(content, 'typescript')
+  -> revealLineInCenter(42)
+  -> deltaDecorations with nap-line-highlight      yellow fade animation
+  -> codeWatch(path) IPC starts right-pane watcher
+```
+
+### The Theme Switch Flow: Cmd+T
+
+```
+Cmd+T keydown                                      [index.tsx:225]
+  -> store.cycleTheme()                            [store.ts:420]
+  -> find current theme index
+  -> (idx + 1) % THEMES.length -> next theme
+  -> set({ currentThemeName: next.name })
+  -> applyTheme(next)                              [themes.ts:296]
+     -> monaco.editor.setTheme(next.name)          both editors update
+     -> set CSS vars on :root                      app shell updates
+  -> persistUiState({ theme: next.name })          write ui-state.json
+```
+
+### The Auto-Save + Git Gutter Pipeline
+
+```
+User types in editor
+  -> onDidChangeModelContent                       [ContentPane.tsx:96]
+  -> pinActiveEphemeral('left')                    ephemeral -> pinned
+  -> suppressExternalRef = true
+  -> save debounce: 1000ms
 
 1000ms later:
-  → editor.getValue()
-  → fileWrite(path, content) IPC to main
-  → main: pendingContentWrites.add(path)         [main.ts:212]
-  → main: writeFile(path, content)
-  → main: setTimeout 300ms → remove from set
+  -> editor.getValue() -> fileWrite IPC
+  -> main: pendingContentWrites.add(path)          [main.ts:220]
+  -> main: writeFile(path, content)
+  -> 300ms later: pendingContentWrites.delete(path)
+  -> 500ms after write: suppressExternalRef = false
 
-500ms after write completes:
-  → suppressExternalRef = false                   [ContentPane.tsx:73]
-```
-
-### The External Update Flow
-
-An agent writes to the file the user is viewing:
-
-```
-Agent writes file on disk
-
-~50ms later:
-  → fs.watch callback fires in main              [main.ts:239]
-  → eventType === 'change' → proceed
-  → pendingContentWrites.has(path) → false → proceed
-  → set 200ms debounce timer
-
-200ms later:
-  → readFile(path, 'utf-8')
-  → win.webContents.send('file:changed', path, content)
-
-Renderer receives event:
-  → onFileChanged callback fires                  [ContentPane.tsx:134]
-  → suppressExternalRef → false → proceed
-  → filePath === activeFilePath → proceed
-  → save cursor position and scroll offset
-  → model.setValue(content)
-  → restore cursor and scroll
+Immediately after write:
+  -> refreshGitGutter(filePath)                    [ContentPane.tsx:133]
+  -> 200ms debounce
+  -> capture model identity
+  -> fileGitDiff IPC -> main shells out to git
+  -> main: git ls-files -> tracked? -> git diff --unified=0
+  -> parseGitDiff -> GutterHunk[]
+  -> model identity guard: same model? -> proceed
+  -> applyGitGutter -> deltaDecorations
 ```
 
 ---
 
 ## Key Takeaways
 
-**Refs are the bridge between imperative and declarative worlds.** Five refs, one store subscription. Monaco lives entirely in ref-land. React re-renders only when `activeFilePath` changes. Everything else is imperatively managed. This is not a hack -- it is the correct pattern for integrating any imperative library (canvas, WebGL, xterm.js) into React.
+**Nine refs, four subscriptions -- the ratio tells the story.** The component re-renders for tab switches, file opens, and mode toggles. Everything else is imperative. This is not a hack -- it is the correct pattern for any heavyweight imperative library in React (Monaco, xterm.js, canvas, WebGL). If you are adding a new feature, ask yourself: does this need to trigger a React re-render? If not, use a ref.
 
-**The always-mounted container is load-bearing.** `display: 'none'` instead of conditional rendering is not laziness. It is the only way to guarantee the DOM element exists when the creation `useEffect` runs. Understand this and you will never accidentally break the editor by "cleaning up" the JSX.
+**Two editors for two purposes -- the configuration contrast IS the design.** Left pane: no line numbers, word wrap, read-write, napkin-markdown. Right pane: line numbers on, folding on, read-only, auto-detected language. If you are tempted to "unify" them, resist. They serve different purposes and their configurations reflect that.
 
-**Echo suppression needs two layers because timing is unknowable.** Main process and renderer process each have their own suppression mechanism, covering different failure modes. If you are tempted to "simplify" this to a single layer, think carefully about what happens when the IPC message arrives 400ms late.
+**The model identity guard prevents stale async decorations.** Capture the model reference before an async call, check reference identity after. This three-line pattern prevents an entire class of race conditions where the user switches files during an IPC round trip. Use it whenever you have async operations that update editor decorations.
 
-**Three independent debounce timers form a pipeline.** 1000ms (renderer auto-save), 300ms (main echo window), 200ms (main watcher coalesce), 500ms (renderer suppress tail). They are not redundant -- each solves a different timing problem at a different point in the pipeline.
+**Link routing is a pure function cascade with two-root fallback.** `routeLink()` does classification and resolution without touching the store or React. The two-root pattern (dirname primary, project root fallback) handles both relative references within `.nap/` and project-root references like `/src/model.ts`. Extension wins over line suffix -- `.md` files always go to the left pane.
 
-**Monarch rule order is the logic.** Role-prefixed comment rules before generic `//`. If you add a new token type that overlaps with existing patterns, put the more specific rule first. The `@bold` state machine shows how to handle multi-token constructs.
+**Theme dual application: Monaco `setTheme()` + CSS custom properties.** One call to `applyTheme()` updates both Monaco editors AND the entire app shell. If you add a new UI component, use the `--nap-*` CSS variables -- they will automatically respond to theme changes.
 
-**The content watcher is deliberately not abstracted.** It is raw `nodeFs.watch()` inline in `main.ts`, separate from the model's `FileSystem` interface. Two watchers, two concerns: one file for content, one directory for structure. If you need to make the content watcher testable with injected fs, that is a documented future improvement -- but it works fine as-is.
+**Echo suppression needs two layers because timing is unknowable.** Main process (`pendingContentWrites`, 300ms window) and renderer (`suppressExternalRef`, covers entire typing session + 500ms tail). If you are tempted to simplify to one layer, think about what happens when the IPC message arrives 400ms late.
 
-**The routing function is pure and segment-based.** No React imports, no store access. `isNapPath()` splits on `/` and checks for an exact `.nap` segment. Substring matching would produce false positives. When you add new routing rules, add them as new `if` branches -- do not introduce abstractions.
+**The sentinel terminal tab is immortal.** `TERMINAL_TAB_ID = '__terminal__'` cannot be closed, always sits at position 0 in the right tab bar, and updates in-place when you switch agents. Code file tabs are ephemeral until pinned by edit or double-click. This asymmetry is the right design: you always have a terminal, you sometimes view code.
