@@ -50,6 +50,7 @@ declare global {
 }
 
 window.__napStore__ = useNapStore;
+(window as any).__getTerminal__ = getTerminal;
 
 function ResizeHandle() {
   const handleRef = useRef<HTMLDivElement>(null);

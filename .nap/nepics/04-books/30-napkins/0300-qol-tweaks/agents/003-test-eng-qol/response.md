@@ -2,12 +2,12 @@
 
 ## Results
 
-**73 tests, 73 passing. 0 failures.**
+**75 tests, 75 passing. 0 failures.**
 
 - Small tests: 64 passing (5 files, vitest)
-- Medium tests: 9 passing (3 files, Playwright + Electron)
+- Medium tests: 11 passing (4 files, Playwright + Electron)
 
-All 22 test cases from `0300-qol-tweaks.test.md` implemented.
+All 22 test cases from `0300-qol-tweaks.test.md` implemented, plus 2 additional tests for terminal fit bug fix.
 
 ## Test files
 
@@ -21,6 +21,7 @@ All 22 test cases from `0300-qol-tweaks.test.md` implemented.
 | `tests/git-gutter-refresh.spec.ts` | medium | GG-01, GG-02, GG-03, GG-05 (4 tests) | ✓ |
 | `tests/rendered-mode.spec.ts` | medium | RM-05, RM-06, TS-01 (3 tests) | ✓ |
 | `tests/theme-css.spec.ts` | medium | TH-05, TH-06 (2 tests) | ✓ |
+| `tests/terminal-fit.spec.ts` | medium | terminal fit rAF deferral (2 tests) | ✓ |
 
 ## Findings
 
@@ -35,6 +36,14 @@ The `source_line` plugin in `markdown-renderer.ts` only handles tokens with `nes
 ### 3. Monaco `EditorOption` enum not directly accessible in Playwright evaluate
 
 For TS-01, `editor.getOptions().get(monaco.editor.EditorOption.tabSize)` returned `undefined` in the Playwright evaluate context. Used `model.getOptions().tabSize` instead, which gives the resolved value directly.
+
+### 4. Terminal fit bug — narrow wrapping on activation (FIXED)
+
+Terminals often rendered with text wrapped at ~4-5 characters. Root cause: `fitAddon.fit()` in Terminal.tsx ran synchronously in `useEffect`, before the browser had completed layout of the container. This sent tiny cols to the PTY via `pty.resize()`, causing the agent's output to wrap at that width.
+
+**Fix:** Deferred `fit()` + `pty.resize()` + `focus()` to `requestAnimationFrame()` in Terminal.tsx's `useEffect([activeTerminalId])`. rAF fires after the browser has completed layout, so fitAddon measures the real container dimensions.
+
+**Also changed:** `index.tsx` — exposed `getTerminal` as `__getTerminal__` test hook (same pattern as `__napStore__`, `__monaco__`). Keybinding: `Cmd+Shift+H` → `Cmd+J` for rendered mode toggle (Cmd+H is intercepted by macOS/Electron "Hide" menu).
 
 ## Environment notes
 

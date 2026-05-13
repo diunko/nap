@@ -300,9 +300,15 @@ export function Terminal() {
       }
     }
 
-    entry.fitAddon.fit();
-    window.electronAPI.pty.resize(activeTerminalId, entry.terminal.cols, entry.terminal.rows);
-    entry.terminal.focus();
+    // Defer fit/resize/focus to rAF — ensures browser has completed layout
+    // so fitAddon measures the real container dimensions, not a stale/zero rect
+    const termId = activeTerminalId;
+    requestAnimationFrame(() => {
+      entry.fitAddon.fit();
+      window.electronAPI.pty.resize(termId, entry.terminal.cols, entry.terminal.rows);
+      entry.terminal.focus();
+      (window as any).__lastEffectFit__ = { id: termId, cols: entry.terminal.cols, rows: entry.terminal.rows, deferred: true };
+    });
   }, [activeTerminalId]);
 
   // ResizeObserver handles both window resize and sidebar toggle
