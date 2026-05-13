@@ -64,11 +64,21 @@ The test architecture designed W01-W03 to use `MemoryFileSystem.simulateChange`,
 
 Monaco normalizes `quickSuggestions: false` to `{comments: "off", other: "off", strings: "off"}` internally. The test accounts for this.
 
+## BUG 3: File watcher ignores atomic writes (fixed, commit 31223d8)
+
+**What:** When an agent (Claude Code) edits a file open in Monaco, the editor doesn't update. VS Code edits work fine.
+
+**Root cause:** `main.ts` file watcher filtered `eventType !== 'change'`. Claude Code uses atomic writes (write temp file → rename over original), which produce `'rename'` events — silently ignored by the filter.
+
+**Fix:** Dropped the `eventType` filter. Watcher now reacts to any fs event. W05 test added to reproduce: simulates temp+rename write, asserts watcher fires.
+
+**Test:** W05 in `content-watching.test.ts` — confirmed failing before fix, passing after.
+
 ## Files created
 
 - `tests/routing-rules.test.ts` — R01-R04
 - `tests/content-store.test.ts` — S01-S07
-- `tests/content-watching.test.ts` — W01-W03
+- `tests/content-watching.test.ts` — W01-W03, W05
 - `tests/content-watching.spec.ts` — W04
 - `tests/content-monaco.spec.ts` — M01-M06
 - `tests/content-layout.spec.ts` — L01-L06
@@ -77,4 +87,27 @@ Monaco normalizes `quickSuggestions: false` to `{comments: "off", other: "off", 
 ## Files modified
 
 - `src/renderer/ContentPane.tsx` — fixed editor mount bug (single DOM tree), added `__monaco__` test hook
+- `src/main/main.ts` — fixed file watcher ignoring atomic writes
 - `tests/helpers.ts` — fixed NAP_SOCKET inheritance + user-data-dir isolation
+
+## Scaling notes
+
+### Current approach (ephemeral, one file per pane)
+
+Scales fine to large repos. The content pane watches one file at a time (`fs.watch` swaps on file switch), so watcher count is always 1. Monaco has one model alive at a time. The bottleneck is elsewhere — sidebar entry tree rendering (no virtualization), `loadFromFilesystem` walking deep directories, and full `AppSnapshot` serialization on every model change.
+
+### If tabs are added (multiple open files per pane)
+
+**What scales fine:**
+- Monaco handles dozens of open models — designed for this (VS Code does it)
+- Store state is just an array of paths, cheap
+- Routing rules unchanged — still pure function per click
+
+**What gets tricky:**
+- **Memory** — each model holds content + undo history + tokenization. 50 tabs fine, 500 would hurt
+- **File watchers** — need one per open file, or a directory watcher that multiplexes. Hundreds of `fs.watch` handles is wasteful
+- **Auto-save fan-out** — each tab needs its own debounce timer + echo suppression. Current single-ref approach (`saveTimerRef`, `suppressExternalRef`) doesn't generalize
+- **Tab state per nepic** — `nepicFilePathMemory` stores one path. With tabs: array of paths, scroll positions, cursor positions, dirty flags — per tab per nepic. Save/restore in `applySnapshot` gets heavier
+- **Right pane mixing terminals + code** — xterm instances are expensive, can't be cheaply suspended like Monaco models. Terminal registry already keeps instances alive but hidden — tab bar would need to manage two resource types
+
+**Architectural decision:** LRU eviction for models (keep N most recent, dispose the rest but remember the tab) vs keep all alive (simpler, memory ceiling). VS Code does LRU.
