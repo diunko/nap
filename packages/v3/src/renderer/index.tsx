@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Sidebar } from './Sidebar';
-import { Terminal } from './Terminal';
+import { ContentPane } from './ContentPane';
+import { TerminalPane } from './TerminalPane';
 import { DebugPanel } from './DebugPanel';
 import { KanbanOverlay } from './KanbanOverlay';
 import { Gutter } from './Gutter';
@@ -33,15 +34,77 @@ declare global {
       switchNepic: (id: string) => Promise<unknown>;
       createNepic: (name: string) => Promise<unknown>;
       spawnSuccessor: (id: string) => Promise<{ ok?: boolean; newId?: string; error?: boolean; message?: string }>;
+      fileRead: (filePath: string) => Promise<string | null>;
+      fileWrite: (filePath: string, content: string) => Promise<{ ok?: boolean; error?: boolean; message?: string }>;
+      onFileChanged: (cb: (filePath: string, content: string) => void) => () => void;
+      fileWatch: (filePath: string | null) => void;
     };
   }
 }
 
 window.__napStore__ = useNapStore;
 
+function ResizeHandle() {
+  const handleRef = useRef<HTMLDivElement>(null);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const handle = handleRef.current;
+    if (!handle) return;
+
+    const parent = handle.parentElement;
+    if (!parent) return;
+
+    const leftPane = handle.previousElementSibling as HTMLElement;
+    const rightPane = handle.nextElementSibling as HTMLElement;
+    if (!leftPane || !rightPane) return;
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const startX = e.clientX;
+    const parentRect = parent.getBoundingClientRect();
+    const leftStart = leftPane.getBoundingClientRect().width;
+    const totalWidth = parentRect.width - 4; // handle width
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX;
+      const newLeft = Math.max(200, Math.min(totalWidth - 200, leftStart + delta));
+      const leftPct = (newLeft / totalWidth) * 100;
+      leftPane.style.flex = `0 0 ${leftPct}%`;
+      rightPane.style.flex = `0 0 ${100 - leftPct}%`;
+    };
+
+    const onMouseUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
+
+  return (
+    <div
+      ref={handleRef}
+      onMouseDown={onMouseDown}
+      style={{
+        width: 4,
+        cursor: 'col-resize',
+        flexShrink: 0,
+        background: 'transparent',
+        zIndex: 5,
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#007acc')}
+      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+    />
+  );
+}
+
 function App() {
   const applySnapshot = useNapStore((s) => s.applySnapshot);
-  const activeTerminalId = useNapStore((s) => s.activeTerminalId);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
   const toggleSidebar = useNapStore((s) => s.toggleSidebar);
   const toggleDebugPanel = useNapStore((s) => s.toggleDebugPanel);
@@ -143,13 +206,11 @@ function App() {
       {nepics.length > 0 && <Gutter />}
       {sidebarVisible && <Sidebar />}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-        {activeTerminalId ? (
-          <Terminal />
-        ) : (
-          <div style={{ flex: 1, color: '#ccc', padding: 24, fontFamily: 'monospace', fontSize: 18 }}>
-            v3
-          </div>
-        )}
+        <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+          <ContentPane />
+          <ResizeHandle />
+          <TerminalPane />
+        </div>
         <DebugPanel />
       </div>
     </div>

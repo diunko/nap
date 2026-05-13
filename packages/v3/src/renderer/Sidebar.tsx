@@ -3,6 +3,7 @@ import { useNapStore } from './store';
 import type { CardViewMode } from './store';
 import type { NapkinState, AgentState, NapkinStatus, Entry, FileEntry, DirEntry } from '../shared/bridge-types';
 import { dotStyle, roleColor } from '../shared/dot-style';
+import { route } from './routing-rules';
 
 // ── Phase colors ──
 
@@ -38,7 +39,12 @@ function AgentDot({ agent, size = 8 }: { agent: AgentState; size?: number }) {
       title={`${agent.name} (${agent.role})`}
       onClick={(e) => {
         e.stopPropagation();
-        if (clickable) setActiveTerminal(agent.id);
+        if (clickable) {
+          const result = route({ agent: { id: agent.id, started: agent.started } });
+          if (result.pane === 'right') {
+            setActiveTerminal(agent.id);
+          }
+        }
       }}
       style={{
         display: 'inline-flex',
@@ -80,6 +86,8 @@ function FileRow({
   indent: number;
   showControls: boolean;
 }) {
+  const openFile = useNapStore((s) => s.openFile);
+
   return (
     <div
       data-testid="file-entry"
@@ -93,7 +101,12 @@ function FileRow({
       }}
       onClick={(e) => {
         e.stopPropagation();
-        window.electronAPI?.openFilePath(file.absPath);
+        const result = route({ filePath: file.absPath });
+        if (result.pane === 'left') {
+          openFile(file.absPath);
+        } else {
+          window.electronAPI?.openFilePath(file.absPath);
+        }
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.background = 'rgba(255,255,255,0.04)';

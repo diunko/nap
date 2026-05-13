@@ -1,0 +1,13 @@
+{
+  "cc_session_uuid": "e2715baf-ceec-4cdb-abde-c265de1c6c13",
+  "role": "test-eng",
+  "name": "003-test-eng-content",
+  "napkin": "0100-content-pane",
+  "nepic": "04-books",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1778633555922,
+  "started": true,
+  "exited": false,
+  "done": true
+}

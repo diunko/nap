@@ -13,6 +13,7 @@ export interface NapStore {
   nepics: NepicInfo[];
 
   // ── Renderer-only state (preserved across snapshots) ──
+  activeFilePath: string | null;
   focusedCardSlug: string | null;
   cardViewMode: CardViewMode;
   sidebarVisible: boolean;
@@ -25,6 +26,7 @@ export interface NapStore {
   // ── Actions ──
   applySnapshot: (snapshot: AppSnapshot) => void;
   setActiveTerminal: (id: string) => void;
+  openFile: (path: string) => void;
   expandCard: (slug: string) => void;
   focusCard: (slug: string) => void;
   extendCard: () => void;
@@ -41,11 +43,13 @@ export interface NapStore {
 // Per-nepic renderer state memory (not persisted)
 const nepicTerminalMemory = new Map<string, string>();
 const nepicFocusedCardMemory = new Map<string, string>();
+const nepicFilePathMemory = new Map<string, string>();
 
 /** Test-only: clear per-nepic memory between tests */
 export function _resetNepicTerminalMemory(): void {
   nepicTerminalMemory.clear();
   nepicFocusedCardMemory.clear();
+  nepicFilePathMemory.clear();
 }
 
 export const useNapStore = create<NapStore>((set, get) => ({
@@ -56,6 +60,7 @@ export const useNapStore = create<NapStore>((set, get) => ({
   watcherEvents: [],
   nepics: [],
 
+  activeFilePath: null,
   focusedCardSlug: null,
   cardViewMode: 'collapsed' as CardViewMode,
   sidebarVisible: true,
@@ -78,6 +83,9 @@ export const useNapStore = create<NapStore>((set, get) => ({
       if (prev.focusedCardSlug) {
         nepicFocusedCardMemory.set(prev.activeNepicId, prev.focusedCardSlug);
       }
+      if (prev.activeFilePath) {
+        nepicFilePathMemory.set(prev.activeNepicId, prev.activeFilePath);
+      }
     }
 
     const updates: Partial<NapStore> = {
@@ -99,6 +107,9 @@ export const useNapStore = create<NapStore>((set, get) => ({
         updates.activeTerminalId = arch?.id ?? null;
       }
 
+      const rememberedFile = nepicFilePathMemory.get(snapshot.activeNepicId);
+      updates.activeFilePath = rememberedFile ?? null;
+
       const rememberedCard = nepicFocusedCardMemory.get(snapshot.activeNepicId);
       if (rememberedCard) {
         updates.focusedCardSlug = rememberedCard;
@@ -116,6 +127,10 @@ export const useNapStore = create<NapStore>((set, get) => ({
 
   setActiveTerminal: (id: string) => {
     set({ activeTerminalId: id });
+  },
+
+  openFile: (path: string) => {
+    set({ activeFilePath: path });
   },
 
   // Click card → focused. Click same card → collapsed.

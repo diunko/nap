@@ -65,4 +65,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ── Agent successor (0620) ──
   spawnSuccessor: (id: string) => ipcRenderer.invoke('agent:spawn-successor', id),
+
+  // ── File content (0100 — content pane) ──
+  fileRead: (filePath: string) => ipcRenderer.invoke('file:read', filePath),
+  fileWrite: (filePath: string, content: string) => ipcRenderer.invoke('file:write', filePath, content),
+  onFileChanged: (cb: (filePath: string, content: string) => void) => {
+    const handler = (_event: IpcRendererEvent, filePath: string, content: string) =>
+      cb(filePath, content);
+    ipcRenderer.on('file:changed', handler);
+    return () => ipcRenderer.removeListener('file:changed', handler);
+  },
+  fileWatch: (filePath: string | null) => ipcRenderer.send('file:watch', filePath),
 });

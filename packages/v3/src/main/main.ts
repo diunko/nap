@@ -1,5 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { join } from 'path';
+import * as nodeFs from 'fs';
+import * as nodeFsPromises from 'fs/promises';
 import { createModel } from './model';
 import { NodeFileSystem } from './filesystem';
 import { NodePtySpawner } from './node-pty-spawner';
@@ -190,6 +192,70 @@ app.whenReady().then(async () => {
   // Open file in default editor
   ipcMain.on('open-file-path', (_event, filePath: string) => {
     shell.openPath(filePath);
+  });
+
+  // ── File content IPC (0100 — content pane) ──
+
+  ipcMain.handle('file:read', async (_event, filePath: string) => {
+    try {
+      return await nodeFsPromises.readFile(filePath, 'utf-8');
+    } catch {
+      return null;
+    }
+  });
+
+  // Track pending writes for echo suppression
+  const pendingContentWrites = new Set<string>();
+
+  ipcMain.handle('file:write', async (_event, filePath: string, content: string) => {
+    try {
+      pendingContentWrites.add(filePath);
+      await nodeFsPromises.writeFile(filePath, content);
+      // Clear after debounce window so watcher doesn't echo
+      setTimeout(() => pendingContentWrites.delete(filePath), 300);
+      return { ok: true };
+    } catch (err) {
+      return { error: true, message: String(err) };
+    }
+  });
+
+  // Per-file content watcher: renderer tells us which file to watch
+  let contentWatcher: (() => void) | null = null;
+  let watchedFilePath: string | null = null;
+  let contentDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  ipcMain.on('file:watch', (_event, filePath: string | null) => {
+    // Clean up previous watcher
+    if (contentWatcher) {
+      contentWatcher();
+      contentWatcher = null;
+    }
+    clearTimeout(contentDebounceTimer);
+    watchedFilePath = filePath;
+
+    if (!filePath) return;
+
+    try {
+      const watcher = nodeFs.watch(filePath, (eventType) => {
+        if (eventType !== 'change') return;
+        if (pendingContentWrites.has(filePath)) return; // echo suppression
+
+        clearTimeout(contentDebounceTimer);
+        contentDebounceTimer = setTimeout(async () => {
+          try {
+            const content = await nodeFsPromises.readFile(filePath, 'utf-8');
+            if (!win.isDestroyed()) {
+              win.webContents.send('file:changed', filePath, content);
+            }
+          } catch {
+            // File may have been deleted
+          }
+        }, 200);
+      });
+      contentWatcher = () => watcher.close();
+    } catch {
+      // File may not exist yet
+    }
   });
 
   // UI state persistence (debug panel collapse/tab, sidebar visible)

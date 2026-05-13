@@ -44,17 +44,25 @@ export function createTestNepicDir(
  * Sets NAP_CWD to a tmpDir containing fixture data.
  */
 export async function launchApp(tmpDir: string): Promise<ElectronApplication> {
+  // Use a unique user-data-dir to avoid conflicts with running dev instance.
+  // Clear NAP_SOCKET so tests don't inherit the dev instance's socket path.
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nap-v3-electron-'));
+  const { NAP_SOCKET: _, ...cleanEnv } = process.env;
   const app = await electron.launch({
-    args: [APP_DIR],
-    env: { ...process.env, NAP_TEST: '1', NAP_CWD: tmpDir },
+    args: [APP_DIR, `--user-data-dir=${userDataDir}`],
+    env: { ...cleanEnv, NAP_TEST: '1', NAP_CWD: tmpDir },
   });
+  // Store for cleanup
+  (app as any).__userDataDir = userDataDir;
   return app;
 }
 
 export async function cleanupApp(app: ElectronApplication, tmpDir: string): Promise<void> {
+  const userDataDir = (app as any).__userDataDir;
   await app.evaluate(({ app }) => app.quit());
   await app.close();
   fs.rmSync(tmpDir, { recursive: true, force: true });
+  if (userDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
 }
 
 export function makeTmpDir(): string {
