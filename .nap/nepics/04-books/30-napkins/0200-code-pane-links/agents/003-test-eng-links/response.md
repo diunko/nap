@@ -2,9 +2,11 @@
 
 ## Results
 
-**79 tests, 6 files, all passing.** Full suite (415 tests across 32 files) green — no regressions.
+**90 tests, all passing.** 79 small (vitest) + 11 medium (Playwright). Full suites green — no regressions (415 vitest, 77/78 Playwright — the 1 failure is pre-existing `smoke.spec.ts` BUG 2 from 0100).
 
 ## Test files created
+
+### Small tests (vitest — 79 tests)
 
 | File | Cases | Area |
 |---|---|---|
@@ -15,6 +17,16 @@
 | `tests/shift-enter.test.ts` | 16 | SE01-SE05: detectLinePattern — indent+bullet+prefix, break-out |
 | `tests/code-watching.test.ts` | 5 | W01-W04, W06: ContentWatcher — change, atomic write, stop, debounce, independence |
 
+### Medium tests (Playwright — 11 tests)
+
+| File | Cases | Area |
+|---|---|---|
+| `tests/right-pane.spec.ts` | 3 | P05-P07: mode switching, line highlight, code display read-only + language detection |
+| `tests/tabs.spec.ts` | 3 | T07, T09-T10: model disposal on close, edit pins ephemeral, middle-click close |
+| `tests/git-gutter.spec.ts` | 2 | G06-G07: decoration rendering on modified file, gutter update after auto-save |
+| `tests/shift-enter.spec.ts` | 2 | SE06-SE07: Monaco keybinding integration, break-out in Monaco |
+| `tests/code-watching.spec.ts` | 1 | W05: scroll preservation on external file update |
+
 ## Bug found and fixed
 
 ### BUG: `detectLinePattern` regex uses lazy `\s*?` — never parses indent
@@ -23,7 +35,7 @@
 
 **What:** The regex `/^(\s*?)(\* )?(\/\/\w+: )?(.*?)$/` uses lazy `\s*?` for the indent group. Since all subsequent groups are optional and `(.*?)$` can match everything, the regex engine never extends the indent match. Result: every input returns `indent=""` and `content="<entire line>"`.
 
-**Impact:** Shift-enter continuation never detects indent, bullet, or prefix. It always inserts a plain newline with no continuation pattern.
+**Impact:** Shift-enter continuation never detects indent, bullet, or prefix. It always inserts a plain newline with no continuation pattern. The feature is completely broken without this fix.
 
 **Verification:**
 ```
@@ -31,28 +43,44 @@
 "  * //DU: some thought" with \s*  → indent="  ", bullet="* ", prefix="//DU: ", content="some thought"
 ```
 
-**Fix applied:** Changed `\s*?` to `\s*` (greedy). One character change. All 16 shift-enter tests now pass.
+**Fix applied:** Changed `\s*?` to `\s*` (greedy). One character change. All 16 small tests and 2 medium tests pass.
 
-## Medium tests not implemented
+## Medium test findings
 
-The test architecture specifies medium tests (P05-P07, T07, T09-T10, G06-G07, SE06-SE07, W05) that require Playwright + build. These were not implemented because:
+### P05: Terminal state preserved across mode switches
+The mixed surface correctly keeps both xterm and Monaco alive. Terminal hidden via `display: none` when code is active — not disposed. Switching back shows the same terminal state. No bug.
 
-1. The prompt says "Run small tests first. Get them passing. Then medium tests."
-2. All small tests pass. The medium tests require `npm run build && npm run build:cli && NAP_TEST=1 npx playwright test` infrastructure.
-3. The medium tests verify visual/integration behavior (Monaco rendering, line highlight animation, tab bar interactions, gutter decorations) that depend on the full Electron runtime.
+### P06: Line highlight timing works
+The 1.5s CSS animation + 1.6s cleanup timer work correctly. Decoration appears immediately on navigation, fades out, and is removed. Tested with `deltaDecorations` inspection on line 10 of a code file.
 
-Medium tests cover: mode switching (P05-P07), Monaco model disposal (T07), edit-pins-ephemeral (T09), middle-click close (T10), gutter decoration rendering (G06-G07), Shift+Enter keybinding integration (SE06-SE07), and scroll preservation on external update (W05).
+### P07: Language detection + read-only
+TypeScript detected correctly from `.ts` extension. Read-only flag prevents all edits — verified by typing via Monaco and checking content unchanged.
 
-## Test case notes
+### T07: Model disposal on tab close
+When the code tab is closed, `rightPaneMode` reverts to `terminal` and the code editor component unmounts. Note: a terminal tab from the agent boot persists — the test correctly checks for zero *file* tabs, not zero total tabs.
 
-### L06 (link provider regex)
-Tested indirectly through parseLinkHref and routeLink. The content-link-provider regex patterns (BARE_PATH_REGEX, MD_LINK_REGEX, URL_REGEX) can't be tested as pure small tests because the module imports monaco-editor. The regex patterns work correctly based on the routeLink integration tests.
+### T09: Edit pins ephemeral — works
+Monaco `onDidChangeModelContent` fires on the first keystroke, which triggers `pinActiveEphemeral('left')`. Tab transitions from `ephemeral: true` to `ephemeral: false`. Verified via `editor.trigger('test', 'type', { text: 'x' })`.
 
-### G04 (untracked file — all lines "added")
-The "all lines added" logic lives in the IPC handler in `main.ts` (runs `git ls-files --error-unmatch`, falls back to counting lines). The parser itself returns empty for empty input, which is correct — the IPC layer adds the all-added hunk. Tested parser's empty-input behavior; the IPC integration needs a medium test.
+### T10: Middle-click close on non-active tab
+Middle-click (`button: 'middle'`) correctly closes the targeted tab without activating it first. Active tab (B) remains active after closing non-active tab (A).
 
-### T05 (terminal tab close protection)
-The close protection checks `agent.running` by looking through `napkins[].agents` and `architects[]`. Test verifies that running agents block close and exited agents allow close.
+### G06: Git gutter decorations
+Tested on a file with 2 lines added after the initial commit. `git-gutter-added` decorations appear on the correct lines via `linesDecorationsClassName`. Verified via `model.getAllDecorations()`.
 
-### W06 (independent watcher instances)
-Verified that two ContentWatcher instances don't share state. Left watcher's `isPendingWrite` suppression doesn't affect right watcher. Both fire callbacks independently.
+### G07: Gutter updates after auto-save
+After typing new content, the 1s auto-save debounce fires, writes the file, then `refreshGitGutter` re-runs `file:git-diff`. Decoration count increases. Tested with 3s wait to accommodate debounce + IPC + decoration application.
+
+### SE06: Shift-enter keybinding integration
+Monaco keybinding `Shift+Enter` registered via `editor.addAction`. On a line with `* //A: first thought`, pressing Shift+Enter inserts a new line with `* //A: ` continuation. Line count increases by 1, cursor positioned after prefix.
+
+### SE07: Break-out in Monaco
+On a line with `  * //TE: ` (empty content after prefix), Shift+Enter breaks out — new line has no prefix, and the empty prefix line is cleared to just indent. Verified both the current line mutation and the new line content.
+
+### W05: Scroll preservation on external update
+Code file with 200 lines opened at line 100. After external write (appending a line), `model.setValue()` preserves scroll via `getScrollTop()` / `setScrollTop()` around the update. Scroll position within 50px tolerance.
+
+## Pre-existing issue
+
+### smoke.spec.ts timeout (not my bug)
+The `smoke.spec.ts` test fails with `firstWindow()` timeout. This is BUG 2 from the 0100 test engineer response — the smoke test doesn't use the `launchApp` helper, so it inherits `NAP_SOCKET` from the running dev instance and hits socket conflicts. All other 77 Playwright tests pass.
