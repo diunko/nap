@@ -23,9 +23,23 @@ nap3 dev
 
 ## What it does
 
-![NAP three-pane layout](docs/nap-three-pane.png)
-
 NAP is an Electron app for reading, writing, and building with AI agents. You brainstorm ideas into napkins — compressed bullet docs — then agents unfold those napkins into specs, tests, and code.
+
+You think together by threading `//` comments inline:
+
+```
+* state management
+  * //DU: should we use zustand or redux?
+    * //A: zustand — 1KB, no boilerplate, already in the project
+      * //DU: sold. what about persistence?
+        * //A: save to ui-state.json on change, restore on mount
+```
+
+Shift+Enter continues at the same indent and prefix. Cmd+Enter sends to the agent. The napkin file IS the conversation.
+
+![NAP threads](docs/nap-threads.png)
+
+![NAP three-pane layout](docs/nap-three-pane.png)
 
 Three panes: nav on the left, your documents in the middle, agent terminals and code on the right. Each agent is a full Claude Code session. You can watch any agent think, talk to them, steer them mid-task.
 
