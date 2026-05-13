@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import * as nodeFs from 'fs';
 import * as nodeFsPromises from 'fs/promises';
 import { execFile } from 'child_process';
@@ -257,7 +257,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('file:git-diff', async (_event, filePath: string) => {
     return new Promise<ReturnType<typeof parseGitDiff>>((resolve) => {
       // Check if file is tracked
-      execFile('git', ['ls-files', '--error-unmatch', filePath], { cwd: projectCwd }, (lsErr) => {
+      execFile('git', ['ls-files', '--error-unmatch', filePath], { cwd: dirname(filePath) }, (lsErr) => {
         if (lsErr) {
           // Untracked file — all lines are "added"
           nodeFsPromises.readFile(filePath, 'utf-8').then((content) => {
@@ -271,7 +271,7 @@ app.whenReady().then(async () => {
         execFile(
           'git',
           ['diff', '--unified=0', 'HEAD', '--', filePath],
-          { cwd: projectCwd, maxBuffer: 1024 * 1024 },
+          { cwd: dirname(filePath), maxBuffer: 1024 * 1024 },
           (err, stdout) => {
             if (err && !stdout) {
               resolve([]);

@@ -1,0 +1,13 @@
+{
+  "cc_session_uuid": "095cfa0c-c81b-4834-9218-428c7f79751b",
+  "role": "fs-eng",
+  "name": "001-fs-eng-git-cwd",
+  "napkin": "0310-git-diff-cwd",
+  "nepic": "04-books",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1778670677483,
+  "started": true,
+  "exited": false,
+  "done": true
+}
