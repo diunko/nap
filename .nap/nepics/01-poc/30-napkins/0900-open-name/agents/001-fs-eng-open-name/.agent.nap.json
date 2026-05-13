@@ -4,9 +4,9 @@
   "name": "001-fs-eng-open-name",
   "napkin": "0900-open-name",
   "nepic": "01-poc",
-  "started": false,
+  "started": true,
   "done": true,
-  "exited": false,
-  "archived": false,
+  "exited": true,
+  "archived": true,
   "created_at": 1778628795713
 }

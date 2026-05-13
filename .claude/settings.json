@@ -22,5 +22,18 @@
       "WebSearch",
       "WebFetch"
     ]
+  },
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "nap3 hook permission-request"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -6,7 +6,7 @@
   "nepic": "03-nepic-spaces-v2",
   "started": true,
   "done": true,
-  "exited": false,
-  "archived": false,
+  "exited": true,
+  "archived": true,
   "created_at": 1778628795723
 }

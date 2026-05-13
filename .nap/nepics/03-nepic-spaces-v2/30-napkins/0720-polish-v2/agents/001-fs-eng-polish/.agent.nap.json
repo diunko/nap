@@ -5,8 +5,8 @@
   "napkin": "0720-polish-v2",
   "nepic": "03-nepic-spaces-v2",
   "started": true,
-  "done": false,
-  "exited": false,
-  "archived": false,
+  "done": true,
+  "exited": true,
+  "archived": true,
   "created_at": 1778628795727
 }

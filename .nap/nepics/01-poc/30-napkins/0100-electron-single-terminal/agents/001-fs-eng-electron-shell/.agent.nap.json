@@ -4,9 +4,9 @@
   "name": "001-fs-eng-electron-shell",
   "napkin": "0100-electron-single-terminal",
   "nepic": "01-poc",
-  "started": false,
+  "started": true,
   "done": true,
-  "exited": false,
-  "archived": false,
+  "exited": true,
+  "archived": true,
   "created_at": 1778628795710
 }

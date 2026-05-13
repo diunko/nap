@@ -4,9 +4,9 @@
   "name": "001-test-arch-wiring",
   "napkin": "0600-live-wiring",
   "nepic": "02-nepic-spaces",
-  "started": false,
-  "done": false,
-  "exited": false,
-  "archived": false,
+  "started": true,
+  "done": true,
+  "exited": true,
+  "archived": true,
   "created_at": 1778628795716
 }

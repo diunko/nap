@@ -4,9 +4,9 @@
   "name": "003-test-eng-reconcile",
   "napkin": "0900-reconciliation",
   "nepic": "02-nepic-spaces",
-  "started": false,
+  "started": true,
   "done": true,
-  "exited": false,
-  "archived": false,
+  "exited": true,
+  "archived": true,
   "created_at": 1778628795718
 }

@@ -4,9 +4,9 @@
   "name": "004-research-pty-input",
   "napkin": "0200-sqlite-setup",
   "nepic": "02-nepic-spaces",
-  "started": false,
+  "started": true,
   "done": true,
-  "exited": false,
-  "archived": false,
+  "exited": true,
+  "archived": true,
   "created_at": 1778628795715
 }

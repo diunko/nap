@@ -4,9 +4,9 @@
   "name": "004-pm-stories",
   "napkin": "1600-agent-lifecycle",
   "nepic": "02-nepic-spaces",
-  "started": false,
-  "done": false,
-  "exited": false,
-  "archived": false,
+  "started": true,
+  "done": true,
+  "exited": true,
+  "archived": true,
   "created_at": 1778628795721
 }

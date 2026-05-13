@@ -1,4 +1,6 @@
 {
   "started": true,
-  "exited": true
+  "exited": true,
+  "done": true,
+  "archived": true
 }
