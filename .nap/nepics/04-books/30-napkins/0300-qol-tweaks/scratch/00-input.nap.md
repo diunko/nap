@@ -98,6 +98,16 @@
                   * careful: Cmd+R is "reload page" in Electron by default
                   * need to intercept it in the renderer before Electron eats it
                   * `event.preventDefault()` in the keydown handler — same pattern as Cmd+B, Cmd+D
+                  * //DU: okay, let's avoid that conflict
+                    * cmd-shift-r conflicts too
+                    * umm, let's take cmd-h
+                    * btw, should be global flag for all left pane
+                    * //A: Cmd+Shift+H — no conflicts, clean
+                    * //A: global flag — yes
+                      * store: `leftPaneRenderMode: 'edit' | 'rendered'`
+                      * all left pane tabs share the mode
+                      * toggle applies instantly to whatever tab is active
+                      * switching tabs keeps the mode
             * rendered mode: parse markdown → HTML, render in a div
               * tables render as actual tables
               * links render as styled anchors
