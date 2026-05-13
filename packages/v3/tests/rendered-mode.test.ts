@@ -19,6 +19,7 @@ if (typeof window === 'undefined') {
 
 import { useNapStore, loadPersistedUiState, _resetNepicTerminalMemory } from '../src/renderer/store';
 import { renderMarkdown, initShiki } from '../src/renderer/markdown-renderer';
+import { hashPrefix, roleCssClass, roleColor } from '../src/renderer/role-palette';
 
 // ── Rendered mode — small tests ──
 
@@ -144,44 +145,45 @@ describe('RM-03: markdown-it source line mapping', () => {
   });
 });
 
-// T-0300-RM-04: Role comments render as colored blocks
+// T-0300-RM-04: Role comments render as colored blocks (dynamic palette system)
 describe('RM-04: Role comments render as colored blocks', () => {
-  it('//A: gets role-architect class', () => {
+  it('//A: gets role-known-A class (known prefix)', () => {
     const html = renderMarkdown('* //A: architecture thought');
     expect(html).toContain('role-comment');
-    expect(html).toContain('role-architect');
+    expect(html).toContain('role-known-A');
   });
 
-  it('//DU: gets role-user class', () => {
+  it('//DU: gets palette class (not known — hashes to palette)', () => {
     const html = renderMarkdown('* //DU: user note');
-    expect(html).toContain('role-user');
+    expect(html).toContain('role-comment');
+    expect(html).toMatch(/role-\d+/);
   });
 
-  it('//FS: gets role-fs-eng class', () => {
+  it('//FS: gets role-known-FS class', () => {
     const html = renderMarkdown('* //FS: code detail');
-    expect(html).toContain('role-fs-eng');
+    expect(html).toContain('role-known-FS');
   });
 
-  it('//TA: gets role-test-arch class', () => {
+  it('//TA: gets role-known-TA class', () => {
     const html = renderMarkdown('* //TA: test design');
-    expect(html).toContain('role-test-arch');
+    expect(html).toContain('role-known-TA');
   });
 
-  it('//TE: gets role-test-eng class', () => {
+  it('//TE: gets role-known-TE class', () => {
     const html = renderMarkdown('* //TE: test note');
-    expect(html).toContain('role-test-eng');
+    expect(html).toContain('role-known-TE');
   });
 
   it('role comments inside nested list items are styled', () => {
     const md = '* outer\n  * //A: nested thought';
     const html = renderMarkdown(md);
-    expect(html).toContain('role-architect');
+    expect(html).toContain('role-known-A');
   });
 
   it('generic // comment does NOT get role class', () => {
     const html = renderMarkdown('* // just a comment');
-    // Should not have any role-* class
-    expect(html).not.toMatch(/role-(architect|user|fs-eng|test-arch|test-eng)/);
+    // "// " has a space after //, \w+ won't match
+    expect(html).not.toContain('role-comment');
   });
 });
 
@@ -327,5 +329,64 @@ describe('SHIKI-06: Theme switching changes code block colors', () => {
     expect(lightHtml).toContain('class="shiki');
     // Colors should differ between themes
     expect(darkHtml).not.toBe(lightHtml);
+  });
+});
+
+// ── Dynamic role palette — rendered mode integration ──
+
+// T-ROLE-09: Known prefix gets known class in rendered output
+describe('ROLE-09: Known prefix gets known class in rendered output', () => {
+  it('//A: produces role-known-A class', () => {
+    const html = renderMarkdown('* //A: thought');
+    expect(html).toContain('role-known-A');
+  });
+
+  it('//FS: produces role-known-FS class', () => {
+    const html = renderMarkdown('* //FS: detail');
+    expect(html).toContain('role-known-FS');
+  });
+});
+
+// T-ROLE-10: Unknown prefix gets palette class in rendered output
+describe('ROLE-10: Unknown prefix gets palette class in rendered output', () => {
+  it('//E: gets role-N class (hashed)', () => {
+    const html = renderMarkdown('* //E: expert thought');
+    const expected = `role-${hashPrefix('E')}`;
+    expect(html).toContain(expected);
+  });
+
+  it('//DU: gets palette class (not known)', () => {
+    const html = renderMarkdown('* //DU: user note');
+    const expected = `role-${hashPrefix('DU')}`;
+    expect(html).toContain(expected);
+  });
+
+  it('//PM: gets palette class', () => {
+    const html = renderMarkdown('* //PM: product thought');
+    const expected = `role-${hashPrefix('PM')}`;
+    expect(html).toContain(expected);
+  });
+});
+
+// T-ROLE-12: Theme switch updates palette colors, known stay pinned
+describe('ROLE-12: Dark vs light changes colors', () => {
+  it('known prefix A has different dark vs light hex', () => {
+    const dark = roleColor('A', true);
+    const light = roleColor('A', false);
+    expect(dark).toBe('#3b82f6');
+    expect(light).toBe('#2563eb');
+    expect(dark).not.toBe(light);
+  });
+
+  it('palette prefix E has same hue, different lightness', () => {
+    const dark = roleColor('E', true);
+    const light = roleColor('E', false);
+    expect(dark).toMatch(/^hsl\(/);
+    expect(light).toMatch(/^hsl\(/);
+    // Same hue, different lightness
+    const darkHue = dark.match(/hsl\((\d+)/)?.[1];
+    const lightHue = light.match(/hsl\((\d+)/)?.[1];
+    expect(darkHue).toBe(lightHue);
+    expect(dark).not.toBe(light);
   });
 });

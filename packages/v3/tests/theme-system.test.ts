@@ -11,8 +11,12 @@ vi.mock('monaco-editor', () => ({
 
 // Provide document + window stubs for tests that call applyTheme/persistUiState
 const mockSetProperty = vi.fn();
+const mockStyleEl = { id: '', textContent: '' };
 vi.stubGlobal('document', {
   documentElement: { style: { setProperty: mockSetProperty } },
+  createElement: vi.fn().mockReturnValue(mockStyleEl),
+  head: { appendChild: vi.fn() },
+  getElementById: vi.fn().mockReturnValue(null),
 });
 if (typeof window === 'undefined') {
   vi.stubGlobal('window', globalThis);
@@ -25,7 +29,6 @@ import { useNapStore, loadPersistedUiState, _resetNepicTerminalMemory } from '..
 // ── Theme system — small tests ──
 
 const REQUIRED_SHELL_KEYS = ['bg', 'bgSecondary', 'border', 'text', 'textMuted', 'accent'];
-const REQUIRED_ROLE_KEYS = ['architect', 'user', 'fs-eng', 'test-arch', 'test-eng'];
 
 function resetStore() {
   _resetNepicTerminalMemory();
@@ -74,13 +77,9 @@ describe('TH-01: THEMES array structure validation', () => {
     }
   });
 
-  it('every theme has all required role colors', () => {
+  it('every theme has isDark boolean', () => {
     for (const theme of THEMES) {
-      expect(theme.roleColors).toBeDefined();
-      for (const key of REQUIRED_ROLE_KEYS) {
-        expect(theme.roleColors).toHaveProperty(key);
-        expect(typeof (theme.roleColors as Record<string, string>)[key]).toBe('string');
-      }
+      expect(typeof theme.isDark).toBe('boolean');
     }
   });
 });
@@ -158,17 +157,17 @@ describe('TH-04: Theme fallback — saved theme not in THEMES array', () => {
   });
 });
 
-// T-0300-TK-01: Generic // comment color matches //DU: color
-describe('TK-01: Generic // comment color matches //DU: color', () => {
-  it('every theme has comment foreground === comment.user foreground', () => {
+// T-0300-TK-01: Generic // comment color matches comment.role color
+describe('TK-01: Generic // comment color matches comment.role', () => {
+  it('every theme has comment foreground === comment.role foreground', () => {
     for (const theme of THEMES) {
       const rules = theme.monacoTheme.rules;
       const commentRule = rules.find((r) => r.token === 'comment');
-      const commentUserRule = rules.find((r) => r.token === 'comment.user');
+      const commentRoleRule = rules.find((r) => r.token === 'comment.role');
 
       expect(commentRule).toBeDefined();
-      expect(commentUserRule).toBeDefined();
-      expect(commentRule!.foreground).toBe(commentUserRule!.foreground);
+      expect(commentRoleRule).toBeDefined();
+      expect(commentRule!.foreground).toBe(commentRoleRule!.foreground);
     }
   });
 });
