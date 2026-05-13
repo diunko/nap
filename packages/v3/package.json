@@ -27,6 +27,7 @@
     "node-pty": "^1.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "shiki": "^4.0.2",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

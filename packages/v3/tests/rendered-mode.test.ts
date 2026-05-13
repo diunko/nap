@@ -18,7 +18,7 @@ if (typeof window === 'undefined') {
 }
 
 import { useNapStore, loadPersistedUiState, _resetNepicTerminalMemory } from '../src/renderer/store';
-import { renderMarkdown } from '../src/renderer/markdown-renderer';
+import { renderMarkdown, initShiki } from '../src/renderer/markdown-renderer';
 
 // ── Rendered mode — small tests ──
 
@@ -227,5 +227,105 @@ describe('RM-07: Rendered mode persistence in ui-state.json', () => {
     expect(useNapStore.getState().leftPaneRenderMode).toBe('edit');
 
     delete (window as any).electronAPI;
+  });
+});
+
+// ── Shiki code highlighting tests ──
+
+// T-SHIKI-01: Shiki initialization
+describe('SHIKI-01: Shiki initialization', () => {
+  it('initShiki resolves and enables highlighted rendering', async () => {
+    await initShiki();
+    const md = '```typescript\nconst x = 1;\n```';
+    const html = renderMarkdown(md);
+    // After init, fenced TS block should use shiki (class="shiki"), not fallback
+    expect(html).toContain('class="shiki');
+  });
+});
+
+// T-SHIKI-02: Fenced code block with known language renders highlighted
+describe('SHIKI-02: Known language renders highlighted', () => {
+  it('typescript block produces shiki output with inline styles', async () => {
+    await initShiki();
+    const md = '```typescript\nconst x: number = 42;\n```';
+    const html = renderMarkdown(md);
+    expect(html).toContain('class="shiki');
+    expect(html).toContain('style="color:');
+  });
+
+  it('javascript block also renders highlighted', async () => {
+    await initShiki();
+    const md = '```javascript\nfunction foo() {}\n```';
+    const html = renderMarkdown(md);
+    expect(html).toContain('class="shiki');
+  });
+
+  it('json block renders highlighted', async () => {
+    await initShiki();
+    const md = '```json\n{"key": "value"}\n```';
+    const html = renderMarkdown(md);
+    expect(html).toContain('class="shiki');
+  });
+});
+
+// T-SHIKI-03: Unknown language falls back to plain rendering
+describe('SHIKI-03: Unknown language falls back', () => {
+  it('brainfuck falls back to nap-code-block', async () => {
+    await initShiki();
+    const md = '```brainfuck\n+++.\n```';
+    const html = renderMarkdown(md);
+    expect(html).toContain('class="nap-code-block"');
+    expect(html).not.toContain('class="shiki');
+  });
+});
+
+// T-SHIKI-04: No language tag falls back
+describe('SHIKI-04: No language tag falls back', () => {
+  it('bare fenced block falls back to nap-code-block', async () => {
+    await initShiki();
+    const md = '```\nplain text here\n```';
+    const html = renderMarkdown(md);
+    expect(html).toContain('class="nap-code-block"');
+  });
+});
+
+// T-SHIKI-05: data-source-line on fenced code blocks
+describe('SHIKI-05: data-source-line on fenced code blocks', () => {
+  it('fenced block has correct data-source-line (1-indexed)', async () => {
+    await initShiki();
+    const md = [
+      '# Heading',         // line 1
+      '',                   // line 2
+      'Paragraph.',         // line 3
+      '',                   // line 4
+      '```typescript',      // line 5
+      'const x = 1;',      // line 6
+      '```',                // line 7
+    ].join('\n');
+    const html = renderMarkdown(md);
+    // The fenced block starts at markdown line 4 (0-indexed), so data-source-line="5"
+    expect(html).toMatch(/<pre[^>]*data-source-line="5"/);
+  });
+
+  it('fallback block also has data-source-line', async () => {
+    await initShiki();
+    const md = 'text\n\n```\nplain\n```';
+    const html = renderMarkdown(md);
+    expect(html).toMatch(/<pre[^>]*data-source-line/);
+  });
+});
+
+// T-SHIKI-06: Theme switching changes code block colors
+describe('SHIKI-06: Theme switching changes code block colors', () => {
+  it('vitesse-dark and vitesse-light produce different output', async () => {
+    await initShiki();
+    const md = '```typescript\nconst x: number = 42;\n```';
+    const darkHtml = renderMarkdown(md, 'vitesse-dark');
+    const lightHtml = renderMarkdown(md, 'vitesse-light');
+    // Both should be shiki output
+    expect(darkHtml).toContain('class="shiki');
+    expect(lightHtml).toContain('class="shiki');
+    // Colors should differ between themes
+    expect(darkHtml).not.toBe(lightHtml);
   });
 });

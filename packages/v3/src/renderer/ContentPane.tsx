@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as monaco from 'monaco-editor';
 import { useNapStore } from './store';
 import { TabBar } from './TabBar';
@@ -6,20 +6,110 @@ import { registerNapkinMarkdown, registerShiftEnter } from './napkin-markdown';
 import { handleLinkClick } from './content-link-provider';
 import { applyGitGutter } from './git-gutter';
 import { registerThemes, applyTheme, findTheme } from './themes';
-import { renderMarkdown } from './markdown-renderer';
+import { renderMarkdown, initShiki } from './markdown-renderer';
 import { routeLink } from './routing-rules';
 import type { LinkResult } from './routing-rules';
+
+// Inject rendered-mode CSS once
+let cssInjected = false;
+function ensureRenderedCss(): void {
+  if (cssInjected) return;
+  cssInjected = true;
+  const style = document.createElement('style');
+  style.textContent = `
+    .nap-rendered pre,
+    .nap-rendered pre.shiki {
+      border-radius: 6px;
+      padding: 12px 16px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 8px 0;
+    }
+    .nap-rendered pre.nap-code-block {
+      background: var(--nap-bg-secondary);
+      border: 1px solid var(--nap-border);
+    }
+    .nap-rendered code {
+      font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+    }
+    .nap-rendered p code {
+      background: var(--nap-bg-secondary);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 13px;
+    }
+    .nap-rendered table {
+      border-collapse: collapse;
+      margin: 8px 0;
+      width: 100%;
+    }
+    .nap-rendered th, .nap-rendered td {
+      border: 1px solid var(--nap-border);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .nap-rendered th {
+      background: var(--nap-bg-secondary);
+      font-weight: 600;
+    }
+    .nap-rendered h1, .nap-rendered h2, .nap-rendered h3,
+    .nap-rendered h4, .nap-rendered h5, .nap-rendered h6 {
+      color: var(--nap-text);
+      margin: 16px 0 8px 0;
+    }
+    .nap-rendered h1 { font-size: 1.5em; }
+    .nap-rendered h2 { font-size: 1.3em; }
+    .nap-rendered h3 { font-size: 1.15em; }
+    .nap-rendered a {
+      color: var(--nap-link);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .nap-rendered hr {
+      border: none;
+      border-top: 1px solid var(--nap-border);
+      margin: 16px 0;
+    }
+    .nap-rendered blockquote {
+      border-left: 3px solid var(--nap-accent);
+      padding-left: 12px;
+      margin: 8px 0;
+      color: var(--nap-text-muted);
+    }
+    .nap-rendered .role-comment {
+      display: inline;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    .nap-rendered .role-architect { background: rgba(59,130,246,0.12); color: var(--nap-role-architect); }
+    .nap-rendered .role-user { background: rgba(34,197,94,0.12); color: var(--nap-role-user); }
+    .nap-rendered .role-fs-eng { background: rgba(34,197,94,0.12); color: var(--nap-role-fs-eng); }
+    .nap-rendered .role-test-arch { background: rgba(245,158,11,0.12); color: var(--nap-role-test-arch); }
+    .nap-rendered .role-test-eng { background: rgba(107,114,128,0.12); color: var(--nap-role-test-eng); }
+    .nap-rendered ul, .nap-rendered ol {
+      padding-left: 24px;
+      margin: 4px 0;
+    }
+    .nap-rendered li {
+      margin: 2px 0;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 // Register language + themes once
 let registered = false;
 function ensureRegistered(): void {
   if (registered) return;
   registered = true;
+  ensureRenderedCss();
   registerNapkinMarkdown();
   registerThemes();
   // Apply initial theme from persisted state
   const themeName = useNapStore.getState().currentThemeName;
   applyTheme(findTheme(themeName));
+  // Shiki init moved to component-level useEffect (needs state to trigger re-render)
   // Expose Monaco for medium tests (same pattern as window.__napStore__)
   (window as any).__monaco__ = monaco;
 }
@@ -39,6 +129,7 @@ export function ContentPane() {
   const leftTabs = useNapStore((s) => s.leftTabs);
   const activeLeftTabId = useNapStore((s) => s.activeLeftTabId);
   const leftPaneRenderMode = useNapStore((s) => s.leftPaneRenderMode);
+  const currentThemeName = useNapStore((s) => s.currentThemeName);
   const containerRef = useRef<HTMLDivElement>(null);
   const renderedRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -49,6 +140,12 @@ export function ContentPane() {
   const shiftEnterDisposableRef = useRef<monaco.IDisposable | null>(null);
   const gutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const focusGutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  const [shikiLoaded, setShikiLoaded] = useState(false);
+
+  // Initialize shiki (async — flips shikiLoaded when ready, triggering re-render of code blocks)
+  useEffect(() => {
+    initShiki().then(() => setShikiLoaded(true));
+  }, []);
 
   // Create editor once
   useEffect(() => {
@@ -312,14 +409,15 @@ export function ContentPane() {
     return unsub;
   }, []);
 
-  // Rendered mode: generate HTML when mode or content changes
+  // Rendered mode: generate HTML when mode, content, or theme changes
+  const shikiTheme = findTheme(currentThemeName).shikiTheme;
+
   useEffect(() => {
     if (leftPaneRenderMode !== 'rendered' || !renderedRef.current) return;
     const model = modelRef.current;
     if (!model) return;
-    const html = renderMarkdown(model.getValue());
-    renderedRef.current.innerHTML = html;
-  }, [leftPaneRenderMode, activeFilePath]);
+    renderedRef.current.innerHTML = renderMarkdown(model.getValue(), shikiTheme);
+  }, [leftPaneRenderMode, activeFilePath, shikiTheme, shikiLoaded]);
 
   // Also update rendered HTML when model content changes (external edits)
   useEffect(() => {
@@ -329,15 +427,15 @@ export function ContentPane() {
 
     const disposable = model.onDidChangeContent(() => {
       if (renderedRef.current) {
-        renderedRef.current.innerHTML = renderMarkdown(model.getValue());
+        renderedRef.current.innerHTML = renderMarkdown(model.getValue(), shikiTheme);
       }
     });
     // Initial render
     if (renderedRef.current) {
-      renderedRef.current.innerHTML = renderMarkdown(model.getValue());
+      renderedRef.current.innerHTML = renderMarkdown(model.getValue(), shikiTheme);
     }
     return () => disposable.dispose();
-  }, [leftPaneRenderMode, activeFilePath]);
+  }, [leftPaneRenderMode, activeFilePath, shikiTheme, shikiLoaded]);
 
   // Rendered view click handler: links → routeLink, Cmd+click → edit at source line
   function handleRenderedClick(e: React.MouseEvent<HTMLDivElement>) {

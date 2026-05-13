@@ -8,6 +8,7 @@ import * as monaco from 'monaco-editor';
 export interface ThemeDef {
   name: string;
   monacoTheme: monaco.editor.IStandaloneThemeData;
+  shikiTheme: string;
   shell: {
     bg: string;
     bgSecondary: string;
@@ -72,6 +73,7 @@ const darkRoleColors: ThemeDef['roleColors'] = {
 
 const dark: ThemeDef = {
   name: 'dark',
+  shikiTheme: 'vitesse-dark',
   monacoTheme: {
     base: 'vs-dark',
     inherit: true,
@@ -113,6 +115,7 @@ const lightCreamRoles: ThemeDef['roleColors'] = {
 
 const lightCream: ThemeDef = {
   name: 'light-cream',
+  shikiTheme: 'vitesse-light',
   monacoTheme: {
     base: 'vs',
     inherit: true,
@@ -154,6 +157,7 @@ const lightGrayRoles: ThemeDef['roleColors'] = {
 
 const lightGray: ThemeDef = {
   name: 'light-gray',
+  shikiTheme: 'vitesse-light',
   monacoTheme: {
     base: 'vs',
     inherit: true,
@@ -195,6 +199,7 @@ const lightSepiaRoles: ThemeDef['roleColors'] = {
 
 const lightSepia: ThemeDef = {
   name: 'light-sepia',
+  shikiTheme: 'vitesse-light',
   monacoTheme: {
     base: 'vs',
     inherit: true,
@@ -236,6 +241,7 @@ const lightBlueRoles: ThemeDef['roleColors'] = {
 
 const lightBlue: ThemeDef = {
   name: 'light-blue',
+  shikiTheme: 'vitesse-light',
   monacoTheme: {
     base: 'vs',
     inherit: true,

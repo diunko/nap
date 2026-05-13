@@ -172,3 +172,13 @@ describe('TK-01: Generic // comment color matches //DU: color', () => {
     }
   });
 });
+
+// T-SHIKI-07: shikiTheme field present on all themes
+describe('SHIKI-07: shikiTheme field on all themes', () => {
+  it('every theme has a non-empty shikiTheme string', () => {
+    for (const theme of THEMES) {
+      expect(typeof theme.shikiTheme).toBe('string');
+      expect(theme.shikiTheme.length).toBeGreaterThan(0);
+    }
+  });
+});
