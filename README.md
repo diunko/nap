@@ -29,10 +29,15 @@ You think together by threading `//` comments inline:
 
 ```
 * state management
-  * //DU: should we use zustand or redux?
+  * //DU: zustand or redux?
     * //A: zustand — 1KB, no boilerplate, already in the project
-      * //DU: sold. what about persistence?
-        * //A: save to ui-state.json on change, restore on mount
+* persistence
+  * //DU: where does state go on quit?
+    * //A: ui-state.json — written on shutdown, read on startup
+    * //A: no database, no reconciliation. files are truth.
+      * //DU: what about conflicts?
+      * //DU: agent writes while user is editing?
+        * //A: turn-based — last write wins, file watcher picks it up
 ```
 
 Shift+Enter continues at the same indent and prefix. Cmd+Enter sends to the agent. The napkin file IS the conversation.
