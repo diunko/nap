@@ -89,14 +89,10 @@ export function registerNapkinMarkdown(): void {
         // Headings: # at line start
         [/^#{1,6}\s.*$/, 'heading'],
 
-        // Role-prefixed comments — MUST come before generic //
-        [/\/\/A:.*$/, 'comment.architect'],
-        [/\/\/DU:.*$/, 'comment.user'],
-        [/\/\/FS:.*$/, 'comment.fs-eng'],
-        [/\/\/TA:.*$/, 'comment.test-arch'],
-        [/\/\/TE:.*$/, 'comment.test-eng'],
+        // Role-prefixed comments (//XX:) — any prefix. Color from decorations.
+        [/\/\/\w+:.*$/, 'comment.role'],
 
-        // Generic comment
+        // Generic comment (bare //)
         [/\/\/.*$/, 'comment'],
 
         // Bold: **text** — tokenize markers and content

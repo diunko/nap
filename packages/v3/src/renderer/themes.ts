@@ -4,9 +4,11 @@
 // THEMES array is the rotation list — comment out entries to remove from rotation.
 
 import * as monaco from 'monaco-editor';
+import { generatePaletteCss } from './role-palette';
 
 export interface ThemeDef {
   name: string;
+  isDark: boolean;
   monacoTheme: monaco.editor.IStandaloneThemeData;
   shikiTheme: string;
   shell: {
@@ -22,67 +24,49 @@ export interface ThemeDef {
     accent: string;
     link: string;
   };
-  roleColors: {
-    architect: string;
-    user: string;
-    'fs-eng': string;
-    'test-arch': string;
-    'test-eng': string;
-  };
 }
 
-// ── Shared token rules — comment foreground = comment.user foreground ──
+// ── Shared token rules ──
+// comment.role gets a neutral base color — actual per-prefix colors come from decorations.
+// Generic // comments (no role prefix) use the same base color.
 
-function tokenRules(
-  roleColors: ThemeDef['roleColors'],
-  opts: {
-    heading: string;
-    bulletMarker: string;
-    boldMarker: string;
-    inlineCode: string;
-    inlineCodeBg: string;
-    source: string;
-  },
-): monaco.editor.ITokenThemeRule[] {
+function tokenRules(opts: {
+  heading: string;
+  bulletMarker: string;
+  boldMarker: string;
+  inlineCode: string;
+  inlineCodeBg: string;
+  comment: string;
+  source: string;
+}): monaco.editor.ITokenThemeRule[] {
   return [
     { token: 'heading', foreground: opts.heading, fontStyle: 'bold' },
     { token: 'bullet.marker', foreground: opts.bulletMarker },
     { token: 'bold', fontStyle: 'bold' },
     { token: 'bold.marker', foreground: opts.boldMarker },
     { token: 'inline-code', foreground: opts.inlineCode, background: opts.inlineCodeBg },
-    // comment foreground = comment.user foreground (tokenizer tweak)
-    { token: 'comment', foreground: roleColors.user.slice(1) },
-    { token: 'comment.architect', foreground: roleColors.architect.slice(1) },
-    { token: 'comment.user', foreground: roleColors.user.slice(1) },
-    { token: 'comment.fs-eng', foreground: roleColors['fs-eng'].slice(1) },
-    { token: 'comment.test-arch', foreground: roleColors['test-arch'].slice(1) },
-    { token: 'comment.test-eng', foreground: roleColors['test-eng'].slice(1) },
+    { token: 'comment', foreground: opts.comment },
+    { token: 'comment.role', foreground: opts.comment },
     { token: 'source', foreground: opts.source },
   ];
 }
 
 // ── Dark theme (current appearance, exact hex match) ──
 
-const darkRoleColors: ThemeDef['roleColors'] = {
-  architect: '#3b82f6',
-  user: '#22c55e',
-  'fs-eng': '#22c55e',
-  'test-arch': '#f59e0b',
-  'test-eng': '#6b7280',
-};
-
 const dark: ThemeDef = {
   name: 'dark',
+  isDark: true,
   shikiTheme: 'vitesse-dark',
   monacoTheme: {
     base: 'vs-dark',
     inherit: true,
-    rules: tokenRules(darkRoleColors, {
+    rules: tokenRules({
       heading: 'e5e5e5',
       bulletMarker: '6b7280',
       boldMarker: '6b7280',
       inlineCode: 'ce9178',
       inlineCodeBg: '2d2d2d',
+      comment: '6b9955',
       source: 'd4d4d4',
     }),
     colors: { 'editor.background': '#1e1e1e' },
@@ -100,31 +84,24 @@ const dark: ThemeDef = {
     accent: '#007acc',
     link: '#9cdcfe',
   },
-  roleColors: darkRoleColors,
 };
 
 // ── Light-cream (warm, paper-like) ──
 
-const lightCreamRoles: ThemeDef['roleColors'] = {
-  architect: '#2563eb',
-  user: '#16a34a',
-  'fs-eng': '#16a34a',
-  'test-arch': '#d97706',
-  'test-eng': '#6b7280',
-};
-
 const lightCream: ThemeDef = {
   name: 'light-cream',
+  isDark: false,
   shikiTheme: 'vitesse-light',
   monacoTheme: {
     base: 'vs',
     inherit: true,
-    rules: tokenRules(lightCreamRoles, {
+    rules: tokenRules({
       heading: '1a1a1a',
       bulletMarker: '8a7e6a',
       boldMarker: '8a7e6a',
       inlineCode: 'a0522d',
       inlineCodeBg: 'f0e8d8',
+      comment: '5a7a4a',
       source: '3c3836',
     }),
     colors: { 'editor.background': '#fdf6e3' },
@@ -142,31 +119,24 @@ const lightCream: ThemeDef = {
     accent: '#268bd2',
     link: '#2573a7',
   },
-  roleColors: lightCreamRoles,
 };
 
 // ── Light-gray (cool, neutral) ──
 
-const lightGrayRoles: ThemeDef['roleColors'] = {
-  architect: '#2563eb',
-  user: '#16a34a',
-  'fs-eng': '#16a34a',
-  'test-arch': '#d97706',
-  'test-eng': '#6b7280',
-};
-
 const lightGray: ThemeDef = {
   name: 'light-gray',
+  isDark: false,
   shikiTheme: 'vitesse-light',
   monacoTheme: {
     base: 'vs',
     inherit: true,
-    rules: tokenRules(lightGrayRoles, {
+    rules: tokenRules({
       heading: '1a1a1a',
       bulletMarker: '888888',
       boldMarker: '888888',
       inlineCode: 'a0522d',
       inlineCodeBg: 'e8e8e8',
+      comment: '5a7a4a',
       source: '333333',
     }),
     colors: { 'editor.background': '#f5f5f5' },
@@ -184,31 +154,24 @@ const lightGray: ThemeDef = {
     accent: '#0078d4',
     link: '#0366d6',
   },
-  roleColors: lightGrayRoles,
 };
 
 // ── Light-sepia (e-reader feel) ──
 
-const lightSepiaRoles: ThemeDef['roleColors'] = {
-  architect: '#2563eb',
-  user: '#16a34a',
-  'fs-eng': '#16a34a',
-  'test-arch': '#d97706',
-  'test-eng': '#6b7280',
-};
-
 const lightSepia: ThemeDef = {
   name: 'light-sepia',
+  isDark: false,
   shikiTheme: 'vitesse-light',
   monacoTheme: {
     base: 'vs',
     inherit: true,
-    rules: tokenRules(lightSepiaRoles, {
+    rules: tokenRules({
       heading: '2a2015',
       bulletMarker: '8a7e6a',
       boldMarker: '8a7e6a',
       inlineCode: '8b4513',
       inlineCodeBg: 'ede3d0',
+      comment: '5a7a4a',
       source: '3d3425',
     }),
     colors: { 'editor.background': '#faf0dc' },
@@ -226,31 +189,24 @@ const lightSepia: ThemeDef = {
     accent: '#b07020',
     link: '#8a5a2b',
   },
-  roleColors: lightSepiaRoles,
 };
 
 // ── Light-blue (cool, slight blue tint) ──
 
-const lightBlueRoles: ThemeDef['roleColors'] = {
-  architect: '#2563eb',
-  user: '#16a34a',
-  'fs-eng': '#16a34a',
-  'test-arch': '#d97706',
-  'test-eng': '#6b7280',
-};
-
 const lightBlue: ThemeDef = {
   name: 'light-blue',
+  isDark: false,
   shikiTheme: 'vitesse-light',
   monacoTheme: {
     base: 'vs',
     inherit: true,
-    rules: tokenRules(lightBlueRoles, {
+    rules: tokenRules({
       heading: '1a1a2e',
       bulletMarker: '7a8a9a',
       boldMarker: '7a8a9a',
       inlineCode: 'a0522d',
       inlineCodeBg: 'e0e8f0',
+      comment: '5a7a4a',
       source: '2e3440',
     }),
     colors: { 'editor.background': '#f0f4f8' },
@@ -268,7 +224,6 @@ const lightBlue: ThemeDef = {
     accent: '#2563eb',
     link: '#1e50c0',
   },
-  roleColors: lightBlueRoles,
 };
 
 // ── Exported THEMES array — rotation list ──
@@ -298,7 +253,9 @@ function camelToKebab(s: string): string {
   return s.replace(/([A-Z])/g, '-$1').toLowerCase();
 }
 
-/** Apply a theme: set Monaco theme + CSS variables on :root. */
+let paletteStyleEl: HTMLStyleElement | null = null;
+
+/** Apply a theme: set Monaco theme + CSS variables on :root + palette CSS. */
 export function applyTheme(theme: ThemeDef): void {
   monaco.editor.setTheme(theme.name);
 
@@ -306,9 +263,14 @@ export function applyTheme(theme: ThemeDef): void {
   for (const [key, value] of Object.entries(theme.shell)) {
     root.style.setProperty(`--nap-${camelToKebab(key)}`, value);
   }
-  for (const [role, color] of Object.entries(theme.roleColors)) {
-    root.style.setProperty(`--nap-role-${role}`, color);
+
+  // Inject/update role palette CSS (20 hues × dark/light)
+  if (!paletteStyleEl) {
+    paletteStyleEl = document.createElement('style');
+    paletteStyleEl.id = 'nap-role-palette';
+    document.head.appendChild(paletteStyleEl);
   }
+  paletteStyleEl.textContent = generatePaletteCss(theme.isDark);
 }
 
 /** Find a theme by name, fallback to THEMES[0]. */

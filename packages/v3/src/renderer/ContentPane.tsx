@@ -7,6 +7,7 @@ import { handleLinkClick } from './content-link-provider';
 import { applyGitGutter } from './git-gutter';
 import { registerThemes, applyTheme, findTheme } from './themes';
 import { renderMarkdown, initShiki } from './markdown-renderer';
+import { roleDecoClass } from './role-palette';
 import { routeLink } from './routing-rules';
 import type { LinkResult } from './routing-rules';
 
@@ -81,12 +82,8 @@ function ensureRenderedCss(): void {
       display: inline;
       padding: 1px 4px;
       border-radius: 3px;
+      background: rgba(128,128,128,0.1);
     }
-    .nap-rendered .role-architect { background: rgba(59,130,246,0.12); color: var(--nap-role-architect); }
-    .nap-rendered .role-user { background: rgba(34,197,94,0.12); color: var(--nap-role-user); }
-    .nap-rendered .role-fs-eng { background: rgba(34,197,94,0.12); color: var(--nap-role-fs-eng); }
-    .nap-rendered .role-test-arch { background: rgba(245,158,11,0.12); color: var(--nap-role-test-arch); }
-    .nap-rendered .role-test-eng { background: rgba(107,114,128,0.12); color: var(--nap-role-test-eng); }
     .nap-rendered ul, .nap-rendered ol {
       padding-left: 24px;
       margin: 4px 0;
@@ -140,6 +137,7 @@ export function ContentPane() {
   const shiftEnterDisposableRef = useRef<monaco.IDisposable | null>(null);
   const gutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const focusGutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  const roleDecorationsRef = useRef<string[]>([]);
   const [shikiLoaded, setShikiLoaded] = useState(false);
 
   // Initialize shiki (async — flips shikiLoaded when ready, triggering re-render of code blocks)
@@ -191,6 +189,9 @@ export function ContentPane() {
 
     // Auto-save on change (1s debounce)
     editor.onDidChangeModelContent(() => {
+      // Refresh role comment decorations immediately
+      refreshRoleDecorations();
+
       clearTimeout(saveTimerRef.current);
       const filePath = useNapStore.getState().activeFilePath;
       if (!filePath) return;
@@ -239,6 +240,37 @@ export function ContentPane() {
       if (editor.getModel() !== model) return;
       gutterDecorationsRef.current = applyGitGutter(editor, hunks, gutterDecorationsRef.current);
     }, 200);
+  }
+
+  // Apply role comment decorations — scan for //XX: and color by hash
+  function refreshRoleDecorations() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const model = editor.getModel();
+    if (!model) return;
+
+    const decorations: monaco.editor.IModelDeltaDecoration[] = [];
+    const lineCount = model.getLineCount();
+    const roleRegex = /\/\/(\w+):/g;
+
+    for (let i = 1; i <= lineCount; i++) {
+      const line = model.getLineContent(i);
+      let match: RegExpExecArray | null;
+      roleRegex.lastIndex = 0;
+      while ((match = roleRegex.exec(line)) !== null) {
+        const prefix = match[1];
+        const cls = roleDecoClass(prefix);
+        const startCol = match.index + 1;
+        const endCol = line.length + 1; // color to end of line
+        decorations.push({
+          range: new monaco.Range(i, startCol, i, endCol),
+          options: { inlineClassName: cls },
+        });
+        break; // one role comment per line
+      }
+    }
+
+    roleDecorationsRef.current = editor.deltaDecorations(roleDecorationsRef.current, decorations);
   }
 
   // Handle link clicks from Monaco
@@ -368,8 +400,9 @@ export function ContentPane() {
       // Start watching this file
       window.electronAPI?.fileWatch(activeFilePath);
 
-      // Load git gutter
+      // Load git gutter + role decorations
       refreshGitGutter(activeFilePath);
+      refreshRoleDecorations();
     })();
 
     return () => {
@@ -402,8 +435,9 @@ export function ContentPane() {
         editor.setScrollTop(scrollTop);
       }
 
-      // Refresh git gutter
+      // Refresh git gutter + role decorations
       if (filePath) refreshGitGutter(filePath);
+      refreshRoleDecorations();
     });
 
     return unsub;

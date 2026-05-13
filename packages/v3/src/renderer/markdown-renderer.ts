@@ -7,14 +7,7 @@
 import MarkdownIt from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
 import type { HighlighterGeneric, BundledLanguage, BundledTheme } from 'shiki';
-
-const ROLE_PREFIXES: Record<string, string> = {
-  A: 'architect',
-  DU: 'user',
-  FS: 'fs-eng',
-  TA: 'test-arch',
-  TE: 'test-eng',
-};
+import { roleCssClass } from './role-palette';
 
 // ── Shiki highlighter (lazy-initialized) ──
 
@@ -98,15 +91,13 @@ const defaultTextRender =
 md.renderer.rules.text = (tokens, idx, options, env, self) => {
   const content = tokens[idx].content;
 
-  // Match //XX: at start of text token (common in napkin list items)
+  // Match //XX: at start of text token (any prefix — hash to palette color)
   const roleMatch = content.match(/^\/\/(\w+):\s/);
   if (roleMatch) {
     const prefix = roleMatch[1];
-    const role = ROLE_PREFIXES[prefix];
-    if (role) {
-      const escaped = md.utils.escapeHtml(content);
-      return `<span class="role-comment role-${role}">${escaped}</span>`;
-    }
+    const cls = roleCssClass(prefix);
+    const escaped = md.utils.escapeHtml(content);
+    return `<span class="role-comment ${cls}">${escaped}</span>`;
   }
 
   return defaultTextRender(tokens, idx, options, env, self);
@@ -125,15 +116,12 @@ export function renderMarkdown(source: string, shikiTheme?: string): string {
 
   const html = md.render(source);
 
-  // Post-process: catch role comments not at the start of a text token
+  // Post-process: catch role comments not at the start of a text token (any //XX: prefix)
   return html.replace(
-    /\/\/(A|DU|FS|TA|TE):\s([^<]*)/g,
+    /\/\/(\w+):\s([^<]*)/g,
     (match, prefix: string, rest: string) => {
-      const role = ROLE_PREFIXES[prefix];
-      if (role) {
-        return `<span class="role-comment role-${role}">//${prefix}: ${rest}</span>`;
-      }
-      return match;
+      const cls = roleCssClass(prefix);
+      return `<span class="role-comment ${cls}">//${prefix}: ${rest}</span>`;
     },
   );
 }
