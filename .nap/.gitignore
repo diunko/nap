@@ -1,5 +1,2 @@
-nap.db
-nap.db-shm
-nap.db-wal
 sock
-**/tmp/
+ui-state.json

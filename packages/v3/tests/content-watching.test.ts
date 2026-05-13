@@ -46,8 +46,7 @@ describe('Content file watching', () => {
     const debounceMs = 200;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const watcher = fs.watch(filePath, (eventType) => {
-      if (eventType !== 'change') return;
+    const watcher = fs.watch(filePath, () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         const content = fs.readFileSync(filePath, 'utf-8');
@@ -80,8 +79,7 @@ describe('Content file watching', () => {
     const debounceMs = 200;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const watcher = fs.watch(filePath, (eventType) => {
-      if (eventType !== 'change') return;
+    const watcher = fs.watch(filePath, () => {
       if (pendingWrites.has(filePath)) return; // echo suppression
 
       clearTimeout(debounceTimer);
@@ -116,8 +114,7 @@ describe('Content file watching', () => {
     const debounceMs = 200;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const watcher = fs.watch(filePath, (eventType) => {
-      if (eventType !== 'change') return;
+    const watcher = fs.watch(filePath, () => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         const content = fs.readFileSync(filePath, 'utf-8');
@@ -140,5 +137,42 @@ describe('Content file watching', () => {
     // Should have received exactly once with final content
     expect(received).toHaveLength(1);
     expect(received[0]).toBe('v5');
+  });
+
+  // T-0100-W05: Atomic write (temp+rename) triggers watcher
+  // Claude Code uses atomic writes — write to temp file, rename over original.
+  // This produces a 'rename' event, not 'change'.
+  it('W05: atomic write (temp+rename) triggers watcher callback', async () => {
+    const dir = setup();
+    const filePath = path.join(dir, 'test.md');
+    fs.writeFileSync(filePath, 'original content');
+
+    const received: string[] = [];
+    const debounceMs = 200;
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    // Mirror main.ts watcher logic — must not filter on eventType
+    const watcher = fs.watch(filePath, () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          received.push(content);
+        } catch { /* file may be gone briefly during rename */ }
+      }, debounceMs);
+    });
+    cleanups.push(() => watcher.close());
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Atomic write: write temp file, rename over original (what Claude Code does)
+    const tmpFile = filePath + '.tmp';
+    fs.writeFileSync(tmpFile, 'atomic update');
+    fs.renameSync(tmpFile, filePath);
+
+    await new Promise((r) => setTimeout(r, debounceMs + 100));
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toBe('atomic update');
   });
 });

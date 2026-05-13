@@ -236,8 +236,7 @@ app.whenReady().then(async () => {
     if (!filePath) return;
 
     try {
-      const watcher = nodeFs.watch(filePath, (eventType) => {
-        if (eventType !== 'change') return;
+      const watcher = nodeFs.watch(filePath, () => {
         if (pendingContentWrites.has(filePath)) return; // echo suppression
 
         clearTimeout(contentDebounceTimer);
