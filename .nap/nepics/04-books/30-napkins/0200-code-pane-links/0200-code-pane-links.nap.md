@@ -1,8 +1,6 @@
 # 0200 — link routing + code in right pane
 
 * what exists (from 0100)
-  * //A: testing
-  * //TE: file watching only triggers on `change` events — atomic writes (temp+rename) produce `rename` events and get ignored. W04 test passes because it uses writeFileSync (direct write) but real agent edits don't update Monaco. Fix: drop the eventType filter in main.ts:240, and re-establish watcher after rename (inode gone).
   * left pane: Monaco with napkin-markdown, ephemeral, file watching, auto-save
   * right pane: terminal only (TerminalPane wraps Terminal)
   * routing rules: agent → right/terminal, .nap/ file → left/monaco, fallback → right
@@ -29,7 +27,11 @@
         * //A: if the path is relative (no leading `/`), resolve relative to the file containing the link
       * //A: for .md links — resolved relative to the current file in left pane
         * //DU: I think this clashes with "treat as repo-root relative" above
-          * //A: <pls clarify in the thread>
+          * //A: you're right, it's two different rules for two different link types. let me clean it up:
+          * //A: rule 1 — links to CODE files (`.ts`, `.tsx`, `.json`, non-.md): leading `/` means project-root-relative. no leading `/` means relative to the file containing the link. both end up in the right pane.
+          * //A: rule 2 — links to .md files: ALWAYS relative to the file containing the link. `./02-foo.md` = same dir. `../bar.md` = parent dir. these stay in the left pane.
+          * //A: the distinction is by extension, not by `/` prefix. `.md` → left, everything else → right.
+          * //A: no clash — different link types, different resolution, different destination pane.
         * //A: e.g. you're reading `01-copy-pipeline.md`, it links to `[next](./02-id-universe.md)`
         * //A: click → left pane opens `02-id-universe.md` in the same directory
         * //A: resolution: dirname(activeFilePath) + linkPath
@@ -61,8 +63,28 @@
   * brief flash/fade effect (yellow background → transparent, ~1.5s)
   * Monaco: editor.revealLineInCenter() + deltaDecorations for highlight
 
+* git gutter decorations (left pane)
+  * green bar in gutter = added lines (not in last commit)
+  * blue bar = modified lines
+  * red triangle = deleted lines (between two existing lines)
+  * on file open: run `git diff` in main process → parse hunks → apply decorations
+  * on auto-save: re-run diff (piggyback on existing 1s debounce)
+  * new IPC: `file:git-diff` → returns list of `{ type: 'add'|'modify'|'delete', startLine, endLine }`
+  * Monaco: deltaDecorations with gutter CSS classes
+
+* file watching for code files (right pane)
+  * same fs.watch pattern as left pane
+  * right pane code is read-only → no write-echo suppression needed
+  * on external change → re-read file, update Monaco model, preserve scroll position
+
 * not in scope
   * tabs in either pane
+    * //A: on tabs — here's my thinking:
+    * //A: LEFT pane: tabs feel useful here. you're reading chapter 1, click a link to chapter 2, want to flip back. without tabs, chapter 1 is gone. this is the reading workflow — you need history.
+    * //A: RIGHT pane: tabs feel wrong. the right pane is reference material — whatever the left pane is pointing at. terminal OR code, one at a time. if you click a new file:line link, the old code view is stale context. you don't flip back to it — you flip to a new reference.
+    * //A: proposal: add tabs to left pane in 0200. right pane stays ephemeral. this matches how you'd read a book with footnotes — you keep your place in the book (left tabs), but the footnote/reference view (right) just shows the latest thing.
+    * //A: the tab model: vscode-style ephemeral tabs. single-click = preview (reuses tab). double-click = pin (sticks). closing last tab = placeholder. cmd-w to close. tab shows filename only, tooltip shows full path.
+    * //A: what do you think?
   * // agent interaction (cmd-enter, shift-enter)
     * // shift-enter is not an agent interaction, right?
     * //A: right — shift-enter is pure typing convenience, no agent involved
@@ -70,7 +92,20 @@
     * // should be simple enough to accomodate in 0200?
     * //A: yes, it's small and self-contained. adding it to scope below.
   * git integration
+    * //DU: what if we include a simple version: highlight what's currently not commited
+      * //DU: using bars on the left, or smth 
+        * //DU: (i think there is some lightweight monaco highlighter for that)
+        * //DU: how hard would that be?
+      * //A: not hard. Monaco has a built-in diff decorator — `editor.deltaDecorations` with gutter classes. the work is:
+        * //A: 1. run `git diff <file>` in main process (or `git diff --no-index` for untracked)
+        * //A: 2. parse the diff → list of changed/added/deleted line ranges
+        * //A: 3. apply gutter decorations: green bar = added, blue bar = modified, red triangle = deleted
+        * //A: the VS Code approach: they use `git diff --unified=0` and parse hunk headers. about 50 lines of diff parsing + 20 lines of decoration. lightweight.
+        * //A: the gotcha: need to re-run diff after each auto-save (1s debounce already exists, piggyback on it). and on file open.
+        * //A: adding to scope — it's small enough and gives immediate visual value.
   * file watching for code files (read-only, snapshot at open time)
+    * //DU: this should be included
+    * //A: agreed — code files should update when they change on disk too. same pattern as left pane: fs.watch the open file, debounce, update model. read-only so no write-echo to worry about. adding to scope.
 
 * shift-enter: continue at same indent + prefix
   * you're on a line like `  * //DU: some thought`
