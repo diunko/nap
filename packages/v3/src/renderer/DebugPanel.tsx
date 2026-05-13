@@ -178,18 +178,18 @@ export function DebugPanel() {
           top: 0,
           bottom: 0,
           width: 20,
-          borderLeft: '1px solid #333',
-          backgroundColor: '#1a1a1a',
+          borderLeft: '1px solid var(--nap-border)',
+          backgroundColor: 'var(--nap-bg)',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 10,
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#252526')}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--nap-bg-secondary)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1a1a1a')}
       >
-        <span style={{ color: '#555', fontSize: 10, writingMode: 'vertical-rl' }}>debug</span>
+        <span style={{ color: 'var(--nap-text-dim)', fontSize: 10, writingMode: 'vertical-rl' }}>debug</span>
       </div>
     );
   }
@@ -209,11 +209,11 @@ export function DebugPanel() {
         right: 0,
         top: 0,
         bottom: 0,
-        borderLeft: '1px solid #333',
-        backgroundColor: '#1a1a1a',
+        borderLeft: '1px solid var(--nap-border)',
+        backgroundColor: 'var(--nap-bg)',
         fontFamily: 'Menlo, Monaco, monospace',
         fontSize: 11,
-        color: '#ccc',
+        color: 'var(--nap-text-secondary)',
         overflowX: 'hidden',
         overflowY: 'auto',
         display: 'flex',
@@ -241,8 +241,8 @@ export function DebugPanel() {
       <div style={{
         padding: '6px 10px',
         fontSize: 10,
-        color: '#555',
-        borderBottom: '1px solid #333',
+        color: 'var(--nap-text-dim)',
+        borderBottom: '1px solid var(--nap-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -254,8 +254,8 @@ export function DebugPanel() {
         <span
           onClick={toggleDebugPanel}
           style={{ cursor: 'pointer', padding: '0 4px', color: '#555' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#ccc')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--nap-text-secondary)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--nap-text-dim)')}
         >
           &#x2715;
         </span>
@@ -264,7 +264,7 @@ export function DebugPanel() {
       {/* Tab bar */}
       <div style={{
         display: 'flex',
-        borderBottom: '1px solid #333',
+        borderBottom: '1px solid var(--nap-border)',
         flexShrink: 0,
       }}>
         {tabs.map((tab) => (
@@ -279,7 +279,7 @@ export function DebugPanel() {
               cursor: 'pointer',
               fontSize: 10,
               color: debugPanelTab === tab.key ? '#ccc' : '#555',
-              borderBottom: debugPanelTab === tab.key ? '1px solid #007acc' : '1px solid transparent',
+              borderBottom: debugPanelTab === tab.key ? '1px solid var(--nap-accent)' : '1px solid transparent',
               userSelect: 'none',
             }}
             onMouseEnter={(e) => {

@@ -121,7 +121,7 @@ function FileRow({
     >
       <span
         style={{
-          color: '#6b7280',
+          color: 'var(--nap-text-muted)',
           flexShrink: 0,
           width: 10,
           textAlign: 'center',
@@ -136,7 +136,7 @@ function FileRow({
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          color: file.isMain ? '#e5e5e5' : '#9cdcfe',
+          color: file.isMain ? 'var(--nap-text)' : 'var(--nap-link)',
           fontWeight: file.isMain ? 600 : 'normal',
         }}
       >
@@ -145,24 +145,24 @@ function FileRow({
       {showControls && (
         <span data-file-controls style={{ display: 'flex', gap: 8, flexShrink: 0, visibility: 'hidden' }}>
           <span
-            style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
+            style={{ color: 'var(--nap-text-muted)', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
             onClick={(e) => {
               e.stopPropagation();
               navigator.clipboard.writeText(file.absPath);
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--nap-text)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--nap-text-muted)')}
           >
             &#x2398;
           </span>
           <span
-            style={{ color: '#6b7280', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
+            style={{ color: 'var(--nap-text-muted)', fontSize: 12, cursor: 'pointer', padding: '0 2px' }}
             onClick={(e) => {
               e.stopPropagation();
               window.electronAPI?.openFilePath(file.absPath);
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--nap-text)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--nap-text-muted)')}
           >
             &#x2197;
           </span>
@@ -219,8 +219,8 @@ function EntryTree({
                 borderRadius: 3,
               }}
             >
-              <span style={{ color: '#6b7280', flexShrink: 0, width: 10, textAlign: 'center', fontSize: 12 }}>*</span>
-              <span style={{ color: '#cccccc' }}>{dir.name}/</span>
+              <span style={{ color: 'var(--nap-text-muted)', flexShrink: 0, width: 10, textAlign: 'center', fontSize: 12 }}>*</span>
+              <span style={{ color: 'var(--nap-text-secondary)' }}>{dir.name}/</span>
             </div>
             {canExpand && dir.children.length > 0 && (
               <EntryTree
@@ -267,12 +267,12 @@ function NapkinCard({
       style={{
         padding: '0 12px 0 9px',
         cursor: 'pointer',
-        background: isFocused ? '#37373d' : 'transparent',
-        borderLeft: isFocused ? '3px solid #007acc' : '3px solid transparent',
+        background: isFocused ? 'var(--nap-bg-tertiary)' : 'transparent',
+        borderLeft: isFocused ? '3px solid var(--nap-accent)' : '3px solid transparent',
         transition: 'background 0.15s',
       }}
       onMouseEnter={(e) => {
-        if (!isFocused) e.currentTarget.style.background = '#2a2d2e';
+        if (!isFocused) e.currentTarget.style.background = 'var(--nap-bg-hover)';
       }}
       onMouseLeave={(e) => {
         if (!isFocused) e.currentTarget.style.background = 'transparent';
@@ -289,14 +289,14 @@ function NapkinCard({
           userSelect: 'none',
         }}
       >
-        <span style={{ color: '#6b7280', flexShrink: 0 }}>*</span>
+        <span style={{ color: 'var(--nap-text-muted)', flexShrink: 0 }}>*</span>
         <span
           style={{
             flex: 1,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            color: isFocused ? '#e5e5e5' : '#cccccc',
+            color: isFocused ? 'var(--nap-text)' : 'var(--nap-text-secondary)',
           }}
         >
           {napkin.slug}
@@ -355,7 +355,7 @@ function NapkinCard({
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    color: '#cccccc',
+                    color: 'var(--nap-text-secondary)',
                   }}
                 >
                   {agent.name}/
@@ -388,8 +388,8 @@ function NapkinCard({
                       }
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
-                      <span style={{ color: '#6b7280', flexShrink: 0, fontSize: 12 }}>*</span>
-                      <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: 12 }}>
+                      <span style={{ color: 'var(--nap-text-muted)', flexShrink: 0, fontSize: 12 }}>*</span>
+                      <span style={{ color: 'var(--nap-text-muted)', fontStyle: 'italic', fontSize: 12 }}>
                         [terminal]
                       </span>
                     </div>
@@ -411,7 +411,7 @@ function NapkinCard({
             <div
               style={{
                 padding: '2px 0 2px 18px',
-                color: '#6b7280',
+                color: 'var(--nap-text-muted)',
                 fontSize: 11,
                 cursor: 'default',
               }}
@@ -458,12 +458,12 @@ function ArchitectCard({
       style={{
         padding: '0 12px 0 9px',
         cursor: archClickable ? 'pointer' : 'default',
-        background: isFocused ? '#37373d' : 'transparent',
-        borderLeft: isFocused ? '3px solid #007acc' : '3px solid transparent',
+        background: isFocused ? 'var(--nap-bg-tertiary)' : 'transparent',
+        borderLeft: isFocused ? '3px solid var(--nap-accent)' : '3px solid transparent',
         transition: 'background 0.15s',
       }}
       onMouseEnter={(e) => {
-        if (!isFocused) e.currentTarget.style.background = '#2a2d2e';
+        if (!isFocused) e.currentTarget.style.background = 'var(--nap-bg-hover)';
       }}
       onMouseLeave={(e) => {
         if (!isFocused) e.currentTarget.style.background = 'transparent';
@@ -480,14 +480,14 @@ function ArchitectCard({
           userSelect: 'none',
         }}
       >
-        <span style={{ color: '#6b7280', flexShrink: 0 }}>*</span>
+        <span style={{ color: 'var(--nap-text-muted)', flexShrink: 0 }}>*</span>
         <span
           style={{
             flex: 1,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            color: isFocused ? '#e5e5e5' : '#cccccc',
+            color: isFocused ? 'var(--nap-text)' : 'var(--nap-text-secondary)',
           }}
         >
           {architect.name}
@@ -634,12 +634,12 @@ export function Sidebar() {
         width,
         minWidth: 180,
         height: '100%',
-        background: '#252526',
-        borderRight: '1px solid #3c3c3c',
+        background: 'var(--nap-bg-secondary)',
+        borderRight: '1px solid var(--nap-border)',
         fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
         fontSize: 13,
         lineHeight: 1.55,
-        color: '#cccccc',
+        color: 'var(--nap-text-secondary)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -658,11 +658,11 @@ export function Sidebar() {
           cursor: 'col-resize',
           zIndex: 10,
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#007acc')}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--nap-accent)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
       />
       {/* Filter bar */}
-      <div style={{ padding: '10px 12px', borderBottom: '1px solid #3c3c3c' }}>
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--nap-border)' }}>
         <input
           ref={filterInputRef}
           data-testid="browser-filter"
@@ -679,9 +679,9 @@ export function Sidebar() {
           }}
           style={{
             width: '100%',
-            background: '#1e1e1e',
-            border: browserFilterVisible ? '1px solid #007acc' : '1px solid #3c3c3c',
-            color: browserFilterVisible ? '#cccccc' : '#6b7280',
+            background: 'var(--nap-bg)',
+            border: browserFilterVisible ? '1px solid var(--nap-accent)' : '1px solid var(--nap-border)',
+            color: browserFilterVisible ? 'var(--nap-text-secondary)' : 'var(--nap-text-muted)',
             fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
             fontSize: 12,
             padding: '5px 10px',
@@ -713,7 +713,7 @@ export function Sidebar() {
 
         {/* Separator */}
         {architects.length > 0 && (
-          <div style={{ height: 1, background: '#3c3c3c', margin: '6px 12px' }} />
+          <div style={{ height: 1, background: 'var(--nap-border)', margin: '6px 12px' }} />
         )}
 
         {/* Napkins */}
@@ -731,7 +731,7 @@ export function Sidebar() {
           <div
             style={{
               padding: '4px 12px 4px 21px',
-              color: '#525252',
+              color: 'var(--nap-text-dim)',
               fontSize: 12,
               cursor: 'default',
             }}

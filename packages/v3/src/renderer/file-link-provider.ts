@@ -21,7 +21,7 @@ function isUrl(text: string, startIndex: number): boolean {
   return /^https?:\/\//.test(token);
 }
 
-function extractPathAndLocation(match: string): { path: string; line?: number; col?: number } {
+export function extractPathAndLocation(match: string): { path: string; line?: number; col?: number } {
   const lineColMatch = match.match(/^(.+?):(\d+)(?::(\d+))?$/);
   if (lineColMatch) {
     return {
@@ -65,7 +65,7 @@ export function createFileLinkProvider(
           },
           text: matchText,
           activate: (_event, linkText) => {
-            const { path: filePath } = extractPathAndLocation(linkText);
+            const { path: filePath, line, col } = extractPathAndLocation(linkText);
             const cwd = getCwd();
             let resolved: string;
             if (filePath.startsWith('/')) {
@@ -76,7 +76,13 @@ export function createFileLinkProvider(
               const clean = filePath.startsWith('./') ? filePath.slice(2) : filePath;
               resolved = `${base}/${clean}`;
             }
-            onOpen(resolved);
+            // Pass resolved path with :line:col so the routing function can parse it
+            let fullMatch = resolved;
+            if (line !== undefined) {
+              fullMatch += `:${line}`;
+              if (col !== undefined) fullMatch += `:${col}`;
+            }
+            onOpen(fullMatch);
           },
         });
       }

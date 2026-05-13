@@ -9,6 +9,8 @@ import { Gutter } from './Gutter';
 import { useNapStore, loadPersistedUiState } from './store';
 import { createTerminalInstance, getTerminal, disposeTerminal } from './terminal-registry';
 import { createFileLinkProvider } from './file-link-provider';
+import { routeLink } from './routing-rules';
+import type { LinkResult } from './routing-rules';
 import type { AppSnapshot } from '../shared/bridge-types';
 import '@xterm/xterm/css/xterm.css';
 
@@ -102,7 +104,7 @@ function ResizeHandle() {
         background: 'transparent',
         zIndex: 5,
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#007acc')}
+      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--nap-accent)')}
       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
     />
   );
@@ -168,7 +170,17 @@ function App() {
           createFileLinkProvider(
             entry.terminal,
             () => '/',
-            (filePath) => window.electronAPI?.openFilePath(filePath),
+            (rawMatch) => {
+              const store = useNapStore.getState();
+              const result = routeLink({ href: rawMatch, sourceFilePath: '' });
+              if (result.action === 'openDoc') {
+                store.openDoc(result.path);
+              } else if (result.action === 'openCode') {
+                store.openCode({ path: result.path, line: result.line, col: result.col });
+              } else if (result.action === 'openExternal') {
+                window.electronAPI?.shellOpenExternal(result.url);
+              }
+            },
           ),
         );
         // Signal ready after next tick (terminal needs to be opened first)
@@ -186,6 +198,7 @@ function App() {
   });
 
   // Cmd+B → toggle sidebar, Cmd+D → toggle debug panel, Cmd+` → toggle kanban, Cmd+W → close tab
+  // Cmd+T → cycle theme, Cmd+Shift+H → toggle render mode
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
@@ -202,12 +215,18 @@ function App() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
         e.preventDefault();
-        // Close active tab in the focused pane (heuristic: if code pane has focus, close right; else close left)
         const state = useNapStore.getState();
-        // Try closing in the pane that has an active tab
         if (state.activeLeftTabId) {
           state.closeActiveTab('left');
         }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault();
+        useNapStore.getState().cycleTheme();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
+        e.preventDefault();
+        useNapStore.getState().toggleRenderMode();
       }
     }
     window.addEventListener('keydown', handleKeyDown);
@@ -215,7 +234,7 @@ function App() {
   }, [toggleSidebar, toggleDebugPanel, toggleKanban]);
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: '#1e1e1e' }}>
+    <div style={{ display: 'flex', height: '100%', background: 'var(--nap-bg)' }}>
       <KanbanOverlay />
       {nepics.length > 0 && <Gutter />}
       {sidebarVisible && <Sidebar />}

@@ -1,0 +1,13 @@
+{
+  "cc_session_uuid": "be42b5a7-fca5-4a1c-bd1f-0ff64f2f549c",
+  "role": "test-arch",
+  "name": "001-test-arch-qol",
+  "napkin": "0300-qol-tweaks",
+  "nepic": "04-books",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1778664202384,
+  "started": true,
+  "exited": false,
+  "done": true
+}

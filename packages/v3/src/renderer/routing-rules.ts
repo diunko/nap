@@ -93,9 +93,13 @@ export function routeLink(ctx: LinkContext): LinkResult {
   const projectRoot = extractProjectRoot(sourceFilePath);
 
   if (parsed.path.startsWith('/')) {
-    // Absolute → project root
-    const resolved = normalizePath(projectRoot + parsed.path);
-    return { action: 'openCode', path: resolved, line: parsed.line, col: parsed.col };
+    if (sourceFilePath) {
+      // Absolute → project root relative (in-content links where / means project root)
+      const resolved = normalizePath(projectRoot + parsed.path);
+      return { action: 'openCode', path: resolved, line: parsed.line, col: parsed.col };
+    }
+    // No source context (terminal links) — path is already fully resolved
+    return { action: 'openCode', path: parsed.path, line: parsed.line, col: parsed.col };
   }
 
   if (parsed.path.startsWith('./') || parsed.path.startsWith('../')) {

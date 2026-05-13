@@ -21,8 +21,8 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose, onPin }: TabBar
       data-testid="tab-bar"
       style={{
         display: 'flex',
-        background: '#252526',
-        borderBottom: '1px solid #3c3c3c',
+        background: 'var(--nap-bg-secondary)',
+        borderBottom: '1px solid var(--nap-border)',
         flexShrink: 0,
         overflow: 'hidden',
         minHeight: 32,
@@ -30,7 +30,11 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose, onPin }: TabBar
     >
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
-        const label = tab.type === 'terminal' ? tab.path.split('-').slice(-2).join('-') : basename(tab.path);
+        const label = tab.title
+          ? tab.title
+          : tab.type === 'terminal'
+            ? tab.path.split('-').slice(-2).join('-')
+            : basename(tab.path);
 
         return (
           <div
@@ -55,10 +59,10 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose, onPin }: TabBar
               cursor: 'pointer',
               fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
               fontSize: 12,
-              color: isActive ? '#e5e5e5' : '#6b7280',
+              color: isActive ? 'var(--nap-text)' : 'var(--nap-text-muted)',
               fontStyle: tab.ephemeral ? 'italic' : 'normal',
-              background: isActive ? '#1e1e1e' : 'transparent',
-              borderRight: '1px solid #3c3c3c',
+              background: isActive ? 'var(--nap-bg)' : 'transparent',
+              borderRight: '1px solid var(--nap-border)',
               whiteSpace: 'nowrap',
               flexShrink: 0,
               maxWidth: 180,
@@ -77,7 +81,7 @@ export function TabBar({ tabs, activeTabId, onActivate, onClose, onPin }: TabBar
                 lineHeight: 1,
                 padding: '0 2px',
                 borderRadius: 3,
-                color: '#6b7280',
+                color: 'var(--nap-text-muted)',
               }}
               onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
               onMouseLeave={(e) => { e.currentTarget.style.opacity = '0'; }}

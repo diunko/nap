@@ -79,13 +79,13 @@ function PermissionModal({ agent }: { agent: AgentState }) {
     >
       <div
         style={{
-          background: '#1e1e1e',
-          border: '1px solid #3c3c3c',
+          background: 'var(--nap-bg)',
+          border: '1px solid var(--nap-border)',
           borderRadius: 8,
           padding: 24,
           maxWidth: 500,
           width: '90%',
-          color: '#e5e5e5',
+          color: 'var(--nap-text)',
           position: 'relative',
         }}
       >
@@ -98,7 +98,7 @@ function PermissionModal({ agent }: { agent: AgentState }) {
             right: 12,
             background: 'none',
             border: 'none',
-            color: '#6b7280',
+            color: 'var(--nap-text-muted)',
             cursor: 'pointer',
             fontSize: 18,
             lineHeight: 1,
@@ -113,12 +113,12 @@ function PermissionModal({ agent }: { agent: AgentState }) {
         </div>
         <pre
           style={{
-            background: '#252526',
-            border: '1px solid #3c3c3c',
+            background: 'var(--nap-bg-secondary)',
+            border: '1px solid var(--nap-border)',
             borderRadius: 4,
             padding: 12,
             fontSize: 12,
-            color: '#9cdcfe',
+            color: 'var(--nap-link)',
             overflow: 'auto',
             maxHeight: 200,
             margin: '0 0 16px 0',
@@ -190,14 +190,14 @@ function SuccessorPrompt({ agent }: { agent: AgentState }) {
         justifyContent: 'center',
         height: '100%',
         fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
-        color: '#6b7280',
+        color: 'var(--nap-text-muted)',
         gap: 16,
       }}
     >
-      <div style={{ fontSize: 14, color: '#9ca3af' }}>
+      <div style={{ fontSize: 14, color: 'var(--nap-text-muted)' }}>
         Session expired — invoke a successor?
       </div>
-      <div style={{ fontSize: 12, color: '#6b7280', maxWidth: 400, textAlign: 'center' }}>
+      <div style={{ fontSize: 12, color: 'var(--nap-text-muted)', maxWidth: 400, textAlign: 'center' }}>
         A fresh Claude will read the original prompt, response, and codebase to continue this work.
       </div>
       <button
@@ -336,7 +336,7 @@ export function Terminal() {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: '#1e1e1e',
+        background: 'var(--nap-bg)',
         overflow: 'hidden',
       }}
     >
@@ -345,35 +345,35 @@ export function Terminal() {
         data-testid="terminal-breadcrumb"
         style={{
           padding: '8px 16px',
-          borderBottom: '1px solid #3c3c3c',
+          borderBottom: '1px solid var(--nap-border)',
           display: 'flex',
           alignItems: 'center',
           gap: 0,
-          background: '#252526',
+          background: 'var(--nap-bg-secondary)',
           flexShrink: 0,
           fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
           fontSize: 13,
         }}
       >
-        <span style={{ color: '#6b7280', padding: '2px 0' }}>S</span>
+        <span style={{ color: 'var(--nap-text-muted)', padding: '2px 0' }}>S</span>
         {breadcrumb?.napkinSlug && (
           <>
-            <span style={{ color: '#3c3c3c', margin: '0 8px' }}>&gt;</span>
-            <span style={{ color: '#6b7280', padding: '2px 0' }}>
+            <span style={{ color: 'var(--nap-border)', margin: '0 8px' }}>&gt;</span>
+            <span style={{ color: 'var(--nap-text-muted)', padding: '2px 0' }}>
               {breadcrumb.napkinSlug}
             </span>
           </>
         )}
         {breadcrumb?.agentName && (
           <>
-            <span style={{ color: '#3c3c3c', margin: '0 8px' }}>&gt;</span>
-            <span style={{ color: '#e5e5e5', fontWeight: 600 }}>
+            <span style={{ color: 'var(--nap-border)', margin: '0 8px' }}>&gt;</span>
+            <span style={{ color: 'var(--nap-text)', fontWeight: 600 }}>
               {breadcrumb.agentName}
             </span>
           </>
         )}
         {breadcrumb?.label && (
-          <span style={{ color: '#6b7280', fontSize: 12, marginLeft: 12 }}>
+          <span style={{ color: 'var(--nap-text-muted)', fontSize: 12, marginLeft: 12 }}>
             {breadcrumb.label}
           </span>
         )}

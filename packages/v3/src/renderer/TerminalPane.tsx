@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import * as monaco from 'monaco-editor';
 import { useNapStore } from './store';
 import { TabBar } from './TabBar';
 import { Terminal } from './Terminal';
+import { registerThemes } from './themes';
 
 // Language detection from file extension
 function detectLanguage(filePath: string): string {
@@ -73,10 +74,11 @@ function CodeEditor() {
   useEffect(() => {
     if (!containerRef.current) return;
     ensureCss();
+    registerThemes();
 
     const editor = monaco.editor.create(containerRef.current, {
       readOnly: true,
-      theme: 'napkin-dark',
+      theme: useNapStore.getState().currentThemeName,
       minimap: { enabled: false },
       lineNumbers: 'on',
       fontSize: 14,
@@ -198,7 +200,7 @@ export function TerminalPane() {
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        background: '#1e1e1e',
+        background: 'var(--nap-bg)',
         overflow: 'hidden',
         minWidth: 200,
       }}
@@ -228,7 +230,7 @@ export function TerminalPane() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#6b7280',
+            color: 'var(--nap-text-muted)',
             fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
             fontSize: 14,
           }}

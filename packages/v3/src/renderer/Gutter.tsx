@@ -42,8 +42,8 @@ export function Gutter() {
       style={{
         width: 60,
         minWidth: 60,
-        background: '#1e1e1e',
-        borderRight: '1px solid #3c3c3c',
+        background: 'var(--nap-bg)',
+        borderRight: '1px solid var(--nap-border)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -69,22 +69,22 @@ export function Gutter() {
               fontSize: 15,
               fontWeight: 600,
               cursor: 'pointer',
-              color: isActive ? '#e5e5e5' : '#6b7280',
-              background: isActive ? '#37373d' : 'transparent',
+              color: isActive ? 'var(--nap-text)' : 'var(--nap-text-muted)',
+              background: isActive ? 'var(--nap-bg-tertiary)' : 'transparent',
               position: 'relative',
               transition: 'all 0.15s',
               fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
             }}
             onMouseEnter={(e) => {
               if (!isActive) {
-                e.currentTarget.style.background = '#37373d';
-                e.currentTarget.style.color = '#cccccc';
+                e.currentTarget.style.background = 'var(--nap-bg-tertiary)';
+                e.currentTarget.style.color = 'var(--nap-text-secondary)';
               }
             }}
             onMouseLeave={(e) => {
               if (!isActive) {
                 e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.color = '#6b7280';
+                e.currentTarget.style.color = 'var(--nap-text-muted)';
               }
             }}
           >
@@ -97,7 +97,7 @@ export function Gutter() {
                   top: 10,
                   bottom: 10,
                   width: 3,
-                  background: '#e5e5e5',
+                  background: 'var(--nap-text)',
                   borderRadius: '0 2px 2px 0',
                 }}
               />
@@ -121,19 +121,19 @@ export function Gutter() {
           fontSize: 20,
           fontWeight: 300,
           cursor: 'pointer',
-          color: '#6b7280',
+          color: 'var(--nap-text-muted)',
           background: 'transparent',
           position: 'relative',
           transition: 'all 0.15s',
           fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#37373d';
-          e.currentTarget.style.color = '#007acc';
+          e.currentTarget.style.background = 'var(--nap-bg-tertiary)';
+          e.currentTarget.style.color = 'var(--nap-accent)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.background = 'transparent';
-          e.currentTarget.style.color = '#6b7280';
+          e.currentTarget.style.color = 'var(--nap-text-muted)';
         }}
       >
         +
@@ -146,8 +146,8 @@ export function Gutter() {
             position: 'absolute',
             left: 64,
             bottom: 12,
-            background: '#252526',
-            border: '1px solid #007acc',
+            background: 'var(--nap-bg-secondary)',
+            border: '1px solid var(--nap-accent)',
             borderRadius: 4,
             padding: '4px 8px',
             zIndex: 100,
@@ -173,7 +173,7 @@ export function Gutter() {
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#e5e5e5',
+              color: 'var(--nap-text)',
               outline: 'none',
               fontFamily: "'Menlo', monospace",
               fontSize: 13,

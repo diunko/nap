@@ -1,13 +1,17 @@
 import { create } from 'zustand';
 import type { AppSnapshot, NapkinState, AgentState, NepicInfo, WatcherEvent } from '../shared/bridge-types';
+import { THEMES, applyTheme, findTheme } from './themes';
 
 export type CardViewMode = 'collapsed' | 'focused' | 'extended';
+
+export const TERMINAL_TAB_ID = '__terminal__';
 
 export interface Tab {
   id: string;
   path: string;
   type: 'file' | 'terminal';
   ephemeral: boolean;
+  title?: string;
   scrollPos?: number;
   cursorPos?: { lineNumber: number; column: number };
 }
@@ -41,6 +45,10 @@ export interface NapStore {
   rightTabs: Tab[];
   activeRightTabId: string | null;
 
+  // ── Theme + render mode ──
+  currentThemeName: string;
+  leftPaneRenderMode: 'edit' | 'rendered';
+
   // ── Actions ──
   applySnapshot: (snapshot: AppSnapshot) => void;
   setActiveTerminal: (id: string) => void;
@@ -63,6 +71,8 @@ export interface NapStore {
   setBrowserFilterVisible: (visible: boolean) => void;
   toggleDebugPanel: () => void;
   setDebugPanelTab: (tab: 'model' | 'filesystem' | 'events') => void;
+  cycleTheme: () => void;
+  toggleRenderMode: () => void;
 }
 
 // Per-nepic renderer state memory (not persisted)
@@ -154,6 +164,9 @@ export const useNapStore = create<NapStore>((set, get) => ({
   rightTabs: [],
   activeRightTabId: null,
 
+  currentThemeName: THEMES[0].name,
+  leftPaneRenderMode: 'edit' as const,
+
   // Snapshot only updates model state — renderer-only state preserved
   applySnapshot: (snapshot: AppSnapshot) => {
     const prev = get();
@@ -227,13 +240,31 @@ export const useNapStore = create<NapStore>((set, get) => ({
 
   setActiveTerminal: (id: string) => {
     const prev = get();
-    // Ensure terminal tab exists in right pane
-    const [tabs, tabId] = upsertTab(prev.rightTabs, id, 'terminal', false);
+
+    // Look up agent name for the terminal tab title
+    const allAgents = [...prev.napkins.flatMap((n) => n.agents), ...prev.architects];
+    const agent = allAgents.find((a) => a.id === id);
+    const title = agent?.name ?? id;
+
+    // Find or create the sentinel terminal tab (always at position 0)
+    const existingIdx = prev.rightTabs.findIndex((t) => t.id === TERMINAL_TAB_ID);
+    let tabs: Tab[];
+    if (existingIdx !== -1) {
+      // Update in place
+      tabs = prev.rightTabs.map((t) =>
+        t.id === TERMINAL_TAB_ID ? { ...t, path: id, title } : t,
+      );
+    } else {
+      // Create at position 0
+      const termTab: Tab = { id: TERMINAL_TAB_ID, path: id, type: 'terminal', ephemeral: false, title };
+      tabs = [termTab, ...prev.rightTabs];
+    }
+
     set({
       activeTerminalId: id,
       rightPaneMode: 'terminal',
       rightTabs: tabs,
-      activeRightTabId: tabId,
+      activeRightTabId: TERMINAL_TAB_ID,
     });
   },
 
@@ -275,13 +306,9 @@ export const useNapStore = create<NapStore>((set, get) => ({
         activeFilePath: activeTab?.path ?? null,
       });
     } else {
-      // Don't close terminal tabs for running agents
+      // Permanent terminal slot — can never be closed
       const tab = prev.rightTabs.find((t) => t.id === tabId);
-      if (tab?.type === 'terminal') {
-        const allAgents = [...prev.napkins.flatMap((n) => n.agents), ...prev.architects];
-        const agent = allAgents.find((a) => a.id === tab.path);
-        if (agent?.running) return;
-      }
+      if (tab?.id === TERMINAL_TAB_ID) return;
       const [tabs, nextActive] = removeTab(prev.rightTabs, tabId, prev.activeRightTabId);
       const activeTab = tabs.find((t) => t.id === nextActive);
       set({
@@ -389,11 +416,31 @@ export const useNapStore = create<NapStore>((set, get) => ({
     set({ debugPanelTab: tab });
     persistUiState({ debugPanelCollapsed: get().debugPanelCollapsed, debugPanelTab: tab });
   },
+
+  cycleTheme: () => {
+    const current = get().currentThemeName;
+    const idx = THEMES.findIndex((t) => t.name === current);
+    const next = THEMES[(idx + 1) % THEMES.length];
+    set({ currentThemeName: next.name });
+    applyTheme(next);
+    persistUiState({ theme: next.name });
+  },
+
+  toggleRenderMode: () => {
+    const next = get().leftPaneRenderMode === 'edit' ? 'rendered' : 'edit';
+    set({ leftPaneRenderMode: next });
+    persistUiState({ leftPaneRenderMode: next });
+  },
 }));
 
 // ── UI state persistence helpers ──
 
-function persistUiState(partial: { debugPanelCollapsed?: boolean; debugPanelTab?: string }) {
+function persistUiState(partial: {
+  debugPanelCollapsed?: boolean;
+  debugPanelTab?: string;
+  theme?: string;
+  leftPaneRenderMode?: string;
+}) {
   if (typeof window !== 'undefined' && window.electronAPI?.saveUiState) {
     window.electronAPI.saveUiState(partial);
   }
@@ -408,6 +455,15 @@ export async function loadPersistedUiState(): Promise<void> {
   if (typeof state.debugPanelCollapsed === 'boolean') updates.debugPanelCollapsed = state.debugPanelCollapsed;
   if (state.debugPanelTab === 'model' || state.debugPanelTab === 'filesystem' || state.debugPanelTab === 'events') {
     updates.debugPanelTab = state.debugPanelTab;
+  }
+  // Theme — fallback to THEMES[0] if saved name not found
+  if (typeof state.theme === 'string') {
+    const theme = findTheme(state.theme as string);
+    updates.currentThemeName = theme.name;
+  }
+  // Render mode
+  if (state.leftPaneRenderMode === 'edit' || state.leftPaneRenderMode === 'rendered') {
+    updates.leftPaneRenderMode = state.leftPaneRenderMode;
   }
   if (Object.keys(updates).length > 0) useNapStore.setState(updates);
 }

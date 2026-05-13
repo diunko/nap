@@ -1,18 +1,25 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as monaco from 'monaco-editor';
 import { useNapStore } from './store';
 import { TabBar } from './TabBar';
 import { registerNapkinMarkdown, registerShiftEnter } from './napkin-markdown';
 import { handleLinkClick } from './content-link-provider';
 import { applyGitGutter } from './git-gutter';
+import { registerThemes, applyTheme, findTheme } from './themes';
+import { renderMarkdown } from './markdown-renderer';
+import { routeLink } from './routing-rules';
 import type { LinkResult } from './routing-rules';
 
-// Register language + theme once
+// Register language + themes once
 let registered = false;
 function ensureRegistered(): void {
   if (registered) return;
   registered = true;
   registerNapkinMarkdown();
+  registerThemes();
+  // Apply initial theme from persisted state
+  const themeName = useNapStore.getState().currentThemeName;
+  applyTheme(findTheme(themeName));
   // Expose Monaco for medium tests (same pattern as window.__napStore__)
   (window as any).__monaco__ = monaco;
 }
@@ -31,13 +38,17 @@ export function ContentPane() {
   const activeFilePath = useNapStore((s) => s.activeFilePath);
   const leftTabs = useNapStore((s) => s.leftTabs);
   const activeLeftTabId = useNapStore((s) => s.activeLeftTabId);
+  const leftPaneRenderMode = useNapStore((s) => s.leftPaneRenderMode);
   const containerRef = useRef<HTMLDivElement>(null);
+  const renderedRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const modelRef = useRef<monaco.editor.ITextModel | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const suppressExternalRef = useRef(false);
   const gutterDecorationsRef = useRef<string[]>([]);
   const shiftEnterDisposableRef = useRef<monaco.IDisposable | null>(null);
+  const gutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  const focusGutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
 
   // Create editor once
   useEffect(() => {
@@ -46,12 +57,14 @@ export function ContentPane() {
 
     const editor = monaco.editor.create(containerRef.current, {
       language: 'napkin-markdown',
-      theme: 'napkin-dark',
+      theme: useNapStore.getState().currentThemeName,
       wordWrap: 'on',
       minimap: { enabled: false },
       lineNumbers: 'off',
       quickSuggestions: false,
       suggestOnTriggerCharacters: false,
+      tabSize: 2,
+      insertSpaces: true,
       fontSize: 14,
       fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
       scrollBeyondLastLine: false,
@@ -69,6 +82,15 @@ export function ContentPane() {
 
     // Register shift-enter keybinding
     shiftEnterDisposableRef.current = registerShiftEnter(editor);
+
+    // Re-request git gutter on editor focus (debounced — catches stale decorations)
+    editor.onDidFocusEditorText(() => {
+      clearTimeout(focusGutterTimerRef.current);
+      focusGutterTimerRef.current = setTimeout(() => {
+        const filePath = useNapStore.getState().activeFilePath;
+        if (filePath) refreshGitGutter(filePath);
+      }, 300);
+    });
 
     // Auto-save on change (1s debounce)
     editor.onDidChangeModelContent(() => {
@@ -98,6 +120,8 @@ export function ContentPane() {
 
     return () => {
       clearTimeout(saveTimerRef.current);
+      clearTimeout(gutterTimerRef.current);
+      clearTimeout(focusGutterTimerRef.current);
       shiftEnterDisposableRef.current?.dispose();
       observer.disconnect();
       editor.dispose();
@@ -105,12 +129,19 @@ export function ContentPane() {
     };
   }, []);
 
-  // Refresh git gutter decorations
-  async function refreshGitGutter(filePath: string) {
-    const editor = editorRef.current;
-    if (!editor || !window.electronAPI?.fileGitDiff) return;
-    const hunks = await window.electronAPI.fileGitDiff(filePath);
-    gutterDecorationsRef.current = applyGitGutter(editor, hunks, gutterDecorationsRef.current);
+  // Refresh git gutter decorations — 200ms delay + model identity guard
+  function refreshGitGutter(filePath: string) {
+    clearTimeout(gutterTimerRef.current);
+    gutterTimerRef.current = setTimeout(async () => {
+      const editor = editorRef.current;
+      if (!editor || !window.electronAPI?.fileGitDiff) return;
+      // Capture model identity before async call
+      const model = editor.getModel();
+      const hunks = await window.electronAPI.fileGitDiff(filePath);
+      // Guard: only apply if model hasn't changed
+      if (editor.getModel() !== model) return;
+      gutterDecorationsRef.current = applyGitGutter(editor, hunks, gutterDecorationsRef.current);
+    }, 200);
   }
 
   // Handle link clicks from Monaco
@@ -281,6 +312,70 @@ export function ContentPane() {
     return unsub;
   }, []);
 
+  // Rendered mode: generate HTML when mode or content changes
+  useEffect(() => {
+    if (leftPaneRenderMode !== 'rendered' || !renderedRef.current) return;
+    const model = modelRef.current;
+    if (!model) return;
+    const html = renderMarkdown(model.getValue());
+    renderedRef.current.innerHTML = html;
+  }, [leftPaneRenderMode, activeFilePath]);
+
+  // Also update rendered HTML when model content changes (external edits)
+  useEffect(() => {
+    if (leftPaneRenderMode !== 'rendered') return;
+    const model = modelRef.current;
+    if (!model) return;
+
+    const disposable = model.onDidChangeContent(() => {
+      if (renderedRef.current) {
+        renderedRef.current.innerHTML = renderMarkdown(model.getValue());
+      }
+    });
+    // Initial render
+    if (renderedRef.current) {
+      renderedRef.current.innerHTML = renderMarkdown(model.getValue());
+    }
+    return () => disposable.dispose();
+  }, [leftPaneRenderMode, activeFilePath]);
+
+  // Rendered view click handler: links → routeLink, Cmd+click → edit at source line
+  function handleRenderedClick(e: React.MouseEvent<HTMLDivElement>) {
+    // Cmd+click → switch to edit mode at source line
+    if (e.metaKey || e.ctrlKey) {
+      e.preventDefault();
+      let el = e.target as HTMLElement | null;
+      while (el && !el.hasAttribute('data-source-line')) {
+        el = el.parentElement;
+        if (el === renderedRef.current) { el = null; break; }
+      }
+      if (el) {
+        const line = parseInt(el.getAttribute('data-source-line')!, 10);
+        useNapStore.getState().toggleRenderMode();
+        const editor = editorRef.current;
+        if (editor) {
+          setTimeout(() => {
+            editor.setPosition({ lineNumber: line, column: 1 });
+            editor.revealLineInCenter(line);
+            editor.focus();
+          }, 0);
+        }
+      }
+      return;
+    }
+
+    // Link clicks → route
+    const anchor = (e.target as HTMLElement).closest?.('a');
+    if (anchor) {
+      e.preventDefault();
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+      const sourceFilePath = useNapStore.getState().activeFilePath ?? '';
+      const result = routeLink({ href, sourceFilePath });
+      handleResult(result);
+    }
+  }
+
   return (
     <div
       data-testid="content-pane"
@@ -288,7 +383,7 @@ export function ContentPane() {
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        background: '#1e1e1e',
+        background: 'var(--nap-bg)',
         overflow: 'hidden',
         minWidth: 200,
       }}
@@ -312,7 +407,7 @@ export function ContentPane() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#6b7280',
+            color: 'var(--nap-text-muted)',
             fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
             fontSize: 14,
           }}
@@ -320,15 +415,35 @@ export function ContentPane() {
           no file open
         </div>
       )}
-      {/* Editor container — always mounted so useEffect can attach Monaco */}
+      {/* Editor container — always mounted, hidden in rendered mode */}
       <div
         ref={containerRef}
         style={{
           flex: 1,
           minHeight: 0,
-          display: activeFilePath ? 'block' : 'none',
+          display: activeFilePath && leftPaneRenderMode === 'edit' ? 'block' : 'none',
         }}
       />
+      {/* Rendered view — visible in rendered mode */}
+      {activeFilePath && leftPaneRenderMode === 'rendered' && (
+        <div
+          ref={renderedRef}
+          data-testid="rendered-view"
+          className="nap-rendered"
+          onClick={handleRenderedClick}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflow: 'auto',
+            padding: '16px 24px',
+            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+            fontSize: 14,
+            lineHeight: 1.6,
+            color: 'var(--nap-text-secondary)',
+            cursor: 'default',
+          }}
+        />
+      )}
     </div>
   );
 }

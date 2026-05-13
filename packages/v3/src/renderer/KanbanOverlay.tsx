@@ -145,15 +145,15 @@ function KanbanCard({
     <div
       data-testid="kanban-card"
       style={{
-        background: '#37373d',
+        background: 'var(--nap-bg-tertiary)',
         borderRadius: 5,
-        border: expanded ? '1px solid #007acc' : '1px solid transparent',
+        border: expanded ? '1px solid var(--nap-accent)' : '1px solid transparent',
         overflow: 'hidden',
         transition: 'border-color 0.15s',
         flexShrink: 0,
       }}
       onMouseEnter={(e) => {
-        if (!expanded) (e.currentTarget as HTMLDivElement).style.borderColor = '#3c3c3c';
+        if (!expanded) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--nap-border)';
       }}
       onMouseLeave={(e) => {
         if (!expanded) (e.currentTarget as HTMLDivElement).style.borderColor = 'transparent';
@@ -175,7 +175,7 @@ function KanbanCard({
           style={{
             flex: 1,
             fontSize: 12,
-            color: '#cccccc',
+            color: 'var(--nap-text-secondary)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -200,14 +200,14 @@ function KanbanCard({
                 onArchive(napkin.slug);
               }}
               style={{
-                color: '#6b7280',
+                color: 'var(--nap-text-muted)',
                 fontSize: 13,
                 cursor: 'pointer',
                 padding: '0 2px',
                 transition: 'color 0.1s',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#007acc')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--nap-accent)')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--nap-text-muted)')}
             >
               &uarr;
             </span>
@@ -225,7 +225,7 @@ function KanbanCard({
                 }
               }}
               style={{
-                color: '#6b7280',
+                color: 'var(--nap-text-muted)',
                 fontSize: 13,
                 cursor: 'pointer',
                 padding: '0 2px',
@@ -233,8 +233,8 @@ function KanbanCard({
                 display: 'inline-block',
                 transform: isDone && cmdHeld ? 'rotate(90deg)' : 'none',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#007acc')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--nap-accent)')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--nap-text-muted)')}
             >
               &rarr;
             </span>
@@ -245,7 +245,7 @@ function KanbanCard({
       {/* Card body (expanded) */}
       {expanded && (
         <div data-testid="kanban-card-body" style={{ padding: '0 10px 8px 10px', fontSize: 12, lineHeight: 1.5 }}>
-          <div style={{ height: 1, background: '#3c3c3c', margin: '0 0 5px 0' }} />
+          <div style={{ height: 1, background: 'var(--nap-border)', margin: '0 0 5px 0' }} />
 
           {/* Napkin content */}
           <NapkinContentLines content={napkin.napkinContent} />
@@ -290,7 +290,7 @@ function KanbanCard({
                     alignItems: 'center',
                     gap: 3,
                     fontSize: 11,
-                    color: '#6b7280',
+                    color: 'var(--nap-text-muted)',
                   }}
                 >
                   <KanbanDot agent={agent} size={6} />
@@ -413,8 +413,8 @@ export function KanbanOverlay() {
         left: 0,
         right: 0,
         height: kanbanVisible ? '70vh' : 0,
-        background: '#1a1a2e',
-        borderBottom: kanbanVisible ? '2px solid #007acc' : 'none',
+        background: 'var(--nap-bg)',
+        borderBottom: kanbanVisible ? '2px solid var(--nap-accent)' : 'none',
         overflow: 'hidden',
         transition: 'height 0.25s ease',
         zIndex: 100,
@@ -426,17 +426,17 @@ export function KanbanOverlay() {
       <div
         style={{
           padding: '12px 24px',
-          borderBottom: '1px solid #3c3c3c',
+          borderBottom: '1px solid var(--nap-border)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexShrink: 0,
         }}
       >
-        <span style={{ fontSize: 14, fontWeight: 600, color: '#e5e5e5' }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--nap-text)' }}>
           project board
         </span>
-        <span style={{ color: '#6b7280', fontSize: 12 }}>
+        <span style={{ color: 'var(--nap-text-muted)', fontSize: 12 }}>
           click card to expand &middot; &rarr; to navigate &middot; hold &#x2318; to archive &middot; &#x2318;` to close
         </span>
       </div>
@@ -447,7 +447,7 @@ export function KanbanOverlay() {
           display: 'flex',
           flex: 1,
           gap: 1,
-          background: '#3c3c3c',
+          background: 'var(--nap-border)',
           overflowX: 'auto',
           overflowY: 'hidden',
           minHeight: 0,
@@ -460,7 +460,7 @@ export function KanbanOverlay() {
             style={{
               flex: 1,
               minWidth: 180,
-              background: '#1a1a2e',
+              background: 'var(--nap-bg)',
               display: 'flex',
               flexDirection: 'column',
               minHeight: 0,
@@ -473,10 +473,10 @@ export function KanbanOverlay() {
                 padding: '10px 14px',
                 fontSize: 11,
                 fontWeight: 600,
-                color: '#6b7280',
+                color: 'var(--nap-text-muted)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.8px',
-                borderBottom: '1px solid #3c3c3c',
+                borderBottom: '1px solid var(--nap-border)',
                 flexShrink: 0,
               }}
             >
