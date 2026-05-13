@@ -1,52 +1,39 @@
+# Why we work this way
 
-**NAP — Napkin Agent Protocol**
+You and an architect brainstorm for fifteen minutes. What survives fits on a napkin — compressed, load-bearing bullets. Agents unfold the napkin into specs, tests, and code. You come back and everything is there — every decision, every wrong turn, every recovery.
 
-*Scratch a napkin with AI in 15 minutes. Spawn agents. Take a nap. Wake up to a working system.*
+## Why separate agents
 
----
+**Context.** One agent can't hold the napkin, the spec, the tests, the codebase, and the iteration history. By the third bug fix, it's forgotten why the system is shaped the way it is.
 
-### 1. Capture
+**Quality.** If the same agent writes code and tests, the tests reflect the author's blind spots. The bugs that ship are the ones the author can't see.
 
-You and Claude riff for fifteen minutes. Not writing a spec — thinking together. Every idea gets stress-tested at the speed of thought. What survives fits on a napkin: twelve bullets, each one load-bearing.
+**Thinking.** Designing where things break is a different act than building them. Test strategy is design work — it deserves its own context window.
 
-A napkin takes one minute to read. You can iterate ten times before lunch. Try that with a PRD.
+## Why full Claude Code sessions
 
-One napkin per feature. Stack them — that's your system. Nothing to skim. Nothing to skip. Every bullet earns its place.
+Every agent is a full CC session in its own terminal. Full history, full tools, full skills. You can click on any agent, watch it think, ask questions, steer mid-task. Agents are teammates you can talk to, not functions returning strings.
 
-### 2. Unfold
+## The cycle
 
-`nap start`. The napkin decompresses. Architect reads bullets, unfolds specs. Specs unfold into user journeys. Journeys unfold into test cases. Test cases unfold into code. Code runs. Tests run. Failures get fixed. Next napkin gets picked up.
+```
+idea → napkin → spec + stories → test design → code → tests → ship → next idea
+```
 
-Agents talk to each other. Agents unblock each other. Agents poke you only when they actually need you. The rest of the time: go take a nap.
+Each step is an unfolding. Each unfolding is visible.
 
-### Why not built-in subagents?
+## What a napkin looks like
 
-Claude Code can spawn subagents internally. They run, return a result, disappear. You never see them think. You can't talk to them. You can't watch them work. They're functions, not teammates.
+```
+* the feature
+  * what it does (one line)
+  * why it matters (the tension it resolves)
+* the hard part
+  * constraint A
+  * constraint B (conflicts with A — that's the design problem)
+* the approach
+  * solution (labels, not sentences)
+  * tradeoff acknowledged
+```
 
-Every NAP agent is a full Claude Code session running in its own terminal. Full message history. Full tool access. Full skills. The human can click on any agent, watch it think in real time, ask follow-up questions, invoke skills, steer it mid-task. The agent is a first-class citizen — not buried inside another agent's context.
-
-This is the whole point. Agents are visible, interactive, inspectable. Not hidden behind an API call.
-
-### 3. Inspect
-
-Come back from your nap. Everything that happened is there.
-
-Click any agent. Full scrollback. Every decision, every wrong turn, every recovery. Not a summary — the actual thinking. Ask it a follow-up question. It has the full context. It was there.
-
-This isn't "let robots do the work." Robots do the work AND show their work. Every napkin bullet traceable to a spec, to a journey, to a test, to a line of code. Go as shallow or as deep as you want.
-
----
-
-### The Promise
-
-| YOU | NAP |
-|---|---|
-| 15 min riffing with AI | Napkin that survives contact with reality |
-| `nap start` | Agents unfold, communicate, self-heal |
-| Come back whenever | Full thinking of every agent, fully interactive |
-
-Napkin -> spec -> journeys -> tests -> code -> running system.
-
-Each step is an unfolding. Each unfolding is visible. Each agent is a teammate you can talk to, not a function that returns a string.
-
-*Wake up. Ship it.*
+The architect and test-architect use `/napkin` to brainstorm and write these. All roles read them. If you need to reformat a document into napkin style, use `/napkin-format`.
