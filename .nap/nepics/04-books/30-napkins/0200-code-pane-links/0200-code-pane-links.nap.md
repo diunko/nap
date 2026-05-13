@@ -19,23 +19,18 @@
     * .md relative link → left pane, replaces current file
       * patterns: `[text](./02-id-universe.md)`, `[text](../specs/foo.spec.md)`
     * // what exactly is open (which path) in each of these cases? 
-      * //A: for file:line — the resolved absolute path of the source file
-        * //A: e.g. you're reading `.nap/nepics/04-books/.../01-copy-pipeline.md` in left pane
-        * //A: it contains `[copy_document.ts:51](/modules/server/.../copy_document.ts#L51)`
-        * //A: click → right pane opens `/Users/diunko/dvl/space-b/nap/modules/server/.../copy_document.ts` at line 51
-        * //A: the path in the link is absolute from project root, so resolution is: projectRoot + linkPath
-        * //A: if the path is relative (no leading `/`), resolve relative to the file containing the link
-      * //A: for .md links — resolved relative to the current file in left pane
+      * //A: resolution by link type
+        * //A: code links (non-.md) → right pane
+          * leading `/` → projectRoot + path
+          * no leading `/` → dirname(currentFile) + path
+        * //A: .md links → left pane
+          * always relative to current file
+          * `./02-foo.md` = same dir, `../bar.md` = parent
+        * //A: https → shell.openExternal, no resolution
+      * //A: distinction is by extension, not `/` prefix
         * //DU: I think this clashes with "treat as repo-root relative" above
-          * //A: you're right, it's two different rules for two different link types. let me clean it up:
-          * //A: rule 1 — links to CODE files (`.ts`, `.tsx`, `.json`, non-.md): leading `/` means project-root-relative. no leading `/` means relative to the file containing the link. both end up in the right pane.
-          * //A: rule 2 — links to .md files: ALWAYS relative to the file containing the link. `./02-foo.md` = same dir. `../bar.md` = parent dir. these stay in the left pane.
-          * //A: the distinction is by extension, not by `/` prefix. `.md` → left, everything else → right.
-          * //A: no clash — different link types, different resolution, different destination pane.
-        * //A: e.g. you're reading `01-copy-pipeline.md`, it links to `[next](./02-id-universe.md)`
-        * //A: click → left pane opens `02-id-universe.md` in the same directory
-        * //A: resolution: dirname(activeFilePath) + linkPath
-      * //A: for https — no path resolution, just hand the URL to shell.openExternal
+          * //A: no clash — two separate rules for two link types
+          * //A: `.md` → left, everything else → right
     * https:// or http:// → default browser
       * patterns: `[text](https://...)`, bare `https://...`
   * implemented as Monaco link provider (registerLinkProvider)
@@ -77,35 +72,60 @@
   * right pane code is read-only → no write-echo suppression needed
   * on external change → re-read file, update Monaco model, preserve scroll position
 
-* not in scope
-  * tabs in either pane
-    * //A: on tabs — here's my thinking:
-    * //A: LEFT pane: tabs feel useful here. you're reading chapter 1, click a link to chapter 2, want to flip back. without tabs, chapter 1 is gone. this is the reading workflow — you need history.
-    * //A: RIGHT pane: tabs feel wrong. the right pane is reference material — whatever the left pane is pointing at. terminal OR code, one at a time. if you click a new file:line link, the old code view is stale context. you don't flip back to it — you flip to a new reference.
-    * //A: proposal: add tabs to left pane in 0200. right pane stays ephemeral. this matches how you'd read a book with footnotes — you keep your place in the book (left tabs), but the footnote/reference view (right) just shows the latest thing.
-    * //A: the tab model: vscode-style ephemeral tabs. single-click = preview (reuses tab). double-click = pin (sticks). closing last tab = placeholder. cmd-w to close. tab shows filename only, tooltip shows full path.
-    * //A: what do you think?
+* tabs (both panes, vscode-style ephemeral)
+  * left pane — .nap files
+  * right pane — code files + terminal
+    * //A: left pane — tabs useful (reading workflow, flip between chapters)
+    * //A: right pane — tabs wrong (reference material, always latest)
+    * //A: proposal: tabs on left only, right stays ephemeral
+      * vscode-style ephemeral: single-click = preview (reuses), double-click = pin
+        * //DU: yeah, right, i was thinking vscode-inspired:
+          * //DU: ephemeral tab for clicking around
+            * //DU: e.g. you click around on links in left pane, right ephemeral gets updated
+            * //DU: and when you dbl-click the tab or the link, the tab becomes real
+            * //DU: would that be too hard for this iteration?
+              * //A: not hard — it's the same mechanic on both sides
+                * //A: left pane
+                  * single-click .md link → ephemeral tab (italic title, reuses slot)
+                  * double-click or edit → pins the tab (normal title, sticks)
+                  * reading workflow: click around chapters, only keep the ones you care about
+                * //A: right pane
+                  * single-click file:line link → ephemeral tab (code view, reuses slot)
+                  * double-click link → pins the tab
+                  * terminal is always a pinned tab (special, can't close while agent running)
+                * //A: implementation
+                  * tab state: `{ path, ephemeral: boolean, scrollPos, cursorPos }`
+                  * ephemeral slot: at most one per pane, always rightmost
+                  * pin = flip `ephemeral: false`
+                  * Monaco models stay alive for open tabs, disposed on tab close
+                * //A: manageable for 0200 — adding to scope
+      * cmd-w to close, filename only, tooltip = full path
+      * closing last tab → placeholder
   * // agent interaction (cmd-enter, shift-enter)
     * // shift-enter is not an agent interaction, right?
-    * //A: right — shift-enter is pure typing convenience, no agent involved
-    * //A: it's just "new line, same indent + prefix" — a Monaco keybinding
+    * //A: correct — pure typing convenience, Monaco keybinding
     * // should be simple enough to accomodate in 0200?
-    * //A: yes, it's small and self-contained. adding it to scope below.
+    * //A: yes, added to scope below
   * git integration
     * //DU: what if we include a simple version: highlight what's currently not commited
       * //DU: using bars on the left, or smth 
         * //DU: (i think there is some lightweight monaco highlighter for that)
         * //DU: how hard would that be?
-      * //A: not hard. Monaco has a built-in diff decorator — `editor.deltaDecorations` with gutter classes. the work is:
-        * //A: 1. run `git diff <file>` in main process (or `git diff --no-index` for untracked)
-        * //A: 2. parse the diff → list of changed/added/deleted line ranges
-        * //A: 3. apply gutter decorations: green bar = added, blue bar = modified, red triangle = deleted
-        * //A: the VS Code approach: they use `git diff --unified=0` and parse hunk headers. about 50 lines of diff parsing + 20 lines of decoration. lightweight.
-        * //A: the gotcha: need to re-run diff after each auto-save (1s debounce already exists, piggyback on it). and on file open.
-        * //A: adding to scope — it's small enough and gives immediate visual value.
+      * //A: not hard — ~70 lines total
+        * //A: main process
+          * `git diff --unified=0 <file>`
+          * parse hunk headers → changed/added/deleted line ranges
+        * //A: renderer
+          * deltaDecorations with gutter CSS classes
+          * green bar = added, blue = modified, red triangle = deleted
+        * //A: gotcha
+          * need to re-run diff after each auto-save
+          * piggyback on existing 1s debounce
+          * also re-run on file open
+        * //A: added to scope
   * file watching for code files (read-only, snapshot at open time)
     * //DU: this should be included
-    * //A: agreed — code files should update when they change on disk too. same pattern as left pane: fs.watch the open file, debounce, update model. read-only so no write-echo to worry about. adding to scope.
+    * //A: agreed, added to scope — same fs.watch pattern, no echo suppression needed (read-only)
 
 * shift-enter: continue at same indent + prefix
   * you're on a line like `  * //DU: some thought`
@@ -116,3 +136,8 @@
     * if current line is just `* //DU: ` with nothing after → don't continue, just newline (break out)
   * Monaco: register keybinding for shift+enter in napkin-markdown language
   * no agent involvement — pure editor behavior
+
+* not in scope
+  * cmd-enter (agent interaction, routing, poke)
+  * git commit integration (working commit pattern)
+  * inline chat / agent responses
