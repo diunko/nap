@@ -19,6 +19,7 @@
       "Bash(mkdir -p *)",
       "Bash(ls *)",
       "Bash(cat *)",
+      "Bash(nap3 *)",
       "WebSearch",
       "WebFetch"
     ]
