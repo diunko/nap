@@ -10,6 +10,7 @@ import { startSocketServer, stopSocketServer } from './socket-server';
 import { createRequestHandler } from './socket-handler';
 import { setWriter } from './message-queue';
 import { getServerSocketPath } from '../shared/constants';
+import { ContentWatcher } from './content-watcher';
 import type { AppSnapshot } from '../shared/bridge-types';
 
 let ptySpawner: NodePtySpawner | null = null;
@@ -220,41 +221,17 @@ app.whenReady().then(async () => {
   });
 
   // Per-file content watcher: renderer tells us which file to watch
-  let contentWatcher: (() => void) | null = null;
-  let watchedFilePath: string | null = null;
-  let contentDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  const contentWatcher = new ContentWatcher({
+    onChange: (filePath, content) => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('file:changed', filePath, content);
+      }
+    },
+    isPendingWrite: (filePath) => pendingContentWrites.has(filePath),
+  });
 
   ipcMain.on('file:watch', (_event, filePath: string | null) => {
-    // Clean up previous watcher
-    if (contentWatcher) {
-      contentWatcher();
-      contentWatcher = null;
-    }
-    clearTimeout(contentDebounceTimer);
-    watchedFilePath = filePath;
-
-    if (!filePath) return;
-
-    try {
-      const watcher = nodeFs.watch(filePath, () => {
-        if (pendingContentWrites.has(filePath)) return; // echo suppression
-
-        clearTimeout(contentDebounceTimer);
-        contentDebounceTimer = setTimeout(async () => {
-          try {
-            const content = await nodeFsPromises.readFile(filePath, 'utf-8');
-            if (!win.isDestroyed()) {
-              win.webContents.send('file:changed', filePath, content);
-            }
-          } catch {
-            // File may have been deleted
-          }
-        }, 200);
-      });
-      contentWatcher = () => watcher.close();
-    } catch {
-      // File may not exist yet
-    }
+    contentWatcher.watch(filePath);
   });
 
   // UI state persistence (debug panel collapse/tab, sidebar visible)
