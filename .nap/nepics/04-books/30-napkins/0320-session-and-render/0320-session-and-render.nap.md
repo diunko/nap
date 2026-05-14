@@ -7,8 +7,28 @@
     * focusedCardSlug
     * activeTerminalId (which agent terminal was showing)
     * leftTabs (array of open file paths + ephemeral flag)
+      * // what happens if some files are absent?
+      * //A: on restore, try to read each file
+        * exists → open tab, load content
+        * missing → keep tab but show "file not found" placeholder
+          * tab stays in the bar, grayed out
+          * file watcher on parent dir — if file reappears, auto-load
+          * this handles branch switches: you switch branch, files vanish, switch back, they return
     * activeLeftTabId
     * rightTabs (open code files, not terminal — terminal restores from activeTerminalId)
+      * // absent files?
+      * // i think main thing to think aobut:
+        * // branch might have changed; 
+        * // if the underlying files get back, they should re-open nicely
+        * // even without closing Nap.app
+      * //A: same approach — ghost tabs for missing files
+        * grayed out tab, "file not found" in editor area
+        * file watcher brings them back when they reappear
+        * no crash, no silent discard — the tab remembers the path
+      * //A: for the "without closing Nap.app" case:
+        * existing content file watcher already fires on changes in watched dirs
+        * just need to also handle the "file deleted" event (show ghost) and "file created" event (reload)
+        * ContentFileWatcher already accepts all event types (BUG 3 fix from 0100)
     * activeRightTabId
     * leftPaneRenderMode
   * on quit: save from store → ui-state.json
