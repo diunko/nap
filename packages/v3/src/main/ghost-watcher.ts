@@ -15,6 +15,8 @@ interface DirWatch {
 export class GhostWatcher {
   private dirWatches = new Map<string, DirWatch>();
   private onAppear: (filePath: string, content: string) => void;
+  // Per-directory queue prevents concurrent watch() calls from creating duplicate subscriptions
+  private dirQueues = new Map<string, Promise<unknown>>();
 
   constructor(onAppear: (filePath: string, content: string) => void) {
     this.onAppear = onAppear;
@@ -22,7 +24,13 @@ export class GhostWatcher {
 
   async watch(filePath: string): Promise<void> {
     const dirPath = path.dirname(filePath);
+    const prev = this.dirQueues.get(dirPath) ?? Promise.resolve();
+    const next = prev.then(() => this._doWatch(filePath, dirPath));
+    this.dirQueues.set(dirPath, next.catch(() => {}));
+    return next;
+  }
 
+  private async _doWatch(filePath: string, dirPath: string): Promise<void> {
     const existing = this.dirWatches.get(dirPath);
     if (existing) {
       existing.ghosts.add(filePath);

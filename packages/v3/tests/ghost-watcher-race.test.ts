@@ -22,7 +22,7 @@ vi.mock('fs/promises', () => ({
 import { GhostWatcher } from '../src/main/ghost-watcher';
 
 describe('RACE-16: GhostWatcher — concurrent watch creates duplicate subscriptions', () => {
-  it.fails('two ghost files in same dir — second watch leaks first subscription', async () => {
+  it('two ghost files in same dir — second watch leaks first subscription', async () => {
     mockSubs.length = 0;
 
     const appeared: string[] = [];
@@ -40,7 +40,7 @@ describe('RACE-16: GhostWatcher — concurrent watch creates duplicate subscript
     expect(dirSubs).toHaveLength(1);
   });
 
-  it.fails('leaked subscription is never unsubscribed', async () => {
+  it('leaked subscription is never unsubscribed', async () => {
     mockSubs.length = 0;
 
     const watcher = new GhostWatcher(() => {});
