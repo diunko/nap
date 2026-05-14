@@ -71,6 +71,14 @@
             * find rendered element with closest `data-source-line`
             * set rendered scrollTop so that `element.offsetTop - scrollTop = cursorY`
             * result: same content at same vertical position on screen
+            * // oh, i think this breaks if cursor is off-screen!
+              * // i think using top elt as anchor for alignment works in that case
+              * //A: yes — if cursor y is negative (scrolled past) or > viewport height
+                * fallback: use the topmost visible editor line as anchor instead
+                * `editor.getVisibleRanges()[0].startLineNumber`
+                * its screen y is always 0 (top of viewport)
+                * match rendered element to that line, place it at scrollTop = element.offsetTop
+                * covers both cases cleanly
     * on Cmd+J (rendered → edit):
       * already works (Cmd+click sets cursor position)
       * but plain Cmd+J without Cmd+click: find topmost visible `data-source-line` in rendered view
