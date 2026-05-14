@@ -18,7 +18,7 @@ if (typeof window === 'undefined') {
   vi.stubGlobal('window', globalThis);
 }
 
-import { useNapStore, loadPersistedUiState, persistFullUiState, _resetNepicTerminalMemory, TERMINAL_TAB_ID } from '../src/renderer/store';
+import { useNapStore, loadPersistedUiState, persistFullUiState, startAutoSave, _resetNepicTerminalMemory, TERMINAL_TAB_ID } from '../src/renderer/store';
 import { findClosestSourceLine, findTopmostVisibleSourceLine } from '../src/renderer/scroll-sync';
 import type { AppSnapshot, AgentState, NapkinState } from '../src/shared/bridge-types';
 
@@ -556,6 +556,106 @@ describe('SS-05: findClosestSourceLine algorithm', () => {
     container = dom.window.document.getElementById('root')!;
     const el = findClosestSourceLine(container, 5);
     expect(el).toBeNull();
+  });
+});
+
+// ── 4. Auto-save ──
+
+describe('Auto-save: debounced session persistence', () => {
+  let saveSpy: ReturnType<typeof vi.fn>;
+  let stopAutoSave: () => void;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    resetStore();
+    saveSpy = vi.fn();
+    (window as any).electronAPI = { saveUiState: saveSpy };
+    stopAutoSave = startAutoSave();
+  });
+
+  afterEach(() => {
+    stopAutoSave();
+    vi.useRealTimers();
+    delete (window as any).electronAPI;
+  });
+
+  it('fires saveUiState after 500ms when focusedCardSlug changes', () => {
+    useNapStore.setState({ focusedCardSlug: '0100-explore', cardViewMode: 'focused' });
+    expect(saveSpy).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(500);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(saveSpy.mock.calls[0][0]).toHaveProperty('focusedCardSlug', '0100-explore');
+  });
+
+  it('fires when leftTabs change (openDoc)', () => {
+    useNapStore.getState().openDoc('/file.md');
+    vi.advanceTimersByTime(500);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    const payload = saveSpy.mock.calls[0][0];
+    expect(payload.leftTabs).toHaveLength(1);
+    expect(payload.leftTabs[0].path).toBe('/file.md');
+  });
+
+  it('fires when activeTerminalId changes', () => {
+    useNapStore.getState().setActiveTerminal('uuid-1');
+    vi.advanceTimersByTime(500);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(saveSpy.mock.calls[0][0]).toHaveProperty('activeTerminalId', 'uuid-1');
+  });
+
+  it('fires when leftPaneRenderMode changes', () => {
+    useNapStore.getState().toggleRenderMode();
+    vi.advanceTimersByTime(500);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(saveSpy.mock.calls[0][0]).toHaveProperty('leftPaneRenderMode', 'rendered');
+  });
+
+  it('fires when currentThemeName changes', () => {
+    useNapStore.setState({ currentThemeName: 'light-blue' });
+    vi.advanceTimersByTime(500);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(saveSpy.mock.calls[0][0]).toHaveProperty('theme', 'light-blue');
+  });
+
+  it('does NOT fire on applySnapshot (model updates only)', () => {
+    useNapStore.getState().applySnapshot(makeSnapshot({
+      activeNepicId: 'test',
+      napkins: [makeNapkin({ id: 'n1', slug: 'n1' })],
+    }));
+    vi.advanceTimersByTime(500);
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it('batches rapid tab opens into one save', () => {
+    useNapStore.getState().openDoc('/a.md');
+    useNapStore.getState().pinTab('left', useNapStore.getState().leftTabs[0].id);
+    useNapStore.getState().openDoc('/b.md');
+    useNapStore.getState().pinTab('left', useNapStore.getState().leftTabs[1].id);
+    useNapStore.getState().openDoc('/c.md');
+
+    // All 5 state changes happened within the debounce window
+    vi.advanceTimersByTime(500);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    // The single save should have the final state
+    const payload = saveSpy.mock.calls[0][0];
+    expect(payload.leftTabs).toHaveLength(3);
+  });
+
+  it('payload has all session fields', () => {
+    useNapStore.setState({ focusedCardSlug: 'test-slug' });
+    vi.advanceTimersByTime(500);
+    const payload = saveSpy.mock.calls[0][0];
+    expect(payload).toHaveProperty('focusedCardSlug');
+    expect(payload).toHaveProperty('cardViewMode');
+    expect(payload).toHaveProperty('activeTerminalId');
+    expect(payload).toHaveProperty('leftPaneRenderMode');
+    expect(payload).toHaveProperty('leftTabs');
+    expect(payload).toHaveProperty('rightTabs');
+    expect(payload).toHaveProperty('activeLeftTabPath');
+    expect(payload).toHaveProperty('activeRightTabPath');
+    expect(payload).toHaveProperty('theme');
+    expect(payload).toHaveProperty('debugPanelCollapsed');
+    expect(payload).toHaveProperty('debugPanelTab');
   });
 });
 

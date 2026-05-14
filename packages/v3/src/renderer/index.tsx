@@ -6,7 +6,7 @@ import { TerminalPane } from './TerminalPane';
 import { DebugPanel } from './DebugPanel';
 import { KanbanOverlay } from './KanbanOverlay';
 import { Gutter } from './Gutter';
-import { useNapStore, loadPersistedUiState, persistFullUiState } from './store';
+import { useNapStore, loadPersistedUiState, persistFullUiState, startAutoSave } from './store';
 import { createTerminalInstance, getTerminal, disposeTerminal } from './terminal-registry';
 import { createFileLinkProvider } from './file-link-provider';
 import { routeLink } from './routing-rules';
@@ -133,7 +133,13 @@ function App() {
     loadPersistedUiState();
   }, [applySnapshot]);
 
-  // Save full session state on quit
+  // Auto-save session state on changes (debounced 500ms)
+  useEffect(() => {
+    const stop = startAutoSave();
+    return stop;
+  }, []);
+
+  // Flush session state on quit (no debounce — belt and suspenders)
   useEffect(() => {
     const handler = () => { persistFullUiState(); };
     window.addEventListener('beforeunload', handler);

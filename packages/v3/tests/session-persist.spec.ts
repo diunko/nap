@@ -177,7 +177,10 @@ test('SP-06: ghost tab — file reappears via dir watcher', async () => {
     const placeholder = page.locator('[data-testid="ghost-placeholder"]');
     await expect(placeholder).toBeVisible({ timeout: 5000 });
 
-    // Create the ghost file on disk — watcher subscription is ready, should fire
+    // Create the ghost file on disk — watcher subscription is ready, should fire.
+    // Write twice with a gap to handle variable FSEvents latency in temp dirs.
+    fs.writeFileSync(ghostFilePath, '# Ghost file appeared\n\nContent here.\n');
+    await page.waitForTimeout(3000);
     fs.writeFileSync(ghostFilePath, '# Ghost file appeared\n\nContent here.\n');
 
     // Wait for ghost promotion via real @parcel/watcher → IPC → promoteGhostTab
@@ -494,6 +497,47 @@ test('SS-04: round-trip edit → rendered → edit preserves position', async ()
 
     // No further drift — within ±5 of the first round trip result
     expect(Math.abs(afterSecondTrip! - afterFirstTrip!)).toBeLessThanOrEqual(5);
+  } finally {
+    await cleanupApp(app, tmpDir);
+  }
+});
+
+// ── Auto-save: session state lands on disk ──
+
+test('Auto-save: session state persists to per-nepic ui-state.json on disk', async () => {
+  const tmpDir = makeTmpDir();
+  const { fileAPath, fileBPath } = createFixture(tmpDir);
+  const { app, page } = await boot(tmpDir);
+  const nepicUiStatePath = path.join(tmpDir, '.nap', 'nepics', 'test-nepic', 'ui-state.json');
+
+  try {
+    // Open tabs, focus a card
+    await openFileAndWait(page, fileAPath);
+    await page.evaluate(() => {
+      const s = (window as any).__napStore__.getState();
+      s.pinTab('left', s.leftTabs[0].id);
+    });
+    await page.evaluate((fp) => {
+      (window as any).__napStore__.getState().openDoc(fp);
+    }, fileBPath);
+
+    // Toggle rendered mode
+    await toggleRenderedMode(page);
+
+    // Wait for debounced auto-save (500ms + margin)
+    await page.waitForTimeout(1500);
+
+    // Read ui-state.json from disk
+    const raw = fs.readFileSync(nepicUiStatePath, 'utf-8');
+    const saved = JSON.parse(raw);
+
+    // Session fields should be present
+    expect(saved.leftTabs).toBeDefined();
+    expect(saved.leftTabs.length).toBeGreaterThanOrEqual(1);
+    expect(saved.leftPaneRenderMode).toBe('rendered');
+    expect(saved).toHaveProperty('focusedCardSlug');
+    expect(saved).toHaveProperty('theme');
+    expect(saved).toHaveProperty('debugPanelCollapsed');
   } finally {
     await cleanupApp(app, tmpDir);
   }

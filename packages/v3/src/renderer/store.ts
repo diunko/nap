@@ -413,14 +413,11 @@ export const useNapStore = create<NapStore>((set, get) => ({
   },
 
   toggleDebugPanel: () => {
-    const next = !get().debugPanelCollapsed;
-    set({ debugPanelCollapsed: next });
-    persistUiState({ debugPanelCollapsed: next, debugPanelTab: get().debugPanelTab });
+    set({ debugPanelCollapsed: !get().debugPanelCollapsed });
   },
 
   setDebugPanelTab: (tab: 'model' | 'filesystem' | 'events') => {
     set({ debugPanelTab: tab });
-    persistUiState({ debugPanelCollapsed: get().debugPanelCollapsed, debugPanelTab: tab });
   },
 
   cycleTheme: () => {
@@ -429,13 +426,11 @@ export const useNapStore = create<NapStore>((set, get) => ({
     const next = THEMES[(idx + 1) % THEMES.length];
     set({ currentThemeName: next.name });
     applyTheme(next);
-    persistUiState({ theme: next.name });
   },
 
   toggleRenderMode: () => {
     const next = get().leftPaneRenderMode === 'edit' ? 'rendered' : 'edit';
     set({ leftPaneRenderMode: next });
-    persistUiState({ leftPaneRenderMode: next });
   },
 
   promoteGhostTab: (path: string) => {
@@ -458,18 +453,29 @@ export const useNapStore = create<NapStore>((set, get) => ({
 
 // ── UI state persistence helpers ──
 
-function persistUiState(partial: {
-  debugPanelCollapsed?: boolean;
-  debugPanelTab?: string;
-  theme?: string;
-  leftPaneRenderMode?: string;
-}) {
-  if (typeof window !== 'undefined' && window.electronAPI?.saveUiState) {
-    window.electronAPI.saveUiState(partial);
-  }
+// Session fields that trigger auto-save when changed
+const SESSION_KEYS: (keyof NapStore)[] = [
+  'focusedCardSlug', 'cardViewMode', 'activeTerminalId',
+  'leftTabs', 'activeLeftTabId', 'rightTabs', 'activeRightTabId',
+  'leftPaneRenderMode', 'currentThemeName', 'debugPanelCollapsed', 'debugPanelTab',
+];
+
+/** Start debounced auto-save. Returns unsubscribe function. */
+export function startAutoSave(debounceMs = 500): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const unsub = useNapStore.subscribe((state, prev) => {
+    const changed = SESSION_KEYS.some((k) => state[k] !== prev[k]);
+    if (!changed) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => persistFullUiState(), debounceMs);
+  });
+  return () => {
+    clearTimeout(timer);
+    unsub();
+  };
 }
 
-/** Save full session state — called on quit (beforeunload). */
+/** Save full session state — called by auto-save and beforeunload flush. */
 export function persistFullUiState(): void {
   if (typeof window === 'undefined' || !window.electronAPI?.saveUiState) return;
   const state = useNapStore.getState();

@@ -71,7 +71,8 @@ app.whenReady().then(async () => {
   }
 
   // Find the active nepic directory
-  const nepicsBase = join(projectCwd, '.nap', 'nepics');
+  const napDir = join(projectCwd, '.nap');
+  const nepicsBase = join(napDir, 'nepics');
   let activeNepicId = '';
   let activeNepicDir = '';
 
@@ -81,7 +82,17 @@ app.whenReady().then(async () => {
     if (d.startsWith('.') || d === 'ui-state.json') continue;
     if (await fs.isDirectory(join(nepicsBase, d))) nepicDirs.push(d);
   }
-  if (nepicDirs.length > 0) {
+
+  // Read saved activeNepicId from .nap/ui-state.json
+  const globalUiState = await fs.readJSON(join(napDir, 'ui-state.json'));
+  const savedNepicId = globalUiState && typeof (globalUiState as any).activeNepicId === 'string'
+    ? (globalUiState as any).activeNepicId : null;
+
+  if (savedNepicId && nepicDirs.includes(savedNepicId)) {
+    activeNepicId = savedNepicId;
+    activeNepicDir = join(nepicsBase, activeNepicId);
+  } else if (nepicDirs.length > 0) {
+    // Fallback: last nepic alphabetically
     activeNepicId = nepicDirs[nepicDirs.length - 1];
     activeNepicDir = join(nepicsBase, activeNepicId);
   }
@@ -331,6 +342,27 @@ app.whenReady().then(async () => {
   // Expose pty manager for medium tests
   if (isTest) {
     (global as any).__napPtyManager__ = ptySpawner;
+
+    // ── Test hooks: inject delays and access internals for race condition tests ──
+    const fileReadDelays = new Map<string, number>();
+    (global as any).__testHooks__ = {
+      setFileReadDelay: (path: string, ms: number) => fileReadDelays.set(path, ms),
+      clearFileReadDelays: () => fileReadDelays.clear(),
+      getContentWatcher: () => contentWatcher,
+      getGhostWatcher: () => ghostWatcher,
+    };
+
+    // Replace file:read handler with delay-injectable version
+    ipcMain.removeHandler('file:read');
+    ipcMain.handle('file:read', async (_event, filePath: string) => {
+      const delay = fileReadDelays.get(filePath) ?? 0;
+      if (delay) await new Promise(r => setTimeout(r, delay));
+      try {
+        return await nodeFsPromises.readFile(filePath, 'utf-8');
+      } catch {
+        return null;
+      }
+    });
   }
 
   // IPC: switch active nepic

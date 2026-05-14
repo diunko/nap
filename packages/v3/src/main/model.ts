@@ -1021,8 +1021,9 @@ export function createModel(fs: FileSystem): NapModel {
     hasPendingWrite = false;
     await loadFromFilesystem(newDir);
     startWatching(newDir);
-    // Persist activeNepicId (outside watched dirs — no guard needed)
-    await fs.writeJSON(base + '/ui-state.json', { activeNepicId: slug });
+    // Persist activeNepicId to .nap/ui-state.json (project-level, not nepics-level)
+    const napDir = base.replace(/\/[^/]+$/, '');
+    await fs.writeJSON(napDir + '/ui-state.json', { activeNepicId: slug });
   }
 
   // ── Permission hook methods ──
