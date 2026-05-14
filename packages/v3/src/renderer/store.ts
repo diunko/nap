@@ -11,6 +11,7 @@ export interface Tab {
   path: string;
   type: 'file' | 'terminal';
   ephemeral: boolean;
+  ghost?: boolean;
   title?: string;
   scrollPos?: number;
   cursorPos?: { lineNumber: number; column: number };
@@ -49,6 +50,9 @@ export interface NapStore {
   currentThemeName: string;
   leftPaneRenderMode: 'edit' | 'rendered';
 
+  // ── Internal (reload trigger for ghost promotion) ──
+  _fileReloadVersion: number;
+
   // ── Actions ──
   applySnapshot: (snapshot: AppSnapshot) => void;
   setActiveTerminal: (id: string) => void;
@@ -73,6 +77,7 @@ export interface NapStore {
   setDebugPanelTab: (tab: 'model' | 'filesystem' | 'events') => void;
   cycleTheme: () => void;
   toggleRenderMode: () => void;
+  promoteGhostTab: (path: string) => void;
 }
 
 // Per-nepic renderer state memory (not persisted)
@@ -166,6 +171,7 @@ export const useNapStore = create<NapStore>((set, get) => ({
 
   currentThemeName: THEMES[0].name,
   leftPaneRenderMode: 'edit' as const,
+  _fileReloadVersion: 0,
 
   // Snapshot only updates model state — renderer-only state preserved
   applySnapshot: (snapshot: AppSnapshot) => {
@@ -431,6 +437,23 @@ export const useNapStore = create<NapStore>((set, get) => ({
     set({ leftPaneRenderMode: next });
     persistUiState({ leftPaneRenderMode: next });
   },
+
+  promoteGhostTab: (path: string) => {
+    const prev = get();
+    const leftTabs = prev.leftTabs.map((t) =>
+      t.path === path ? { ...t, ghost: undefined } : t,
+    );
+    const rightTabs = prev.rightTabs.map((t) =>
+      t.path === path ? { ...t, ghost: undefined } : t,
+    );
+    const updates: Partial<NapStore> = { leftTabs, rightTabs };
+    // If the promoted tab is the active left tab, trigger a file reload
+    const activeLeftTab = prev.leftTabs.find((t) => t.id === prev.activeLeftTabId);
+    if (activeLeftTab?.path === path) {
+      updates._fileReloadVersion = prev._fileReloadVersion + 1;
+    }
+    set(updates);
+  },
 }));
 
 // ── UI state persistence helpers ──
@@ -446,24 +469,158 @@ function persistUiState(partial: {
   }
 }
 
+/** Save full session state — called on quit (beforeunload). */
+export function persistFullUiState(): void {
+  if (typeof window === 'undefined' || !window.electronAPI?.saveUiState) return;
+  const state = useNapStore.getState();
+  const activeLeftTab = state.leftTabs.find((t) => t.id === state.activeLeftTabId);
+  const activeRightTab = state.rightTabs.find((t) => t.id === state.activeRightTabId);
+  window.electronAPI.saveUiState({
+    focusedCardSlug: state.focusedCardSlug,
+    activeTerminalId: state.activeTerminalId,
+    leftPaneRenderMode: state.leftPaneRenderMode,
+    leftTabs: state.leftTabs
+      .filter((t) => t.type === 'file')
+      .map((t) => ({ path: t.path, ephemeral: t.ephemeral })),
+    rightTabs: state.rightTabs
+      .filter((t) => t.type === 'file')
+      .map((t) => ({ path: t.path, ephemeral: t.ephemeral })),
+    activeLeftTabPath: activeLeftTab?.path ?? null,
+    activeRightTabPath: activeRightTab?.type === 'file' ? activeRightTab.path : null,
+    theme: state.currentThemeName,
+    debugPanelCollapsed: state.debugPanelCollapsed,
+    debugPanelTab: state.debugPanelTab,
+  });
+}
+
 // Load persisted ui-state on mount
 export async function loadPersistedUiState(): Promise<void> {
   if (typeof window === 'undefined' || !window.electronAPI?.loadUiState) return;
   const state = await window.electronAPI.loadUiState() as Record<string, unknown> | null;
   if (!state) return;
   const updates: Partial<NapStore> = {};
+
+  // ── Existing fields ──
   if (typeof state.debugPanelCollapsed === 'boolean') updates.debugPanelCollapsed = state.debugPanelCollapsed;
   if (state.debugPanelTab === 'model' || state.debugPanelTab === 'filesystem' || state.debugPanelTab === 'events') {
     updates.debugPanelTab = state.debugPanelTab;
   }
-  // Theme — fallback to THEMES[0] if saved name not found
   if (typeof state.theme === 'string') {
     const theme = findTheme(state.theme as string);
     updates.currentThemeName = theme.name;
   }
-  // Render mode
   if (state.leftPaneRenderMode === 'edit' || state.leftPaneRenderMode === 'rendered') {
     updates.leftPaneRenderMode = state.leftPaneRenderMode;
   }
+
+  // ── focusedCardSlug ──
+  if (typeof state.focusedCardSlug === 'string') {
+    const store = useNapStore.getState();
+    const napkinMatch = store.napkins.some((n) => n.slug === state.focusedCardSlug);
+    const archMatch = store.architects.some((a) => a.id === state.focusedCardSlug);
+    if (napkinMatch || archMatch) {
+      updates.focusedCardSlug = state.focusedCardSlug as string;
+      updates.cardViewMode = 'focused';
+    }
+  }
+
+  // ── leftTabs ──
+  if (Array.isArray(state.leftTabs)) {
+    const saved = state.leftTabs as Array<{ path?: string; ephemeral?: boolean }>;
+    const checks = await Promise.all(
+      saved.map(async (entry) => {
+        if (typeof entry.path !== 'string') return null;
+        const content = await window.electronAPI!.fileRead(entry.path);
+        return {
+          path: entry.path,
+          ephemeral: entry.ephemeral ?? false,
+          ghost: content === null || content === undefined,
+        };
+      }),
+    );
+
+    const tabs: Tab[] = [];
+    for (const check of checks) {
+      if (!check) continue;
+      tabs.push({
+        id: nextTabId(),
+        path: check.path,
+        type: 'file',
+        ephemeral: check.ephemeral,
+        ...(check.ghost ? { ghost: true } : {}),
+      });
+      if (check.ghost) {
+        window.electronAPI!.watchGhost(check.path);
+      }
+    }
+
+    updates.leftTabs = tabs;
+
+    // Active left tab — match by path, skip ghosts
+    const activeLeftPath = typeof state.activeLeftTabPath === 'string' ? state.activeLeftTabPath as string : null;
+    const match = activeLeftPath ? tabs.find((t) => t.path === activeLeftPath && !t.ghost) : null;
+    const fallback = tabs.find((t) => !t.ghost);
+    const activeTab = match ?? fallback ?? null;
+    updates.activeLeftTabId = activeTab?.id ?? null;
+    updates.activeFilePath = activeTab?.path ?? null;
+  }
+
+  // ── rightTabs (file tabs only — terminal reconstructed from activeTerminalId) ──
+  if (Array.isArray(state.rightTabs)) {
+    const saved = state.rightTabs as Array<{ path?: string; ephemeral?: boolean }>;
+    const checks = await Promise.all(
+      saved.map(async (entry) => {
+        if (typeof entry.path !== 'string') return null;
+        const content = await window.electronAPI!.fileRead(entry.path);
+        return {
+          path: entry.path,
+          ephemeral: entry.ephemeral ?? false,
+          ghost: content === null || content === undefined,
+        };
+      }),
+    );
+
+    const tabs: Tab[] = [];
+    for (const check of checks) {
+      if (!check) continue;
+      tabs.push({
+        id: nextTabId(),
+        path: check.path,
+        type: 'file',
+        ephemeral: check.ephemeral,
+        ...(check.ghost ? { ghost: true } : {}),
+      });
+      if (check.ghost) {
+        window.electronAPI!.watchGhost(check.path);
+      }
+    }
+
+    updates.rightTabs = tabs;
+  }
+
   if (Object.keys(updates).length > 0) useNapStore.setState(updates);
+
+  // ── activeTerminalId — needs setActiveTerminal action (creates terminal tab) ──
+  if (typeof state.activeTerminalId === 'string') {
+    const store = useNapStore.getState();
+    const allAgents = [...store.napkins.flatMap((n) => n.agents), ...store.architects];
+    if (allAgents.some((a) => a.id === state.activeTerminalId)) {
+      store.setActiveTerminal(state.activeTerminalId as string);
+    }
+  }
+
+  // ── If saved active right tab was a file, switch to it ──
+  if (typeof state.activeRightTabPath === 'string') {
+    const store = useNapStore.getState();
+    const match = store.rightTabs.find(
+      (t) => t.path === state.activeRightTabPath && t.type === 'file' && !t.ghost,
+    );
+    if (match) {
+      useNapStore.setState({
+        activeRightTabId: match.id,
+        rightPaneMode: 'code',
+        rightFilePath: match.path,
+      });
+    }
+  }
 }

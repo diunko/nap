@@ -88,4 +88,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   codeWatch: (filePath: string | null) => ipcRenderer.send('code:watch', filePath),
   shellOpenExternal: (url: string) => ipcRenderer.send('shell:open-external', url),
+
+  // ── Ghost tab watcher (0320 — session persistence) ──
+  watchGhost: (filePath: string) => ipcRenderer.send('file:watch-ghost', filePath),
+  unwatchGhost: (filePath: string) => ipcRenderer.send('file:unwatch-ghost', filePath),
+  onGhostAppeared: (cb: (filePath: string, content: string) => void) => {
+    const handler = (_event: IpcRendererEvent, filePath: string, content: string) =>
+      cb(filePath, content);
+    ipcRenderer.on('file:ghost-appeared', handler);
+    return () => ipcRenderer.removeListener('file:ghost-appeared', handler);
+  },
 });

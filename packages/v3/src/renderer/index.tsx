@@ -6,7 +6,7 @@ import { TerminalPane } from './TerminalPane';
 import { DebugPanel } from './DebugPanel';
 import { KanbanOverlay } from './KanbanOverlay';
 import { Gutter } from './Gutter';
-import { useNapStore, loadPersistedUiState } from './store';
+import { useNapStore, loadPersistedUiState, persistFullUiState } from './store';
 import { createTerminalInstance, getTerminal, disposeTerminal } from './terminal-registry';
 import { createFileLinkProvider } from './file-link-provider';
 import { routeLink } from './routing-rules';
@@ -45,6 +45,9 @@ declare global {
       onCodeChanged: (cb: (filePath: string, content: string) => void) => () => void;
       codeWatch: (filePath: string | null) => void;
       shellOpenExternal: (url: string) => void;
+      watchGhost: (filePath: string) => void;
+      unwatchGhost: (filePath: string) => void;
+      onGhostAppeared: (cb: (filePath: string, content: string) => void) => () => void;
     };
   }
 }
@@ -126,9 +129,26 @@ function App() {
         applySnapshot(snapshot);
       });
     }
-    // Load persisted UI state (debug panel collapse/tab)
+    // Load persisted UI state (debug panel, theme, tabs, terminal, card)
     loadPersistedUiState();
   }, [applySnapshot]);
+
+  // Save full session state on quit
+  useEffect(() => {
+    const handler = () => { persistFullUiState(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  // Wire ghost tab watcher — promote ghost tabs when files reappear
+  useEffect(() => {
+    if (!window.electronAPI?.onGhostAppeared) return;
+    const unsub = window.electronAPI.onGhostAppeared((filePath) => {
+      useNapStore.getState().promoteGhostTab(filePath);
+      window.electronAPI?.unwatchGhost(filePath);
+    });
+    return unsub;
+  }, []);
 
   // Wire pty data → xterm terminals
   useEffect(() => {

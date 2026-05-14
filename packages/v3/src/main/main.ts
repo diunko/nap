@@ -12,6 +12,7 @@ import { createRequestHandler } from './socket-handler';
 import { setWriter } from './message-queue';
 import { getServerSocketPath } from '../shared/constants';
 import { ContentWatcher } from './content-watcher';
+import { GhostWatcher } from './ghost-watcher';
 import { parseGitDiff } from './git-diff-parser';
 import type { AppSnapshot } from '../shared/bridge-types';
 
@@ -299,6 +300,22 @@ app.whenReady().then(async () => {
     codeWatcher.watch(filePath);
   });
 
+  // ── Ghost tab watcher (0320 — session persistence) ──
+
+  const ghostWatcher = new GhostWatcher((filePath, content) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('file:ghost-appeared', filePath, content);
+    }
+  });
+
+  ipcMain.on('file:watch-ghost', (_event, filePath: string) => {
+    ghostWatcher.watch(filePath);
+  });
+
+  ipcMain.on('file:unwatch-ghost', (_event, filePath: string) => {
+    ghostWatcher.unwatch(filePath);
+  });
+
   // UI state persistence (debug panel collapse/tab, sidebar visible)
   ipcMain.on('save-ui-state', (_event, state: unknown) => {
     model.saveUiState(state);
@@ -378,6 +395,8 @@ app.on('before-quit', () => {
     ptySpawner.killAll();
   }
 });
+
+// Note: ghostWatcher cleanup happens implicitly when the process exits
 
 app.on('window-all-closed', () => {
   app.quit();

@@ -10,6 +10,7 @@ import { renderMarkdown, initShiki } from './markdown-renderer';
 import { roleDecoClass } from './role-palette';
 import { routeLink } from './routing-rules';
 import type { LinkResult } from './routing-rules';
+import { syncEditToRendered, syncRenderedToEdit } from './scroll-sync';
 
 // Inject rendered-mode CSS once
 let cssInjected = false;
@@ -127,6 +128,7 @@ export function ContentPane() {
   const activeLeftTabId = useNapStore((s) => s.activeLeftTabId);
   const leftPaneRenderMode = useNapStore((s) => s.leftPaneRenderMode);
   const currentThemeName = useNapStore((s) => s.currentThemeName);
+  const fileReloadVersion = useNapStore((s) => s._fileReloadVersion);
   const containerRef = useRef<HTMLDivElement>(null);
   const renderedRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -138,7 +140,14 @@ export function ContentPane() {
   const gutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const focusGutterTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
   const roleDecorationsRef = useRef<string[]>([]);
+  const contentDisposableRef = useRef<monaco.IDisposable | null>(null);
+  const prevModeRef = useRef(leftPaneRenderMode);
+  const cachedRenderedScrollTopRef = useRef(0);
   const [shikiLoaded, setShikiLoaded] = useState(false);
+
+  // Detect if the active tab is a ghost
+  const activeTab = leftTabs.find((t) => t.id === activeLeftTabId);
+  const isGhost = activeTab?.ghost === true;
 
   // Initialize shiki (async — flips shikiLoaded when ready, triggering re-render of code blocks)
   useEffect(() => {
@@ -365,7 +374,7 @@ export function ContentPane() {
     return () => mouseDisposable.dispose();
   }, []);
 
-  // Load file when activeFilePath changes
+  // Load file when activeFilePath changes (or ghost promotion triggers reload)
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -376,6 +385,8 @@ export function ContentPane() {
         modelRef.current.dispose();
         modelRef.current = null;
       }
+      contentDisposableRef.current?.dispose();
+      contentDisposableRef.current = null;
       editor.setModel(null);
       gutterDecorationsRef.current = [];
       // Tell main to stop watching
@@ -386,12 +397,37 @@ export function ContentPane() {
     // Load file content
     (async () => {
       const content = await window.electronAPI?.fileRead(activeFilePath);
-      if (content === null || content === undefined) return;
+      if (content === null || content === undefined) {
+        // File not found — ghost tab. Clear model, start ghost watcher.
+        if (modelRef.current) {
+          modelRef.current.dispose();
+          modelRef.current = null;
+        }
+        contentDisposableRef.current?.dispose();
+        contentDisposableRef.current = null;
+        editor.setModel(null);
+        gutterDecorationsRef.current = [];
+        window.electronAPI?.fileWatch(null);
+
+        // Mark tab as ghost if not already
+        const state = useNapStore.getState();
+        const tab = state.leftTabs.find((t) => t.path === activeFilePath);
+        if (tab && !tab.ghost) {
+          const leftTabs = state.leftTabs.map((t) =>
+            t.path === activeFilePath ? { ...t, ghost: true } : t,
+          );
+          useNapStore.setState({ leftTabs });
+          window.electronAPI?.watchGhost(activeFilePath);
+        }
+        return;
+      }
 
       // Dispose old model, create new
       if (modelRef.current) {
         modelRef.current.dispose();
       }
+      contentDisposableRef.current?.dispose();
+
       const model = monaco.editor.createModel(content, 'napkin-markdown');
       modelRef.current = model;
       editor.setModel(model);
@@ -403,12 +439,26 @@ export function ContentPane() {
       // Load git gutter + role decorations
       refreshGitGutter(activeFilePath);
       refreshRoleDecorations();
+
+      // If rendered mode is active, render HTML now (fixes stale content on tab switch)
+      const currentMode = useNapStore.getState().leftPaneRenderMode;
+      if (currentMode === 'rendered' && renderedRef.current) {
+        renderedRef.current.innerHTML = renderMarkdown(content, shikiTheme);
+      }
+
+      // Set up onDidChangeContent listener for live re-render (external edits while rendered)
+      contentDisposableRef.current = model.onDidChangeContent(() => {
+        const mode = useNapStore.getState().leftPaneRenderMode;
+        if (mode === 'rendered' && renderedRef.current) {
+          renderedRef.current.innerHTML = renderMarkdown(model.getValue(), shikiTheme);
+        }
+      });
     })();
 
     return () => {
       clearTimeout(saveTimerRef.current);
     };
-  }, [activeFilePath]);
+  }, [activeFilePath, fileReloadVersion]);
 
   // Listen for external file changes
   useEffect(() => {
@@ -443,7 +493,8 @@ export function ContentPane() {
     return unsub;
   }, []);
 
-  // Rendered mode: generate HTML when mode, content, or theme changes
+  // Rendered mode: generate HTML when mode or theme changes
+  // (Tab switch rendering is handled in the file load effect above)
   const shikiTheme = findTheme(currentThemeName).shikiTheme;
 
   useEffect(() => {
@@ -451,25 +502,40 @@ export function ContentPane() {
     const model = modelRef.current;
     if (!model) return;
     renderedRef.current.innerHTML = renderMarkdown(model.getValue(), shikiTheme);
-  }, [leftPaneRenderMode, activeFilePath, shikiTheme, shikiLoaded]);
+  }, [leftPaneRenderMode, shikiTheme, shikiLoaded]);
 
-  // Also update rendered HTML when model content changes (external edits)
+  // Cache rendered scrollTop continuously while visible (before React hides it on mode switch)
   useEffect(() => {
-    if (leftPaneRenderMode !== 'rendered') return;
-    const model = modelRef.current;
-    if (!model) return;
+    const rendered = renderedRef.current;
+    if (!rendered || leftPaneRenderMode !== 'rendered') return;
 
-    const disposable = model.onDidChangeContent(() => {
-      if (renderedRef.current) {
-        renderedRef.current.innerHTML = renderMarkdown(model.getValue(), shikiTheme);
-      }
-    });
-    // Initial render
-    if (renderedRef.current) {
-      renderedRef.current.innerHTML = renderMarkdown(model.getValue(), shikiTheme);
+    const onScroll = () => { cachedRenderedScrollTopRef.current = rendered.scrollTop; };
+    // Capture initial scrollTop
+    cachedRenderedScrollTopRef.current = rendered.scrollTop;
+    rendered.addEventListener('scroll', onScroll, { passive: true });
+    return () => rendered.removeEventListener('scroll', onScroll);
+  }, [leftPaneRenderMode]);
+
+  // Scroll sync on mode toggle
+  useEffect(() => {
+    const prevMode = prevModeRef.current;
+    prevModeRef.current = leftPaneRenderMode;
+    if (prevMode === leftPaneRenderMode) return;
+
+    const editor = editorRef.current;
+    const rendered = renderedRef.current;
+    if (!editor || !rendered) return;
+
+    if (prevMode === 'edit' && leftPaneRenderMode === 'rendered') {
+      // Edit → rendered: match scroll position
+      // Run after a microtask so rendered HTML has been populated by the effect above
+      queueMicrotask(() => syncEditToRendered(editor, rendered));
+    } else if (prevMode === 'rendered' && leftPaneRenderMode === 'edit') {
+      // Rendered → edit: use cached scrollTop (rendered div is display:none by now, scrollTop is 0)
+      syncRenderedToEdit(editor, rendered, cachedRenderedScrollTopRef.current);
+      setTimeout(() => editor.focus(), 0);
     }
-    return () => disposable.dispose();
-  }, [leftPaneRenderMode, activeFilePath, shikiTheme, shikiLoaded]);
+  }, [leftPaneRenderMode]);
 
   // Rendered view click handler: links → routeLink, Cmd+click → edit at source line
   function handleRenderedClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -547,35 +613,52 @@ export function ContentPane() {
           no file open
         </div>
       )}
-      {/* Editor container — always mounted, hidden in rendered mode */}
+      {/* Ghost tab placeholder — file not found */}
+      {isGhost && (
+        <div
+          data-testid="ghost-placeholder"
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--nap-text-muted)',
+            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+            fontSize: 14,
+            opacity: 0.5,
+          }}
+        >
+          file not found
+        </div>
+      )}
+      {/* Editor container — always mounted, hidden in rendered mode or ghost */}
       <div
         ref={containerRef}
         style={{
           flex: 1,
           minHeight: 0,
-          display: activeFilePath && leftPaneRenderMode === 'edit' ? 'block' : 'none',
+          display: activeFilePath && !isGhost && leftPaneRenderMode === 'edit' ? 'block' : 'none',
         }}
       />
-      {/* Rendered view — visible in rendered mode */}
-      {activeFilePath && leftPaneRenderMode === 'rendered' && (
-        <div
-          ref={renderedRef}
-          data-testid="rendered-view"
-          className="nap-rendered"
-          onClick={handleRenderedClick}
-          style={{
-            flex: 1,
-            minHeight: 0,
-            overflow: 'auto',
-            padding: '16px 24px',
-            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
-            fontSize: 14,
-            lineHeight: 1.6,
-            color: 'var(--nap-text-secondary)',
-            cursor: 'default',
-          }}
-        />
-      )}
+      {/* Rendered view — always mounted for scroll sync, hidden when not in rendered mode */}
+      <div
+        ref={renderedRef}
+        data-testid="rendered-view"
+        className="nap-rendered"
+        onClick={handleRenderedClick}
+        style={{
+          flex: activeFilePath && !isGhost && leftPaneRenderMode === 'rendered' ? 1 : undefined,
+          minHeight: 0,
+          overflow: 'auto',
+          padding: '16px 24px',
+          fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+          fontSize: 14,
+          lineHeight: 1.6,
+          color: 'var(--nap-text-secondary)',
+          cursor: 'default',
+          display: activeFilePath && !isGhost && leftPaneRenderMode === 'rendered' ? undefined : 'none',
+        }}
+      />
     </div>
   );
 }

@@ -656,7 +656,12 @@ export function createModel(fs: FileSystem): NapModel {
   async function saveUiState(state: unknown): Promise<void> {
     const uiStatePath = nepicDir + '/ui-state.json';
     hasPendingWrite = true;
-    await fs.writeJSON(uiStatePath, state);
+    // Merge with existing state so partial saves don't destroy other fields
+    let existing: Record<string, unknown> = {};
+    const raw = await fs.readJSON(uiStatePath);
+    if (raw && typeof raw === 'object') existing = raw as Record<string, unknown>;
+    const merged = { ...existing, ...(state as Record<string, unknown>) };
+    await fs.writeJSON(uiStatePath, merged);
   }
 
   function getAllAgents(): AgentState[] {
