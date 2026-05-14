@@ -64,6 +64,13 @@
       * get current editor cursor line
       * find rendered element with closest `data-source-line`
       * scrollIntoView that element
+        * // my suggestion was to align-match y-coords of those elts
+          * // not just scroll into view
+          * //A: right — match the screen y position, not just visibility
+            * cursor y in editor: `editor.getTopForLineNumber(line) - editor.getScrollTop()`
+            * find rendered element with closest `data-source-line`
+            * set rendered scrollTop so that `element.offsetTop - scrollTop = cursorY`
+            * result: same content at same vertical position on screen
     * on Cmd+J (rendered → edit):
       * already works (Cmd+click sets cursor position)
       * but plain Cmd+J without Cmd+click: find topmost visible `data-source-line` in rendered view
