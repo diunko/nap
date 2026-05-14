@@ -7,10 +7,10 @@ const PALETTE_SIZE = 20;
 const HUE_STEP = 360 / PALETTE_SIZE; // 18 degrees
 
 // ── Known prefixes with fixed colors (keep existing role identity) ──
-// DU intentionally omitted — user's own prefix uses the palette like any new prefix.
 
 const KNOWN: Record<string, { dark: string; light: string }> = {
   A:  { dark: '#3b82f6', light: '#2563eb' },   // architect — blue
+  DU: { dark: '#22c55e', light: '#16a34a' },   // user — bright green (matches generic //)
   FS: { dark: '#22c55e', light: '#16a34a' },   // fs-eng — green
   TA: { dark: '#f59e0b', light: '#d97706' },   // test-arch — orange
   TE: { dark: '#6b7280', light: '#6b7280' },   // test-eng — gray

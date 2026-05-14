@@ -153,10 +153,10 @@ describe('RM-04: Role comments render as colored blocks', () => {
     expect(html).toContain('role-known-A');
   });
 
-  it('//DU: gets palette class (not known — hashes to palette)', () => {
+  it('//DU: gets role-known-DU class', () => {
     const html = renderMarkdown('* //DU: user note');
     expect(html).toContain('role-comment');
-    expect(html).toMatch(/role-\d+/);
+    expect(html).toContain('role-known-DU');
   });
 
   it('//FS: gets role-known-FS class', () => {
@@ -355,10 +355,9 @@ describe('ROLE-10: Unknown prefix gets palette class in rendered output', () => 
     expect(html).toContain(expected);
   });
 
-  it('//DU: gets palette class (not known)', () => {
+  it('//DU: gets known class (bright green)', () => {
     const html = renderMarkdown('* //DU: user note');
-    const expected = `role-${hashPrefix('DU')}`;
-    expect(html).toContain(expected);
+    expect(html).toContain('role-known-DU');
   });
 
   it('//PM: gets palette class', () => {

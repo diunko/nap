@@ -44,6 +44,14 @@ describe('ROLE-02: Known prefixes return fixed colors', () => {
     expect(roleColor('A', false)).toBe('#2563eb');
   });
 
+  it('DU dark → #22c55e (bright green)', () => {
+    expect(roleColor('DU', true)).toBe('#22c55e');
+  });
+
+  it('DU light → #16a34a', () => {
+    expect(roleColor('DU', false)).toBe('#16a34a');
+  });
+
   it('FS dark → #22c55e', () => {
     expect(roleColor('FS', true)).toBe('#22c55e');
   });
@@ -75,8 +83,8 @@ describe('ROLE-03: Unknown prefixes return HSL from palette', () => {
     expect(roleColor('E', true)).toMatch(/^hsl\(\d+, \d+%, \d+%\)$/);
   });
 
-  it('DU → hsl(...) (DU is NOT in known map)', () => {
-    expect(roleColor('DU', true)).toMatch(/^hsl\(/);
+  it('PM → hsl(...)', () => {
+    expect(roleColor('PM', true)).toMatch(/^hsl\(/);
   });
 
   it('PM → hsl(...)', () => {
@@ -137,8 +145,8 @@ describe('ROLE-06: roleCssClass splits known vs palette', () => {
     expect(roleCssClass('E')).toBe(`role-${hashPrefix('E')}`);
   });
 
-  it('DU → role-N (palette, not known)', () => {
-    expect(roleCssClass('DU')).toBe(`role-${hashPrefix('DU')}`);
+  it('DU → role-known-DU (known prefix)', () => {
+    expect(roleCssClass('DU')).toBe('role-known-DU');
   });
 });
 
