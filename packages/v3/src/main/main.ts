@@ -55,6 +55,7 @@ app.whenReady().then(async () => {
   // ── Start socket server BEFORE window creation ──
   const socketPath = getServerSocketPath(projectCwd);
   ptySpawner = new NodePtySpawner(isTest);
+  model.setPtySpawner(ptySpawner);
   const handler = createRequestHandler(model, ptySpawner);
   await startSocketServer(handler, socketPath);
 

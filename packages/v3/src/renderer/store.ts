@@ -520,19 +520,15 @@ export async function loadPersistedUiState(): Promise<void> {
     updates.leftPaneRenderMode = state.leftPaneRenderMode;
   }
 
-  // ── focusedCardSlug ──
+  // ── focusedCardSlug — restore unconditionally, applySnapshot validates later ──
   if (typeof state.focusedCardSlug === 'string') {
-    const store = useNapStore.getState();
-    const napkinMatch = store.napkins.some((n) => n.slug === state.focusedCardSlug);
-    const archMatch = store.architects.some((a) => a.id === state.focusedCardSlug);
-    if (napkinMatch || archMatch) {
-      updates.focusedCardSlug = state.focusedCardSlug as string;
-      const savedMode = state.cardViewMode;
-      updates.cardViewMode = (savedMode === 'focused' || savedMode === 'extended') ? savedMode : 'focused';
-    }
+    updates.focusedCardSlug = state.focusedCardSlug as string;
+    const savedMode = state.cardViewMode;
+    updates.cardViewMode = (savedMode === 'focused' || savedMode === 'extended') ? savedMode : 'focused';
   }
 
   // ── leftTabs ──
+  let ghostPaths: string[] = [];
   if (Array.isArray(state.leftTabs)) {
     const saved = state.leftTabs as Array<{ path?: string; ephemeral?: boolean }>;
     const checks = await Promise.all(
@@ -557,14 +553,11 @@ export async function loadPersistedUiState(): Promise<void> {
         ephemeral: check.ephemeral,
         ...(check.ghost ? { ghost: true } : {}),
       });
-      if (check.ghost) {
-        await window.electronAPI!.watchGhost(check.path);
-      }
+      if (check.ghost) ghostPaths.push(check.path);
     }
 
     updates.leftTabs = tabs;
 
-    // Active left tab — match by path, skip ghosts
     const activeLeftPath = typeof state.activeLeftTabPath === 'string' ? state.activeLeftTabPath as string : null;
     const match = activeLeftPath ? tabs.find((t) => t.path === activeLeftPath && !t.ghost) : null;
     const fallback = tabs.find((t) => !t.ghost);
@@ -574,6 +567,7 @@ export async function loadPersistedUiState(): Promise<void> {
   }
 
   // ── rightTabs (file tabs only — terminal reconstructed from activeTerminalId) ──
+  const rightGhostPaths: string[] = [];
   if (Array.isArray(state.rightTabs)) {
     const saved = state.rightTabs as Array<{ path?: string; ephemeral?: boolean }>;
     const checks = await Promise.all(
@@ -598,15 +592,22 @@ export async function loadPersistedUiState(): Promise<void> {
         ephemeral: check.ephemeral,
         ...(check.ghost ? { ghost: true } : {}),
       });
-      if (check.ghost) {
-        await window.electronAPI!.watchGhost(check.path);
-      }
+      if (check.ghost) rightGhostPaths.push(check.path);
     }
 
     updates.rightTabs = tabs;
   }
 
+  // Commit state BEFORE starting ghost watchers — promoteGhostTab needs tabs in store
   if (Object.keys(updates).length > 0) useNapStore.setState(updates);
+
+  // Now start ghost watchers (tabs exist in store, promotion will find them)
+  for (const p of ghostPaths) {
+    await window.electronAPI!.watchGhost(p);
+  }
+  for (const p of rightGhostPaths) {
+    await window.electronAPI!.watchGhost(p);
+  }
 
   // ── activeTerminalId — needs setActiveTerminal action (creates terminal tab) ──
   if (typeof state.activeTerminalId === 'string') {

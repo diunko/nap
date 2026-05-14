@@ -78,6 +78,7 @@ export interface AgentTreeNode {
 // ── NapModel — owns the app's business state ──
 
 export interface NapModel {
+  setPtySpawner(ps: PtySpawner): void;
   loadFromFilesystem(nepicDir: string): Promise<void>;
   getNapkins(): NapkinState[];
   getArchitects(): AgentState[];
@@ -89,7 +90,7 @@ export interface NapModel {
   setAgentExited(napkinSlug: string, agentName: string): Promise<void>;
   setAgentExitedById(agentId: string): Promise<void>;
   setAgentRunning(agentId: string, running: boolean): void;
-  setAgentDone(agentId: string): void;
+  setAgentDone(agentId: string): Promise<void>;
   setAgentStarted(agentId: string): Promise<void>;
   setAgentArchived(agentId: string): Promise<void>;
   spawnSuccessor(agentId: string, ptySpawner: PtySpawner): Promise<string | null>;
@@ -134,14 +135,21 @@ export function createModel(fs: FileSystem): NapModel {
   let nepicDir = '';
   let nepicList: NepicInfo[] = [];
   const listeners = new Set<() => void>();
-  let hasPendingWrite = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const watchUnsubs: (() => void)[] = [];
 
-  // Ephemeral state kept separate — never wiped by filesystem reloads
-  const runningAgents = new Set<string>();
-  const doneAgents = new Set<string>();
+  // Serialize queue — all async model mutations go through this.
+  // Prevents concurrent read-modify-write races on marker files.
+  let queue: Promise<unknown> = Promise.resolve();
+  function serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const p = queue.then(fn);
+    queue = p.catch(() => {}); // don't break chain on error
+    return p;
+  }
+
+  // Runtime-only state (not on disk, survives reloads via re-derivation)
   const pendingApprovals = new Map<string, PendingApproval>();
+  let ptySpawnerRef: PtySpawner | null = null; // set when startAgents is called
 
   // Watcher events for debug panel
   const watcherEventLog: WatcherEvent[] = [];
@@ -346,10 +354,9 @@ export function createModel(fs: FileSystem): NapModel {
 
     architects = loadedArchitects.sort((a, b) => a.createdAt - b.createdAt);
 
-    // Apply ephemeral flags from persistent sets
+    // Derive runtime state from pty spawner + pending approvals
     for (const agent of getAllAgents()) {
-      if (runningAgents.has(agent.id)) agent.running = true;
-      if (doneAgents.has(agent.id)) agent.done = true;
+      if (ptySpawnerRef?.isRunning(agent.id)) agent.running = true;
       const pa = pendingApprovals.get(agent.id);
       if (pa) agent.pendingApproval = pa;
     }
@@ -379,8 +386,7 @@ export function createModel(fs: FileSystem): NapModel {
           const firstArchAgents = await loadAgents(firstArchDir, firstNepicId, null);
           const guardian = firstArchAgents.find(a => a.role === 'guardian');
           if (guardian) {
-            if (runningAgents.has(guardian.id)) guardian.running = true;
-            if (doneAgents.has(guardian.id)) guardian.done = true;
+            if (ptySpawnerRef?.isRunning(guardian.id)) guardian.running = true;
             const pa = pendingApprovals.get(guardian.id);
             if (pa) guardian.pendingApproval = pa;
             architects.push(guardian);
@@ -398,13 +404,9 @@ export function createModel(fs: FileSystem): NapModel {
     if (debounceTimer !== null) {
       clearTimeout(debounceTimer);
     }
-    debounceTimer = setTimeout(async () => {
+    debounceTimer = setTimeout(() => {
       debounceTimer = null;
-      if (hasPendingWrite) {
-        hasPendingWrite = false;
-        return;
-      }
-      await loadFromFilesystem(nepicDir);
+      serialize(() => loadFromFilesystem(nepicDir));
     }, DEBOUNCE_MS);
   }
 
@@ -455,7 +457,7 @@ export function createModel(fs: FileSystem): NapModel {
       created_at: Date.now(),
     };
 
-    hasPendingWrite = true;
+
     await fs.writeJSON(markerPath, markerData);
 
     // Update internal state
@@ -491,7 +493,7 @@ export function createModel(fs: FileSystem): NapModel {
     const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
     const updated = { ...existing, exited: true };
 
-    hasPendingWrite = true;
+
     await fs.writeJSON(markerPath, updated);
 
     // Update internal state
@@ -507,34 +509,30 @@ export function createModel(fs: FileSystem): NapModel {
     notify();
   }
 
-  async function setAgentExitedById(agentId: string): Promise<void> {
-    const agent = findAgentById(agentId);
-    if (!agent) return;
+  function setAgentExitedById(agentId: string): Promise<void> {
+    return serialize(async () => {
+      const agent = findAgentById(agentId);
+      if (!agent) return;
 
-    // Update ephemeral sets — keep doneAgents (done + exited is valid)
-    runningAgents.delete(agentId);
-    pendingApprovals.delete(agentId);
-    agent.pendingApproval = null;
+      pendingApprovals.delete(agentId);
+      agent.pendingApproval = null;
 
-    // Write to disk FIRST — prevents race where file watcher reload
-    // happens before the write and loses both exited and done flags
-    const markerPath = agent.homePath + '/.agent.nap.json';
-    const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
-    const updated = { ...existing, exited: true };
-    hasPendingWrite = true;
-    await fs.writeJSON(markerPath, updated);
+      const markerPath = agent.homePath + '/.agent.nap.json';
+      const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
+      const updated = { ...existing, exited: true };
+      await fs.writeJSON(markerPath, updated);
 
-    // Update in-memory state after disk write
-    agent.exited = true;
-    agent.running = false;
-    notify();
+      agent.exited = true;
+      agent.running = false;
+      notify();
+    });
   }
 
   function setAgentRunning(agentId: string, running: boolean): void {
     if (running) {
-      runningAgents.add(agentId);
+  
     } else {
-      runningAgents.delete(agentId);
+  
     }
     const agent = findAgentById(agentId);
     if (agent) {
@@ -543,20 +541,20 @@ export function createModel(fs: FileSystem): NapModel {
     }
   }
 
-  async function setAgentDone(agentId: string): Promise<void> {
-    doneAgents.add(agentId);
-    const agent = findAgentById(agentId);
-    if (!agent) return;
+  function setAgentDone(agentId: string): Promise<void> {
+    return serialize(async () => {
+      const agent = findAgentById(agentId);
+      if (!agent) return;
 
-    agent.done = true;
-    notify();
+      // Disk first — prevents race where reload reads stale marker
+      const markerPath = agent.homePath + '/.agent.nap.json';
+      const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
+      const updated = { ...existing, done: true };
+      await fs.writeJSON(markerPath, updated);
 
-    // Persist to disk so done survives app restart
-    const markerPath = agent.homePath + '/.agent.nap.json';
-    const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
-    const updated = { ...existing, done: true };
-    hasPendingWrite = true;
-    await fs.writeJSON(markerPath, updated);
+      agent.done = true;
+      notify();
+    });
   }
 
   async function setAgentStarted(agentId: string): Promise<void> {
@@ -569,7 +567,7 @@ export function createModel(fs: FileSystem): NapModel {
     const markerPath = agent.homePath + '/.agent.nap.json';
     const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
     const updated = { ...existing, started: true };
-    hasPendingWrite = true;
+
     await fs.writeJSON(markerPath, updated);
   }
 
@@ -579,60 +577,55 @@ export function createModel(fs: FileSystem): NapModel {
 
     agent.archived = true;
     agent.running = false;
-    runningAgents.delete(agentId);
+
     notify();
 
     const markerPath = agent.homePath + '/.agent.nap.json';
     const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
     const updated = { ...existing, archived: true };
-    hasPendingWrite = true;
+
     await fs.writeJSON(markerPath, updated);
   }
 
-  async function spawnSuccessor(agentId: string, ptySpawner: PtySpawner): Promise<string | null> {
-    const agent = findAgentById(agentId);
-    if (!agent) return null;
+  function spawnSuccessor(agentId: string, ptySpawner: PtySpawner): Promise<string | null> {
+    return serialize(async () => {
+      const agent = findAgentById(agentId);
+      if (!agent) return null;
 
-    const newId = crypto.randomUUID();
-    const prompt = generateSuccessorPrompt(agent);
+      const newId = crypto.randomUUID();
+      const prompt = generateSuccessorPrompt(agent);
 
-    // Spawn fresh Claude with generated prompt as first message
-    const command = `claude --verbose --session-id ${newId} '${prompt.replace(/'/g, "'\\''")}'`;
-    ptySpawner.spawn({ id: newId, command, cwd: '' });
+      const command = `claude --verbose --session-id ${newId} '${prompt.replace(/'/g, "'\\''")}'`;
+      ptySpawner.spawn({ id: newId, command, cwd: '' });
 
-    ptySpawner.onExit(newId, () => {
-      return setAgentExitedById(newId);
+      ptySpawner.onExit(newId, () => {
+        return setAgentExitedById(newId);
+      });
+
+      // Write to disk first, then update in-memory
+      const markerPath = agent.homePath + '/.agent.nap.json';
+      const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
+      const updated = {
+        ...existing,
+        cc_session_uuid: newId,
+        archived: false,
+        started: true,
+        done: true,
+        exited: false,
+      };
+      await fs.writeJSON(markerPath, updated);
+
+      // Update in-memory after disk write
+      agent.id = newId;
+      agent.archived = false;
+      agent.done = true;
+      agent.exited = false;
+      agent.started = true;
+      agent.running = true;
+
+      notify();
+      return newId;
     });
-
-    // Update agent in-memory: new UUID, clear archived, mark done+started+running
-    const oldId = agent.id;
-    agent.id = newId;
-    agent.archived = false;
-    agent.done = true;
-    agent.exited = false;
-    agent.started = true;
-    agent.running = true;
-    runningAgents.delete(oldId);
-    doneAgents.delete(oldId);
-    runningAgents.add(newId);
-    doneAgents.add(newId);
-
-    // Write updated marker to disk
-    const markerPath = agent.homePath + '/.agent.nap.json';
-    const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
-    const updated = {
-      ...existing,
-      cc_session_uuid: newId,
-      archived: false,
-      started: true,
-      done: true,
-      exited: false,
-    };
-    hasPendingWrite = true;
-    await fs.writeJSON(markerPath, updated);
-
-    notify();
-    return newId;
   }
 
   async function setNapkinStatus(slug: string, status: string): Promise<void> {
@@ -641,7 +634,7 @@ export function createModel(fs: FileSystem): NapModel {
     const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
     const updated = { ...(existing || {}), status };
 
-    hasPendingWrite = true;
+
     await fs.writeJSON(markerPath, updated);
 
     // Update internal state
@@ -653,15 +646,15 @@ export function createModel(fs: FileSystem): NapModel {
     notify();
   }
 
-  async function saveUiState(state: unknown): Promise<void> {
-    const uiStatePath = nepicDir + '/ui-state.json';
-    hasPendingWrite = true;
-    // Merge with existing state so partial saves don't destroy other fields
-    let existing: Record<string, unknown> = {};
-    const raw = await fs.readJSON(uiStatePath);
-    if (raw && typeof raw === 'object') existing = raw as Record<string, unknown>;
-    const merged = { ...existing, ...(state as Record<string, unknown>) };
-    await fs.writeJSON(uiStatePath, merged);
+  function saveUiState(state: unknown): Promise<void> {
+    return serialize(async () => {
+      const uiStatePath = nepicDir + '/ui-state.json';
+      let existing: Record<string, unknown> = {};
+      const raw = await fs.readJSON(uiStatePath);
+      if (raw && typeof raw === 'object') existing = raw as Record<string, unknown>;
+      const merged = { ...existing, ...(state as Record<string, unknown>) };
+      await fs.writeJSON(uiStatePath, merged);
+    });
   }
 
   function getAllAgents(): AgentState[] {
@@ -685,7 +678,7 @@ export function createModel(fs: FileSystem): NapModel {
     const markerPath = napkinPath + '/.napkin.nap.json';
 
     const markerData = { status, nepic: currentNepicId };
-    hasPendingWrite = true;
+
     await fs.writeJSON(markerPath, markerData);
 
     // Create agents subdir marker so isDirectory works in MemoryFileSystem
@@ -746,7 +739,7 @@ export function createModel(fs: FileSystem): NapModel {
       exited: false,
     };
 
-    hasPendingWrite = true;
+
     await fs.writeJSON(markerPath, markerData);
 
     const agentState: AgentState = {
@@ -795,7 +788,7 @@ export function createModel(fs: FileSystem): NapModel {
       exited: false,
     };
 
-    hasPendingWrite = true;
+
     await fs.writeJSON(markerPath, markerData);
 
     const agentState: AgentState = {
@@ -852,7 +845,7 @@ export function createModel(fs: FileSystem): NapModel {
       exited: false,
     };
 
-    hasPendingWrite = true;
+
     await fs.writeJSON(archPath + '/.agent.nap.json', archMarker);
     await fs.writeFile(archPath + '/prompt.md', ARCHITECT_PROMPT);
     notify();
@@ -903,13 +896,12 @@ export function createModel(fs: FileSystem): NapModel {
 
     agent.started = true;
     agent.running = true;
-    runningAgents.add(agent.id);
 
     // Write started=true to marker
     const markerPath = agent.homePath + '/.agent.nap.json';
     const existing = (await fs.readJSON(markerPath)) as Record<string, unknown> | null;
     const updated = { ...existing, started: true };
-    hasPendingWrite = true;
+
     await fs.writeJSON(markerPath, updated);
 
     notify();
@@ -1009,21 +1001,19 @@ export function createModel(fs: FileSystem): NapModel {
     return roots.map(buildNode);
   }
 
-  async function switchNepicFn(slug: string): Promise<void> {
-    const base = nepicDir.replace(/\/[^/]+$/, '');
-    const newDir = base + '/' + slug;
-    if (!(await fs.isDirectory(newDir))) {
-      throw new Error(`cannot switch to '${slug}': not a directory`);
-    }
-    stopWatching();
-    // Reset write guard — stale flag from previous nepic must not
-    // suppress watcher reloads in the new nepic
-    hasPendingWrite = false;
-    await loadFromFilesystem(newDir);
-    startWatching(newDir);
-    // Persist activeNepicId to .nap/ui-state.json (project-level, not nepics-level)
-    const napDir = base.replace(/\/[^/]+$/, '');
-    await fs.writeJSON(napDir + '/ui-state.json', { activeNepicId: slug });
+  function switchNepicFn(slug: string): Promise<void> {
+    return serialize(async () => {
+      const base = nepicDir.replace(/\/[^/]+$/, '');
+      const newDir = base + '/' + slug;
+      if (!(await fs.isDirectory(newDir))) {
+        throw new Error(`cannot switch to '${slug}': not a directory`);
+      }
+      stopWatching();
+      await loadFromFilesystem(newDir);
+      startWatching(newDir);
+      const napDir = base.replace(/\/[^/]+$/, '');
+      await fs.writeJSON(napDir + '/ui-state.json', { activeNepicId: slug });
+    });
   }
 
   // ── Permission hook methods ──
@@ -1069,6 +1059,7 @@ export function createModel(fs: FileSystem): NapModel {
         listeners.delete(listener);
       };
     },
+    setPtySpawner: (ps: PtySpawner) => { ptySpawnerRef = ps; },
     startWatching,
     stopWatching,
     createAgent,

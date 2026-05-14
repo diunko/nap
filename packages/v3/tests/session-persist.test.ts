@@ -128,14 +128,15 @@ describe('SP-01: focusedCardSlug round-trip', () => {
     expect(useNapStore.getState().focusedCardSlug).toBe('uuid-arch');
   });
 
-  it('ignores focusedCardSlug when slug matches nothing in model', async () => {
+  it('restores focusedCardSlug unconditionally — validation deferred to applySnapshot', async () => {
     (window as any).electronAPI = {
       loadUiState: vi.fn().mockResolvedValue({ focusedCardSlug: 'nonexistent-slug' }),
       fileRead: vi.fn().mockResolvedValue(null),
     };
 
     await loadPersistedUiState();
-    expect(useNapStore.getState().focusedCardSlug).toBeNull();
+    // Slug restored even if model doesn't have it yet — applySnapshot validates later
+    expect(useNapStore.getState().focusedCardSlug).toBe('nonexistent-slug');
   });
 
   it('saves and restores cardViewMode: extended', async () => {
@@ -176,7 +177,7 @@ describe('SP-01: focusedCardSlug round-trip', () => {
     expect(useNapStore.getState().cardViewMode).toBe('focused');
   });
 
-  it('does not restore cardViewMode when slug has no match', async () => {
+  it('restores cardViewMode even when slug has no match yet', async () => {
     (window as any).electronAPI = {
       loadUiState: vi.fn().mockResolvedValue({
         focusedCardSlug: 'nonexistent',
@@ -186,7 +187,7 @@ describe('SP-01: focusedCardSlug round-trip', () => {
     };
 
     await loadPersistedUiState();
-    expect(useNapStore.getState().cardViewMode).toBe('collapsed');
+    expect(useNapStore.getState().cardViewMode).toBe('extended');
   });
 });
 

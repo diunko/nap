@@ -377,9 +377,9 @@ export function ContentPane() {
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
+    let aborted = false;
 
     if (!activeFilePath) {
-      // No file — clear model
       if (modelRef.current) {
         modelRef.current.dispose();
         modelRef.current = null;
@@ -388,16 +388,15 @@ export function ContentPane() {
       contentDisposableRef.current = null;
       editor.setModel(null);
       gutterDecorationsRef.current = [];
-      // Tell main to stop watching
       window.electronAPI?.fileWatch(null);
       return;
     }
 
-    // Load file content
     (async () => {
       const content = await window.electronAPI?.fileRead(activeFilePath);
+      if (aborted) return;
+
       if (content === null || content === undefined) {
-        // File not found — ghost tab. Clear model, start ghost watcher.
         if (modelRef.current) {
           modelRef.current.dispose();
           modelRef.current = null;
@@ -408,7 +407,6 @@ export function ContentPane() {
         gutterDecorationsRef.current = [];
         window.electronAPI?.fileWatch(null);
 
-        // Mark tab as ghost if not already
         const state = useNapStore.getState();
         const tab = state.leftTabs.find((t) => t.path === activeFilePath);
         if (tab && !tab.ghost) {
@@ -421,7 +419,8 @@ export function ContentPane() {
         return;
       }
 
-      // Dispose old model, create new
+      if (aborted) return;
+
       if (modelRef.current) {
         modelRef.current.dispose();
       }
@@ -432,20 +431,15 @@ export function ContentPane() {
       editor.setModel(model);
       gutterDecorationsRef.current = [];
 
-      // Start watching this file
       window.electronAPI?.fileWatch(activeFilePath);
-
-      // Load git gutter + role decorations
       refreshGitGutter(activeFilePath);
       refreshRoleDecorations();
 
-      // If rendered mode is active, render HTML now (fixes stale content on tab switch)
       const currentMode = useNapStore.getState().leftPaneRenderMode;
       if (currentMode === 'rendered' && renderedRef.current) {
         renderedRef.current.innerHTML = renderMarkdown(content, shikiTheme);
       }
 
-      // Set up onDidChangeContent listener for live re-render (external edits while rendered)
       contentDisposableRef.current = model.onDidChangeContent(() => {
         const mode = useNapStore.getState().leftPaneRenderMode;
         if (mode === 'rendered' && renderedRef.current) {
@@ -455,6 +449,7 @@ export function ContentPane() {
     })();
 
     return () => {
+      aborted = true;
       clearTimeout(saveTimerRef.current);
     };
   }, [activeFilePath, fileReloadVersion]);

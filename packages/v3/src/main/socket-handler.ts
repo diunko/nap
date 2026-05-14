@@ -83,7 +83,7 @@ export function createRequestHandler(
 
       case 'done': {
         const sessionId = req.sessionId as string;
-        model.setAgentDone(sessionId);
+        await model.setAgentDone(sessionId);
         return { id: reqId };
       }
 

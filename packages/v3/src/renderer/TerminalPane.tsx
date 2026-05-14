@@ -109,6 +109,7 @@ function CodeEditor() {
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
+    let aborted = false;
 
     if (!rightFilePath) {
       if (modelRef.current) {
@@ -122,6 +123,7 @@ function CodeEditor() {
 
     (async () => {
       const content = await window.electronAPI?.fileRead(rightFilePath);
+      if (aborted) return;
       if (content === null || content === undefined) return;
 
       if (modelRef.current) modelRef.current.dispose();
@@ -131,7 +133,6 @@ function CodeEditor() {
       modelRef.current = model;
       editor.setModel(model);
 
-      // Line highlight
       if (rightFileLine) {
         editor.revealLineInCenter(rightFileLine);
         decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [
@@ -140,7 +141,6 @@ function CodeEditor() {
             options: { isWholeLine: true, className: 'nap-line-highlight' },
           },
         ]);
-        // Remove after animation
         setTimeout(() => {
           if (editorRef.current) {
             decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, []);
@@ -148,11 +148,11 @@ function CodeEditor() {
         }, 1600);
       }
 
-      // Start watching
       window.electronAPI?.codeWatch(rightFilePath);
     })();
 
     return () => {
+      aborted = true;
       decorationsRef.current = [];
     };
   }, [rightFilePath, rightFileLine]);

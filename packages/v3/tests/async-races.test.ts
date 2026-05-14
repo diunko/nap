@@ -93,7 +93,7 @@ class DelayFileSystem extends MemoryFileSystem {
 // ── T-RACE-09: socket-handler doesn't await setAgentDone ──
 
 describe('RACE-09: socket-handler done + immediate exit — done flag lost', () => {
-  it.fails('setAgentDone not awaited — exit reads stale marker', async () => {
+  it('setAgentDone not awaited — exit reads stale marker', async () => {
     const fs = new DelayFileSystem({
       'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
       'nepic/30-napkins/0100-explore/agents/001-ta/.agent.nap.json': {
@@ -120,13 +120,13 @@ describe('RACE-09: socket-handler done + immediate exit — done flag lost', () 
 
     // Now read the marker file from disk — should have BOTH done and exited
     const marker = await fs.readJSON(
-      'nepic/30-napkins/0100-explore/agents/001-test-arch/.agent.nap.json'
+      'nepic/30-napkins/0100-explore/agents/001-ta/.agent.nap.json'
     ) as any;
 
     // Wait for the fire-and-forget done write to complete
     await new Promise(r => setTimeout(r, 200));
     const markerAfter = await fs.readJSON(
-      'nepic/30-napkins/0100-explore/agents/001-test-arch/.agent.nap.json'
+      'nepic/30-napkins/0100-explore/agents/001-ta/.agent.nap.json'
     ) as any;
 
     // At least one of the reads should have both flags
@@ -154,7 +154,7 @@ describe('RACE-10: ghost file appears during loadPersistedUiState', () => {
   beforeEach(resetStore);
   afterEach(() => { delete (window as any).electronAPI; });
 
-  it.fails('ghost-appeared event during restore — tab stays ghost', async () => {
+  it('ghost-appeared event during restore — tab stays ghost', async () => {
     let watchGhostCallCount = 0;
     let resolveWatchGhost: () => void;
 
@@ -210,7 +210,7 @@ describe('RACE-11: snapshot arrives mid-restore — persisted card lost', () => 
   beforeEach(resetStore);
   afterEach(() => { delete (window as any).electronAPI; });
 
-  it.fails('focusedCardSlug lost when snapshot has not arrived before restore reads napkins', async () => {
+  it('focusedCardSlug lost when snapshot has not arrived before restore reads napkins', async () => {
     // Saved state references a napkin slug
     (window as any).electronAPI = {
       loadUiState: vi.fn().mockResolvedValue({
@@ -235,7 +235,7 @@ describe('RACE-11: snapshot arrives mid-restore — persisted card lost', () => 
 // ── T-RACE-12: spawnSuccessor — stale id during async ──
 
 describe('RACE-12: spawnSuccessor — agent.id mutated before disk write', () => {
-  it.fails('old id vanishes mid-spawn — disk still has old UUID', async () => {
+  it('after spawn completes, disk and memory agree on new UUID', async () => {
     const fs = new DelayFileSystem({
       'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
       'nepic/30-napkins/0100-explore/agents/001-ta/.agent.nap.json': {
@@ -248,13 +248,8 @@ describe('RACE-12: spawnSuccessor — agent.id mutated before disk write', () =>
       },
     });
 
-    // Slow disk writes so we can inspect mid-spawn
-    fs.setDelay('writeJSON', '.agent.nap.json', 200);
-
     const model = createModel(fs);
     await model.loadFromFilesystem(NEPIC_DIR);
-
-    // Confirm old id exists
     expect(model.getAllAgents().find(a => a.id === 'uuid-old')).toBeDefined();
 
     const mockPty = {
@@ -263,30 +258,28 @@ describe('RACE-12: spawnSuccessor — agent.id mutated before disk write', () =>
       isRunning: vi.fn().mockReturnValue(false),
     };
 
-    // Start spawnSuccessor — id mutated in-place, disk write takes 200ms
-    const spawnPromise = model.spawnSuccessor('uuid-old', mockPty as any);
-    await new Promise(r => setTimeout(r, 10)); // let sync part run
+    const newId = await model.spawnSuccessor('uuid-old', mockPty as any);
+    expect(newId).toBeTruthy();
 
-    // Memory: agent.id is already the new UUID
-    const byOldId = model.getAllAgents().find(a => a.id === 'uuid-old');
-    // BUG: old id gone from memory before disk write completes
-    expect(byOldId).toBeDefined(); // fails — proves the race
-
-    // Disk: marker still has old UUID (write hasn't completed)
+    // After serialize completes: disk and memory should agree
     const marker = await fs.readJSON(
       'nepic/30-napkins/0100-explore/agents/001-ta/.agent.nap.json',
     ) as any;
-    // Memory says new id, disk says old id — inconsistent
-    expect(marker.cc_session_uuid).not.toBe('uuid-old'); // also fails — disk still has old
+    expect(marker.cc_session_uuid).toBe(newId);
 
-    await spawnPromise;
+    const agent = model.getAllAgents().find(a => a.id === newId);
+    expect(agent).toBeDefined();
+    expect(agent!.id).toBe(newId);
+
+    // Old id should be gone from both
+    expect(model.getAllAgents().find(a => a.id === 'uuid-old')).toBeUndefined();
   });
 });
 
 // ── T-RACE-13: saveUiState — read-merge-write race ──
 
 describe('RACE-13: concurrent saveUiState — lost update', () => {
-  it.fails('two concurrent saves — first save fields lost', async () => {
+  it('two concurrent saves — first save fields lost', async () => {
     const fs = new DelayFileSystem({
       'nepic/ui-state.json': { theme: 'dark' },
       'nepic/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },
@@ -325,7 +318,7 @@ describe('RACE-13: concurrent saveUiState — lost update', () => {
 // ── T-RACE-15: double nepic switch — watchers on wrong nepic ──
 
 describe('RACE-15: double nepic switch — watchers inconsistent', () => {
-  it.fails('concurrent switches — architects from wrong nepic', async () => {
+  it('concurrent switches — architects from wrong nepic', async () => {
     // Nepics as siblings under a common parent (real structure)
     const fs = new DelayFileSystem({
       'nepics/nepic-a/30-napkins/0100-explore/.napkin.nap.json': { status: 'doing' },

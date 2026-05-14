@@ -70,7 +70,7 @@ async function boot(tmpDir: string): Promise<{ app: ElectronApplication; page: P
 // ── T-RACE-01: ContentPane file load — rapid tab switch shows stale file ──
 
 test('RACE-01: rapid tab switch — editor shows stale file content', async () => {
-  test.fail(); // No cancellation in ContentPane file load effect
+
   const tmpDir = makeTmpDir();
   const { fileAPath, fileBPath } = createFixture(tmpDir);
   const { app, page } = await boot(tmpDir);
@@ -126,7 +126,7 @@ test('RACE-01: rapid tab switch — editor shows stale file content', async () =
 // ── T-RACE-02: Tab switch during file load — fileWatch set to wrong file ──
 
 test('RACE-02: rapid tab switch — file watcher watches wrong file', async () => {
-  test.fail(); // No cancellation in ContentPane file load effect
+
   const tmpDir = makeTmpDir();
   const { fileAPath, fileBPath } = createFixture(tmpDir);
   const { app, page } = await boot(tmpDir);
@@ -175,7 +175,7 @@ test('RACE-02: rapid tab switch — file watcher watches wrong file', async () =
 // ── T-RACE-03: TerminalPane CodeEditor — rapid code file switch shows stale file ──
 
 test('RACE-03: rapid code file switch — right pane shows stale content', async () => {
-  test.fail(); // No cancellation in TerminalPane CodeEditor file load effect
+
   const tmpDir = makeTmpDir();
   const { fileAPath, codeAPath, codeBPath } = createFixture(tmpDir);
   const { app, page } = await boot(tmpDir);
@@ -358,7 +358,7 @@ test('RACE-14: late watcher echo causes cursor jump', async () => {
 // ── T-RACE-08: setAgentDone memory-before-disk — disk missing done after crash ──
 
 test('RACE-08: done flag missing from disk — fire-and-forget + immediate exit', async () => {
-  test.fail(); // No serialization on model mutations — concurrent writes lose data
+
   const tmpDir = makeTmpDir();
   createFixture(tmpDir);
   const { app, page } = await boot(tmpDir);
