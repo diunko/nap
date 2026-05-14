@@ -5,7 +5,20 @@
   * missing: which card is focused, which files are open
   * add to ui-state.json:
     * focusedCardSlug
+      * // slug is reliable enough?
+      * //A: yes — slugs are directory names, they never change (napkins never move)
+        * napkin slug = dir name in `30-napkins/` (e.g. `0100-content-pane`)
+        * architect slug = agent id (UUID from `.agent.nap.json`)
+        * both are stable across restarts
+        * if a napkin dir gets deleted, slug won't match anything → no card focused, harmless
     * activeTerminalId (which agent terminal was showing)
+      * // what exactly is stored? can it de-sync from the card somehow?
+      * //A: it's the `cc_session_uuid` from `.agent.nap.json`
+        * same UUID used for `--session-id` and `--resume`
+        * de-sync risk: agent gets archived → new successor gets fresh UUID
+          * saved UUID points to the old agent, which still exists (archived)
+          * on restore: agent found but archived → show successor prompt (existing behavior)
+          * not a de-sync, just the natural lifecycle — works correctly
     * leftTabs (array of open file paths + ephemeral flag)
       * // what happens if some files are absent?
       * //A: on restore, try to read each file
