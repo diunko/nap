@@ -45,8 +45,8 @@ declare global {
       onCodeChanged: (cb: (filePath: string, content: string) => void) => () => void;
       codeWatch: (filePath: string | null) => void;
       shellOpenExternal: (url: string) => void;
-      watchGhost: (filePath: string) => void;
-      unwatchGhost: (filePath: string) => void;
+      watchGhost: (filePath: string) => Promise<void>;
+      unwatchGhost: (filePath: string) => Promise<void>;
       onGhostAppeared: (cb: (filePath: string, content: string) => void) => () => void;
     };
   }

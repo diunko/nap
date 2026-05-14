@@ -137,6 +137,57 @@ describe('SP-01: focusedCardSlug round-trip', () => {
     await loadPersistedUiState();
     expect(useNapStore.getState().focusedCardSlug).toBeNull();
   });
+
+  it('saves and restores cardViewMode: extended', async () => {
+    const napkin = makeNapkin({ id: '0100-explore', slug: '0100-explore' });
+    useNapStore.setState({ napkins: [napkin], focusedCardSlug: '0100-explore', cardViewMode: 'extended' });
+
+    let savedState: any = null;
+    (window as any).electronAPI = {
+      saveUiState: (s: any) => { savedState = s; },
+    };
+
+    persistFullUiState();
+    expect(savedState.cardViewMode).toBe('extended');
+
+    resetStore();
+    useNapStore.setState({ napkins: [napkin] });
+    (window as any).electronAPI = {
+      loadUiState: vi.fn().mockResolvedValue(savedState),
+      fileRead: vi.fn().mockResolvedValue(null),
+    };
+
+    await loadPersistedUiState();
+    expect(useNapStore.getState().cardViewMode).toBe('extended');
+  });
+
+  it('defaults to focused when cardViewMode is invalid', async () => {
+    const napkin = makeNapkin({ id: '0100-explore', slug: '0100-explore' });
+    useNapStore.setState({ napkins: [napkin] });
+    (window as any).electronAPI = {
+      loadUiState: vi.fn().mockResolvedValue({
+        focusedCardSlug: '0100-explore',
+        cardViewMode: 'garbage',
+      }),
+      fileRead: vi.fn().mockResolvedValue(null),
+    };
+
+    await loadPersistedUiState();
+    expect(useNapStore.getState().cardViewMode).toBe('focused');
+  });
+
+  it('does not restore cardViewMode when slug has no match', async () => {
+    (window as any).electronAPI = {
+      loadUiState: vi.fn().mockResolvedValue({
+        focusedCardSlug: 'nonexistent',
+        cardViewMode: 'extended',
+      }),
+      fileRead: vi.fn().mockResolvedValue(null),
+    };
+
+    await loadPersistedUiState();
+    expect(useNapStore.getState().cardViewMode).toBe('collapsed');
+  });
 });
 
 // T-0320-SP-02: Save round-trip — activeTerminalId

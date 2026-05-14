@@ -90,30 +90,13 @@ export function syncEditToRendered(
  * Sync scroll from rendered view to edit mode.
  * Finds topmost visible source-line element and positions the editor cursor there.
  *
- * @param cachedScrollTop — scrollTop captured while the rendered div was visible.
- *   When the div is display:none, browser resets scrollTop to 0, so we need the cached value.
+ * Requires rendered div to preserve layout state (use visibility:hidden, not display:none).
  */
 export function syncRenderedToEdit(
   editor: monaco.editor.IStandaloneCodeEditor,
   rendered: HTMLDivElement,
-  cachedScrollTop?: number,
 ): void {
-  const scrollTop = cachedScrollTop ?? rendered.scrollTop;
-  const elements = rendered.querySelectorAll('[data-source-line]');
-
-  // Find topmost visible element using cached scrollTop
-  let line: number | null = null;
-  for (const el of elements) {
-    if ((el as HTMLElement).offsetTop >= scrollTop) {
-      line = parseInt(el.getAttribute('data-source-line')!, 10);
-      break;
-    }
-  }
-  // All above viewport — use last element
-  if (line === null && elements.length > 0) {
-    line = parseInt(elements[elements.length - 1].getAttribute('data-source-line')!, 10);
-  }
-
+  const line = findTopmostVisibleSourceLine(rendered);
   if (line !== null) {
     editor.setPosition({ lineNumber: line, column: 1 });
     editor.revealLineInCenter(line);

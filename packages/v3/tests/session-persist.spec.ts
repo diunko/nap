@@ -139,8 +139,7 @@ async function toggleRenderedMode(page: Page): Promise<void> {
 // ── SP-06: Ghost tab — file reappears (dir watcher) ──
 
 test('SP-06: ghost tab — file reappears via dir watcher', async () => {
-  // Use realpathSync to avoid macOS /var → /private/var symlink mismatches
-  // between @parcel/watcher event paths and the paths we pass to watchGhost
+  // realpathSync avoids macOS /var → /private/var symlink mismatches
   const tmpDir = fs.realpathSync(makeTmpDir());
   const { ghostFilePath, fileAPath } = createFixture(tmpDir);
   const { app, page } = await boot(tmpDir);
@@ -155,36 +154,33 @@ test('SP-06: ghost tab — file reappears via dir watcher', async () => {
       s.pinTab('left', s.leftTabs[0].id);
     });
 
-    // Open ghost file path (file doesn't exist on disk)
+    // Open ghost file path (file doesn't exist on disk).
+    // watchGhost is now awaitable (ipcMain.handle) — the ContentPane effect
+    // awaits it, so by the time the ghost state is set the @parcel/watcher
+    // subscription is confirmed ready.
     await page.evaluate((gp) => {
       (window as any).__napStore__.getState().openDoc(gp);
     }, ghostFilePath);
-    await page.waitForTimeout(1500);
 
-    // Verify ghost tab exists
-    const ghostState = await page.evaluate((gp) => {
-      const s = (window as any).__napStore__.getState();
-      const tab = s.leftTabs.find((t: any) => t.path === gp);
-      return tab ? { ghost: tab.ghost, path: tab.path } : null;
-    }, ghostFilePath);
-    expect(ghostState).not.toBeNull();
-    expect(ghostState!.ghost).toBe(true);
+    // Wait for ghost tab state (confirms file read returned null + watchGhost completed)
+    await page.waitForFunction(
+      (gp) => {
+        const s = (window as any).__napStore__.getState();
+        const tab = s.leftTabs.find((t: any) => t.path === gp);
+        return tab && tab.ghost === true;
+      },
+      ghostFilePath,
+      { timeout: 10000 },
+    );
 
     // Verify ghost placeholder visible
     const placeholder = page.locator('[data-testid="ghost-placeholder"]');
     await expect(placeholder).toBeVisible({ timeout: 5000 });
 
-    // Test IPC chain: manually send ghost-appeared from main process to verify
-    // the renderer listener promotes the tab. This tests the full IPC path
-    // without depending on @parcel/watcher filesystem events.
+    // Create the ghost file on disk — watcher subscription is ready, should fire
     fs.writeFileSync(ghostFilePath, '# Ghost file appeared\n\nContent here.\n');
 
-    await app.evaluate(async ({ BrowserWindow }, fp) => {
-      const win = BrowserWindow.getAllWindows()[0];
-      win.webContents.send('file:ghost-appeared', fp, '# Ghost file appeared\n\nContent here.\n');
-    }, ghostFilePath);
-
-    // Wait for ghost promotion via IPC
+    // Wait for ghost promotion via real @parcel/watcher → IPC → promoteGhostTab
     await page.waitForFunction(
       (gp) => {
         const s = (window as any).__napStore__.getState();
@@ -192,7 +188,7 @@ test('SP-06: ghost tab — file reappears via dir watcher', async () => {
         return tab && !tab.ghost;
       },
       ghostFilePath,
-      { timeout: 5000 },
+      { timeout: 15000 },
     );
 
     // Verify tab is no longer ghost
@@ -400,13 +396,7 @@ test('SS-02: edit → rendered scroll sync — cursor off-screen fallback', asyn
 
 // ── SS-03: Rendered → edit — topmost visible source line ──
 
-// BUG FINDING: syncRenderedToEdit runs inside a useEffect that fires AFTER React has committed
-// display:none to the rendered div. At that point scrollTop is 0 and all child offsetTop values
-// are 0, so the cursor always lands at line 1 instead of the actual topmost visible line.
-// Fix: cache rendered.scrollTop in a ref before the mode toggle state update, or use
-// useLayoutEffect + requestAnimationFrame ordering so the div is still visible when read.
 test('SS-03: rendered → edit — topmost visible source line', async () => {
-  test.fail(); // Expected failure — rendered→edit sync reads display:none div (scrollTop=0)
   const tmpDir = makeTmpDir();
   const { napFilePath } = createFixture(tmpDir);
   const { app, page } = await boot(tmpDir);
@@ -459,9 +449,7 @@ test('SS-03: rendered → edit — topmost visible source line', async () => {
 
 // ── SS-04: Round-trip — edit → rendered → edit preserves position ──
 
-// Same display:none bug as SS-03 — rendered→edit leg of the round-trip always goes to line 1.
 test('SS-04: round-trip edit → rendered → edit preserves position', async () => {
-  test.fail(); // Expected failure — depends on SS-03 fix (rendered→edit sync)
   const tmpDir = makeTmpDir();
   const { napFilePath } = createFixture(tmpDir);
   const { app, page } = await boot(tmpDir);

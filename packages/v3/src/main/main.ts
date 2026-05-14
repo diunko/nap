@@ -308,12 +308,12 @@ app.whenReady().then(async () => {
     }
   });
 
-  ipcMain.on('file:watch-ghost', (_event, filePath: string) => {
-    ghostWatcher.watch(filePath);
+  ipcMain.handle('file:watch-ghost', async (_event, filePath: string) => {
+    await ghostWatcher.watch(filePath);
   });
 
-  ipcMain.on('file:unwatch-ghost', (_event, filePath: string) => {
-    ghostWatcher.unwatch(filePath);
+  ipcMain.handle('file:unwatch-ghost', async (_event, filePath: string) => {
+    await ghostWatcher.unwatch(filePath);
   });
 
   // UI state persistence (debug panel collapse/tab, sidebar visible)

@@ -142,7 +142,6 @@ export function ContentPane() {
   const roleDecorationsRef = useRef<string[]>([]);
   const contentDisposableRef = useRef<monaco.IDisposable | null>(null);
   const prevModeRef = useRef(leftPaneRenderMode);
-  const cachedRenderedScrollTopRef = useRef(0);
   const [shikiLoaded, setShikiLoaded] = useState(false);
 
   // Detect if the active tab is a ghost
@@ -417,7 +416,7 @@ export function ContentPane() {
             t.path === activeFilePath ? { ...t, ghost: true } : t,
           );
           useNapStore.setState({ leftTabs });
-          window.electronAPI?.watchGhost(activeFilePath);
+          await window.electronAPI?.watchGhost(activeFilePath);
         }
         return;
       }
@@ -504,18 +503,6 @@ export function ContentPane() {
     renderedRef.current.innerHTML = renderMarkdown(model.getValue(), shikiTheme);
   }, [leftPaneRenderMode, shikiTheme, shikiLoaded]);
 
-  // Cache rendered scrollTop continuously while visible (before React hides it on mode switch)
-  useEffect(() => {
-    const rendered = renderedRef.current;
-    if (!rendered || leftPaneRenderMode !== 'rendered') return;
-
-    const onScroll = () => { cachedRenderedScrollTopRef.current = rendered.scrollTop; };
-    // Capture initial scrollTop
-    cachedRenderedScrollTopRef.current = rendered.scrollTop;
-    rendered.addEventListener('scroll', onScroll, { passive: true });
-    return () => rendered.removeEventListener('scroll', onScroll);
-  }, [leftPaneRenderMode]);
-
   // Scroll sync on mode toggle
   useEffect(() => {
     const prevMode = prevModeRef.current;
@@ -531,8 +518,8 @@ export function ContentPane() {
       // Run after a microtask so rendered HTML has been populated by the effect above
       queueMicrotask(() => syncEditToRendered(editor, rendered));
     } else if (prevMode === 'rendered' && leftPaneRenderMode === 'edit') {
-      // Rendered → edit: use cached scrollTop (rendered div is display:none by now, scrollTop is 0)
-      syncRenderedToEdit(editor, rendered, cachedRenderedScrollTopRef.current);
+      // Rendered → edit: rendered div is visibility:hidden so scrollTop/offsetTop are preserved
+      syncRenderedToEdit(editor, rendered);
       setTimeout(() => editor.focus(), 0);
     }
   }, [leftPaneRenderMode]);
@@ -631,34 +618,40 @@ export function ContentPane() {
           file not found
         </div>
       )}
-      {/* Editor container — always mounted, hidden in rendered mode or ghost */}
-      <div
-        ref={containerRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: activeFilePath && !isGhost && leftPaneRenderMode === 'edit' ? 'block' : 'none',
-        }}
-      />
-      {/* Rendered view — always mounted for scroll sync, hidden when not in rendered mode */}
-      <div
-        ref={renderedRef}
-        data-testid="rendered-view"
-        className="nap-rendered"
-        onClick={handleRenderedClick}
-        style={{
-          flex: activeFilePath && !isGhost && leftPaneRenderMode === 'rendered' ? 1 : undefined,
-          minHeight: 0,
-          overflow: 'auto',
-          padding: '16px 24px',
-          fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
-          fontSize: 14,
-          lineHeight: 1.6,
-          color: 'var(--nap-text-secondary)',
-          cursor: 'default',
-          display: activeFilePath && !isGhost && leftPaneRenderMode === 'rendered' ? undefined : 'none',
-        }}
-      />
+      {/* Stacked layers: editor + rendered, both always mounted and laid out.
+          visibility:hidden preserves scrollTop/offsetTop so scroll sync works. */}
+      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+        {/* Editor layer */}
+        <div
+          ref={containerRef}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: activeFilePath && !isGhost && leftPaneRenderMode === 'edit' ? 1 : 0,
+            visibility: activeFilePath && !isGhost && leftPaneRenderMode === 'edit' ? 'visible' : 'hidden',
+          }}
+        />
+        {/* Rendered layer */}
+        <div
+          ref={renderedRef}
+          data-testid="rendered-view"
+          className="nap-rendered"
+          onClick={handleRenderedClick}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            overflow: 'auto',
+            padding: '16px 24px',
+            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+            fontSize: 14,
+            lineHeight: 1.6,
+            color: 'var(--nap-text-secondary)',
+            cursor: 'default',
+            zIndex: activeFilePath && !isGhost && leftPaneRenderMode === 'rendered' ? 1 : 0,
+            visibility: activeFilePath && !isGhost && leftPaneRenderMode === 'rendered' ? 'visible' : 'hidden',
+          }}
+        />
+      </div>
     </div>
   );
 }

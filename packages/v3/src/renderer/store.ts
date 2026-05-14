@@ -477,6 +477,7 @@ export function persistFullUiState(): void {
   const activeRightTab = state.rightTabs.find((t) => t.id === state.activeRightTabId);
   window.electronAPI.saveUiState({
     focusedCardSlug: state.focusedCardSlug,
+    cardViewMode: state.cardViewMode,
     activeTerminalId: state.activeTerminalId,
     leftPaneRenderMode: state.leftPaneRenderMode,
     leftTabs: state.leftTabs
@@ -520,7 +521,8 @@ export async function loadPersistedUiState(): Promise<void> {
     const archMatch = store.architects.some((a) => a.id === state.focusedCardSlug);
     if (napkinMatch || archMatch) {
       updates.focusedCardSlug = state.focusedCardSlug as string;
-      updates.cardViewMode = 'focused';
+      const savedMode = state.cardViewMode;
+      updates.cardViewMode = (savedMode === 'focused' || savedMode === 'extended') ? savedMode : 'focused';
     }
   }
 
@@ -550,7 +552,7 @@ export async function loadPersistedUiState(): Promise<void> {
         ...(check.ghost ? { ghost: true } : {}),
       });
       if (check.ghost) {
-        window.electronAPI!.watchGhost(check.path);
+        await window.electronAPI!.watchGhost(check.path);
       }
     }
 
@@ -591,7 +593,7 @@ export async function loadPersistedUiState(): Promise<void> {
         ...(check.ghost ? { ghost: true } : {}),
       });
       if (check.ghost) {
-        window.electronAPI!.watchGhost(check.path);
+        await window.electronAPI!.watchGhost(check.path);
       }
     }
 
