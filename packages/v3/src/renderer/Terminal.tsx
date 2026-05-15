@@ -316,7 +316,13 @@ export function Terminal() {
     if (!containerRef.current) return;
 
     let resizeTimer: ReturnType<typeof setTimeout> | undefined;
-    const observer = new ResizeObserver(() => {
+    const observer = new ResizeObserver((entries) => {
+      // Skip when container has zero dimensions (parent display:none).
+      // fitAddon.fit() would resize the terminal to ~2 cols, causing the
+      // pty to reflow all content to narrow columns.
+      const rect = entries[0]?.contentRect;
+      if (!rect || rect.width === 0 || rect.height === 0) return;
+
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         const id = useNapStore.getState().activeTerminalId;
