@@ -54,13 +54,32 @@ export async function launchApp(tmpDir: string): Promise<ElectronApplication> {
   });
   // Store for cleanup
   (app as any).__userDataDir = userDataDir;
+
+  // Pipe main process stdout/stderr when TRACE=1
+  if (process.env['TRACE'] === '1') {
+    app.process().stdout?.on('data', (d: Buffer) => process.stdout.write(d));
+    app.process().stderr?.on('data', (d: Buffer) => process.stderr.write(d));
+  }
+
   return app;
 }
 
 export async function cleanupApp(app: ElectronApplication, tmpDir: string): Promise<void> {
   const userDataDir = (app as any).__userDataDir;
-  await app.evaluate(({ app }) => app.quit());
-  await app.close();
+  try {
+    // Try graceful quit with a timeout — if the app is hung, don't wait forever
+    await Promise.race([
+      app.evaluate(({ app }) => app.quit()),
+      new Promise(resolve => setTimeout(resolve, 3000)),
+    ]);
+  } catch {
+    // App may already be closed or unresponsive
+  }
+  try {
+    await app.close();
+  } catch {
+    // Force-kill: app.close() can throw if process already exited
+  }
   fs.rmSync(tmpDir, { recursive: true, force: true });
   if (userDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
 }

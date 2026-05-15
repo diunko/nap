@@ -177,10 +177,11 @@ test('SP-06: ghost tab — file reappears via dir watcher', async () => {
     const placeholder = page.locator('[data-testid="ghost-placeholder"]');
     await expect(placeholder).toBeVisible({ timeout: 5000 });
 
-    // Create the ghost file on disk — watcher subscription is ready, should fire.
-    // Write twice with a gap to handle variable FSEvents latency in temp dirs.
+    // Create the ghost file on disk — watcher subscription is confirmed ready
+    // because ghost=true is set AFTER watchGhost completes.
+    // Write twice with a gap — FSEvents on macOS tmpdir can delay delivery.
     fs.writeFileSync(ghostFilePath, '# Ghost file appeared\n\nContent here.\n');
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2000);
     fs.writeFileSync(ghostFilePath, '# Ghost file appeared\n\nContent here.\n');
 
     // Wait for ghost promotion via real @parcel/watcher → IPC → promoteGhostTab
@@ -191,7 +192,7 @@ test('SP-06: ghost tab — file reappears via dir watcher', async () => {
         return tab && !tab.ghost;
       },
       ghostFilePath,
-      { timeout: 15000 },
+      { timeout: 20000 },
     );
 
     // Verify tab is no longer ghost

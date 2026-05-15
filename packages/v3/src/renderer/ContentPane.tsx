@@ -410,11 +410,13 @@ export function ContentPane() {
         const state = useNapStore.getState();
         const tab = state.leftTabs.find((t) => t.path === activeFilePath);
         if (tab && !tab.ghost) {
-          const leftTabs = state.leftTabs.map((t) =>
+          // Start watcher BEFORE setting ghost flag — when external code sees
+          // ghost=true, the subscription is guaranteed ready.
+          await window.electronAPI?.watchGhost(activeFilePath);
+          const leftTabs = useNapStore.getState().leftTabs.map((t) =>
             t.path === activeFilePath ? { ...t, ghost: true } : t,
           );
           useNapStore.setState({ leftTabs });
-          await window.electronAPI?.watchGhost(activeFilePath);
         }
         return;
       }

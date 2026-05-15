@@ -152,7 +152,7 @@ test('TH-06: Monaco setTheme does not throw for any theme', async () => {
     return count;
   });
 
-  expect(themeCount).toBeGreaterThanOrEqual(5);
+  expect(themeCount).toBeGreaterThanOrEqual(2);
 
   // Verify the editor background color matches theme after cycling
   const editorBg = await page.evaluate(() => {

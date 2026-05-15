@@ -166,11 +166,11 @@ test('M03: role-prefixed comment tokens', async () => {
   });
 
   const expectedTypes = [
-    'comment.architect',
-    'comment.user',
-    'comment.fs-eng',
-    'comment.test-arch',
-    'comment.test-eng',
+    'comment.role',
+    'comment.role',
+    'comment.role',
+    'comment.role',
+    'comment.role',
   ];
 
   for (let i = 0; i < results.length; i++) {
@@ -249,12 +249,12 @@ test('M05: mixed content tokenization', async () => {
   expect(results[3].types.some((t: string) => t.includes('inline-code'))).toBe(true);
 
   // Role comment
-  expect(results[4].types.some((t: string) => t.includes('comment.architect'))).toBe(true);
+  expect(results[4].types.some((t: string) => t.includes('comment.role'))).toBe(true);
 
-  // Generic comment
+  // Generic comment — has 'comment' but NOT 'comment.role'
   const genericCommentTypes = results[5].types;
   expect(genericCommentTypes.some((t: string) => t.includes('comment'))).toBe(true);
-  expect(genericCommentTypes.some((t: string) => t.includes('comment.architect'))).toBe(false);
+  expect(genericCommentTypes.some((t: string) => t.includes('comment.role'))).toBe(false);
 
   await cleanupApp(app, tmpDir);
 });

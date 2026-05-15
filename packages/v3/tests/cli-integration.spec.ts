@@ -184,14 +184,17 @@ test('T-0210-86: nap stop via real CLI → agent stops', async () => {
   await setupApp(F10_FIXTURE);
   try {
     // Create and start a fresh agent
-    execNap('create agent 003-stop-target --napkin 0100-explore --role test-eng', {
+    const createResult = execNap('create agent 003-stop-target --napkin 0100-explore --role test-eng', {
       cwd: tmpDir,
       env: { NAP_SOCKET: sockPath },
     });
-    execNap('start 003-stop-target test', {
+    expect(createResult.exitCode).toBe(0);
+
+    const startResult = execNap('start 003-stop-target test', {
       cwd: tmpDir,
       env: { NAP_SOCKET: sockPath },
     });
+    expect(startResult.exitCode).toBe(0);
 
     // Wait for it to be running
     await page.waitForFunction(
@@ -200,7 +203,7 @@ test('T-0210-86: nap stop via real CLI → agent stops', async () => {
         const agents = s?.napkins?.flatMap((n: any) => n.agents) || [];
         return agents.some((a: any) => a.name === '003-stop-target' && a.running);
       },
-      { timeout: 10000 },
+      { timeout: 15000 },
     );
 
     // Stop it

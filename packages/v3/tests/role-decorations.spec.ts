@@ -18,7 +18,8 @@ function createFixture(tmpDir: string): { napFilePath: string } {
     '* //A: architect thought (known — should get role-deco-known-A)',
     '* //E: expert thought (palette — should get role-deco-N)',
     '* //FS: engineer note (known — should get role-deco-known-FS)',
-    '* //DU: user note (palette — DU is NOT known)',
+    '* //DU: user note (known — should get role-deco-known-DU)',
+    '* //PM: product thought (palette — should get role-deco-N)',
     '* plain bullet with no role prefix',
   ].join('\n');
 
@@ -101,18 +102,19 @@ test('ROLE-11: edit mode decorations have correct role-deco classes', async () =
       }));
   });
 
-  // Should have decorations for //A:, //E:, //FS:, //DU: lines
-  expect(decorations.length).toBeGreaterThanOrEqual(4);
+  // Should have decorations for //A:, //E:, //FS:, //DU:, //PM: lines
+  expect(decorations.length).toBeGreaterThanOrEqual(5);
 
   const classNames = decorations.map((d: any) => d.className);
 
   // Known prefixes get role-deco-known-XX
   expect(classNames).toContain('role-deco-known-A');
   expect(classNames).toContain('role-deco-known-FS');
+  expect(classNames).toContain('role-deco-known-DU');
 
   // Palette prefixes get role-deco-N (N is the hash index)
   const paletteClasses = classNames.filter((c: string) => c.match(/^role-deco-\d+$/));
-  expect(paletteClasses.length).toBeGreaterThanOrEqual(2); // //E: and //DU:
+  expect(paletteClasses.length).toBeGreaterThanOrEqual(2); // //E: and //PM:
 
   await cleanupApp(app, tmpDir);
 });
