@@ -34,12 +34,17 @@
                     * `#tags` → monarch token, colored, clickable → zoom to all bullets with that tag
                     * `@agent` → mention token → resolves to agent name, could trigger poke
                       * // omg omg yesss!
+                      * //A: the poke path already exists — `nap3 poke <name> "message"`
+                        * just need: detect `@fs-eng` under cursor → resolve to running agent → poke
                     * drag-to-reorder bullets (Monaco doesn't have this, but `moveLines` command exists)
                       * // umm guess kinda just editing is fine?
+                      * //A: yeah, alt+up/alt+down moves lines — good enough for now
                     * collapse/expand subtrees (Monaco folding, just need a custom fold provider by indent)
                       * // yeah, maybe; should be real careful about not cluttering ui
                         * // hate forests of triangles
                         * // this is v2+ maybe
+                        * //A: agreed — folding icons add noise. workflowy zoom is the better UX for this
+                          * zoom replaces fold — you don't collapse, you just go deeper
         * //A: breadcrumbs
           * Monaco has a built-in breadcrumb widget (`BreadcrumbsWidget`)
           * but it's tied to symbol navigation, not bullet nesting
@@ -65,6 +70,16 @@
                             * // ability to assign individual classes/styles to individual tokens
                             * // maybe tricky if grids need particular elts nesting
                               * // monaco has linear struc of divs and spans inside
+                              * //A: you're right that Monaco's DOM is flat: `.view-line > span > span`
+                                * CSS grid needs a grid container wrapping the cells
+                                * Monaco's lines are independent divs — no shared grid parent across lines
+                                * BUT: `position: absolute` + calculated `left`/`width` per cell could fake it
+                                  * each `|` token gets a decoration with fixed `left` position
+                                  * content between pipes gets `width` to fill the column
+                                  * no grid, just absolute positioning per token
+                                * wild but plausible — the hard part is measuring column widths across rows
+                                  * need a pre-pass: scan all rows, find max width per column, then decorate
+                                * definitely v3+ territory — fun research though
                     * looks tabular, edits as text
                   * for real tables → the rendered mode (Cmd+J) is the answer
                   * in edit mode: best we can do is visual alignment, which is honestly pretty good for napkins
@@ -130,6 +145,11 @@
           * // my idea now: everything should be encoded in markdown itself
           * // but idk, this seems like kinda out-of-band thing
           * // where to store?
+          * //A: could be a sibling bullet with a marker:
+            * `* //AI-SUMMARY: one-line summary of the collapsed subtree`
+            * stored in the markdown itself — no out-of-band
+            * generated on demand (cmd+shift+S on a bullet?), overwrites previous summary
+            * when collapsed/zoomed-out, the summary bullet shows in place of the subtree
     * bullet templates
       * `@template daily-standup` expands a structure
         * // neat
@@ -152,6 +172,15 @@
       * // this might be real cool!
         * // should think about how to id bullets
           * // kinda [copy link] triggers including anchor into markdown?
+          * //A: bullet ID = content hash of the line (first 8 chars of sha256)
+            * stable across edits to other bullets
+            * changes when bullet text changes — but that's correct (it's a different bullet now)
+            * `[copy link]` writes `<!-- #a1b2c3d4 -->` as invisible anchor after the bullet
+            * other files reference it: `[[file.nap.md#a1b2c3d4]]`
+            * clicking → opens file in left pane, zooms to that bullet
+              * // no, i mean, only bullets that have the anchor are linkable
+                * // and anchor is random id that's inserted when [copy link] is clicked
+                * // also can be smth simpler linke [anchor:abc123] or smth
         * // maybe v2-3
     * presentation mode
       * each top-level bullet is a "slide"
@@ -172,7 +201,26 @@
         * // would be craaaaaazy
         * // this is just :rocket:
           * // could we pull this? like, v3-4
-            * //A: <jot couple ideas how, haha>
+            * //A: haha ok, two approaches:
+              * //A: option A — git-based (simple, async)
+                * each user's .nap/ is a git repo
+                * they push/pull to shared remote
+                * file watcher picks up changes
+                * "cursor" = a marker file `.nap/cursors/<username>.json` with `{ file, line, col }`
+                * each user writes their own, reads others
+                * latency: 1-2s (git push/pull interval)
+                * no server, no WebSocket, just git
+              * //A: option B — WebSocket relay (real-time)
+                * tiny relay server (100 lines, just broadcasts cursor positions)
+                * each client sends `{ user, file, line, col }` on cursor move
+                * others render colored cursor decorations
+                * Monaco: `deltaDecorations` with a thin colored line + username label
+                * latency: <100ms
+                * needs a server, but trivially small
+              * //A: both could coexist — git for content sync, WebSocket for cursor presence
+              * // yeah, ok, probably i'm buying collab surface
+                * // sharedb or yjs simple backend would do it
+                * // given that everything is just markdown, should be pretty easy
     * agent assignment per bullet
       * `@fs-eng` tag, cmd-enter pokes that agent
         * // hell yeah, this is tremendous
@@ -188,5 +236,23 @@
       * what do we do with worktree changes and staged?
         * idk, combination seems tricky
         * any simple ideas?
+        * //A: keep it simple — show ONE diff, make it the most useful one:
+          * default: `git diff HEAD` (everything not committed — staged + unstaged combined)
+          * this is what you care about: "what changed since last commit"
+          * don't try to show staged vs unstaged separately — that's git UI, not napkin UI
+            * // i think i want to distinguish what you have written (latest commit)
+            * // vs what i have written (unstaged)
+              * // makes sense? 
+              * //A: <??>
+          * //A: display:
+            * same gutter decorations as git gutter (green/blue/red)
+            * but also: inline deleted text as faded strikethrough (decoration on the old line range)
+            * or: Monaco's built-in diff viewer (`createDiffEditor`) as a toggle
+              * Cmd+Shift+D? toggle inline diff view
+              * shows old vs new side by side, or inline with red/green
+          * //A: the simple version:
+            * just the gutter bars we already have — those ARE the diff
+            * add a tooltip on hover: "added 3 lines" / "modified" / "2 lines deleted"
+            * that's it — no new UI, just better information on what's already there
     
 
