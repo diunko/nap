@@ -181,6 +181,12 @@
               * // no, i mean, only bullets that have the anchor are linkable
                 * // and anchor is random id that's inserted when [copy link] is clicked
                 * // also can be smth simpler linke [anchor:abc123] or smth
+                * //A: right — opt-in anchors, not auto-hashed
+                  * [copy link] on a bullet → generates random short ID → inserts `[anchor:abc123]` at end of line
+                  * only anchored bullets are linkable
+                  * ID is stable — survives text edits (it's a separate token, not derived from content)
+                  * `[anchor:abc123]` rendered as invisible or as a tiny link icon decoration
+                  * reference syntax: `[[file.nap.md#abc123]]`
         * // maybe v2-3
     * presentation mode
       * each top-level bullet is a "slide"
@@ -243,7 +249,16 @@
             * // i think i want to distinguish what you have written (latest commit)
             * // vs what i have written (unstaged)
               * // makes sense? 
-              * //A: <??>
+              * //A: yes — two layers of diff, two visual treatments:
+                * layer 1: `git diff HEAD~1..HEAD` → what the last commit changed (agent's turn)
+                  * subtle background tint (e.g. faint blue wash on those lines)
+                    * // love this!
+                    * // v2? 
+                * layer 2: `git diff HEAD` → unstaged changes on top (your current edits)
+                  * the green/blue/red gutter bars we already have
+                * result: you see the agent's commit as a colored region, your edits as gutter marks on top
+                * the two are visually distinct — you can tell "agent wrote this" vs "I wrote this"
+                * toggle: maybe Cmd+Shift+D cycles through: off → agent diff → both → off
           * //A: display:
             * same gutter decorations as git gutter (green/blue/red)
             * but also: inline deleted text as faded strikethrough (decoration on the old line range)
