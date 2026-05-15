@@ -92,6 +92,29 @@ function ensureRenderedCss(): void {
     .nap-rendered li {
       margin: 2px 0;
     }
+    .git-gutter-added {
+      border-left: 3px solid #22c55e !important;
+      margin-left: 3px;
+    }
+    .git-gutter-modified {
+      border-left: 3px solid #3b82f6 !important;
+      margin-left: 3px;
+    }
+    .git-gutter-deleted {
+      border-left: 3px solid transparent !important;
+      margin-left: 3px;
+    }
+    .git-gutter-deleted::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: -3px;
+      width: 0;
+      height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 5px solid #ef4444;
+    }
   `;
   document.head.appendChild(style);
 }
