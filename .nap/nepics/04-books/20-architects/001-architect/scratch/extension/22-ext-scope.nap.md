@@ -3,6 +3,8 @@
 * v0 — side panel reader + ephemeral editing
   * Chrome side panel on GitHub PR pages
   * loads mini-book .md from repo via GitHub API
+    * // should load from folder
+      * // books are numbered files, should sort accordingly
   * Monaco with napkin-markdown tokenizer
   * Cmd+J rendered/edit toggle
   * file:line links → navigate PR diff in main tab
@@ -11,8 +13,10 @@
 
 * v1 — persistence + commit
   * localStorage drafts (survive browser restart)
+    * // should be some way to manage model persistnce and map it to local storage
   * GitHub API commit (one clean commit to PR branch)
   * auth via chrome.identity OAuth or PAT
+    * // just use api token
 
 * v2 — workflowy mode
   * zoom into subtree via setHiddenAreas()
