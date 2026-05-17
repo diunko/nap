@@ -7,6 +7,9 @@
     * prepending prefix and then content on next line
     * "//" is also a prefix for shift-enter
     * only "*" followed by "//" token is counted as comments
+      * // hmm, sometimes it's handy to comment inline
+      * // e.g. in code block
+        * // okay, for that case should be //NN: prefix (not just "//")
 * for .nap.md files
   * workflowy mode
     * zoom in 
