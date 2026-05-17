@@ -15,6 +15,8 @@ async function main() {
 
   // 1. Filesystem — single LightningFS instance shared by bash + git
   const lfs = new LightningFS('bash-poc');
+  (window as any).__lfs = lfs;
+  (window as any).__fs = undefined; // set after adapter created
   console.log('[main] lightning-fs created');
 
   // Create /home/user so the shell has a home dir
@@ -24,6 +26,7 @@ async function main() {
 
   // 2. Adapter for just-bash
   const fs = new LightningFsAdapter(lfs);
+  (window as any).__fs = fs;
   console.log('[main] fs adapter created');
 
   // 3. Git command (uses raw lfs for isomorphic-git)

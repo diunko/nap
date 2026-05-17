@@ -32,6 +32,7 @@ export class BashShell {
   private _line = '';
   private _cursor = 0;
   private _buffer = '';
+  private _heredocDelim: string | null = null;
   private _history: string[] = [];
   private _historyPos = -1;
   private _busy = false;
@@ -103,8 +104,60 @@ export class BashShell {
       this._cursor = 0;
       write('\r\n');
 
+      // Heredoc: currently buffering body lines
+      if (this._heredocDelim) {
+        this._buffer += cur + '\n';
+        if (cur.trim() === this._heredocDelim) {
+          this._heredocDelim = null;
+          // buffer has the complete command — fall through, don't append cur again
+          const cmd = this._buffer;
+          this._buffer = '';
+          if (cmd.trim() && this._bash) {
+            this._history.push(cmd.trimEnd());
+            this._historyPos = -1;
+            this._busy = true;
+            try {
+              const wrapped = `cd ${JSON.stringify(this._cwd)} && ${cmd}`;
+              console.log(`[shell] exec: ${wrapped}`);
+              const result = await this._bash.exec(wrapped);
+              console.log(`[shell] stdout=${JSON.stringify(result.stdout?.slice(0, 100))} stderr=${JSON.stringify(result.stderr?.slice(0, 100))}`);
+              if (result.stdout) {
+                write(result.stdout.replace(/\n/g, '\r\n'));
+                if (!result.stdout.endsWith('\n')) write('\r\n');
+              }
+              if (result.stderr) {
+                write(`\x1b[31m${result.stderr.replace(/\n/g, '\r\n')}\x1b[0m`);
+                if (!result.stderr.endsWith('\n')) write('\r\n');
+              }
+              const envPwd = result.env?.['PWD'];
+              if (envPwd) this._cwd = envPwd;
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Unknown error';
+              write(`\x1b[31m${msg}\x1b[0m\r\n`);
+            } finally {
+              this._busy = false;
+            }
+          }
+          write(this._prompt(this._cwd));
+          return;
+        } else {
+          write('> ');
+          return;
+        }
+      }
+
       if (cur.endsWith('\\')) {
         this._buffer += cur + '\n';
+        write('> ');
+        return;
+      }
+
+      // Detect heredoc start: <<WORD or <<'WORD' or <<"WORD" or <<-WORD
+      const accumulated = this._buffer + cur;
+      const heredocMatch = accumulated.match(/<<-?\s*['"]?(\w+)['"]?\s*$/);
+      if (heredocMatch) {
+        this._heredocDelim = heredocMatch[1];
+        this._buffer = accumulated + '\n';
         write('> ');
         return;
       }
