@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "nap — .nap repo reader",
+  "version": "0.0.1",
+  "description": "Side panel for reading and editing .nap repos alongside GitHub",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://github.com/*"
+  ],
+  "side_panel": {
+    "default_path": "side-panel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self';"
+  }
+}

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      background: var(--nap-bg, #f0f4f8);
+      color: var(--nap-text, #2e3440);
+      font-family: 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', monospace;
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    /* ── Layout ── */
+    #app {
+      display: flex;
+      height: 100%;
+    }
+    #nav {
+      width: 280px;
+      min-width: 180px;
+      border-right: 1px solid var(--nap-border, #c4cad0);
+      overflow-y: auto;
+      padding: 8px 0;
+      background: var(--nap-bg-secondary, #e6eaee);
+    }
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    /* ── Resize handle ── */
+    #resize-handle {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      flex-shrink: 0;
+    }
+    #resize-handle:hover { background: var(--nap-accent, #2563eb); opacity: 0.3; }
+
+    /* ── Tab bar ── */
+    #tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--nap-border, #c4cad0);
+      background: var(--nap-bg-secondary, #e6eaee);
+      height: 32px;
+      flex-shrink: 0;
+    }
+    .tab {
+      padding: 6px 16px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: var(--nap-text-muted, #6d7a8a);
+      font-size: 12px;
+      user-select: none;
+    }
+    .tab:hover { color: var(--nap-text, #2e3440); }
+    .tab.active {
+      color: var(--nap-text, #2e3440);
+      border-bottom-color: var(--nap-accent, #2563eb);
+    }
+
+    /* ── Content surfaces ── */
+    #content {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    #editor-surface, #terminal-surface {
+      position: absolute;
+      inset: 0;
+    }
+    #editor-surface.hidden, #terminal-surface.hidden {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    /* ── Editor ── */
+    #editor-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Terminal (wterm CSS from bash-poc) ── */
+    #terminal-container {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    .wterm {
+      --term-fg: #2e3440;
+      --term-bg: #f0f4f8;
+      --term-cursor: #4c566a;
+      --term-color-0: #e6eaee;
+      --term-color-1: #dc2626;
+      --term-color-2: #16a34a;
+      --term-color-3: #d97706;
+      --term-color-4: #2563eb;
+      --term-color-5: #9333ea;
+      --term-color-6: #0891b2;
+      --term-color-7: #4c566a;
+      --term-color-8: #6d7a8a;
+      --term-color-9: #dc2626;
+      --term-color-10: #16a34a;
+      --term-color-11: #d97706;
+      --term-color-12: #2563eb;
+      --term-color-13: #9333ea;
+      --term-color-14: #0891b2;
+      --term-color-15: #2e3440;
+      --term-font-family: 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', monospace;
+      --term-font-size: 14px;
+      --term-line-height: 1.2;
+      --term-row-height: 17px;
+
+      position: relative;
+      background: var(--term-bg);
+      color: var(--term-fg);
+      font-family: var(--term-font-family);
+      font-size: var(--term-font-size);
+      line-height: var(--term-line-height);
+      padding: 12px;
+      outline: none;
+      overflow: hidden;
+      height: 100%;
+    }
+    .wterm:focus, .wterm:focus-visible { outline: none; }
+    .term-grid { display: block; white-space: pre; contain: layout paint style; }
+    .term-row { display: block; height: var(--term-row-height); line-height: var(--term-row-height); contain: layout style; }
+    .term-row > span { display: inline-block; height: var(--term-row-height); vertical-align: top; }
+    .term-block { width: 1ch; overflow: hidden; }
+    .term-cursor { outline: 1px solid var(--term-cursor); outline-offset: -1px; }
+    .wterm.focused .term-cursor { background: var(--term-cursor); color: var(--term-bg); outline: none; }
+    .wterm.focused.cursor-blink .term-cursor { animation: cursor-blink 1s step-end infinite; }
+    @keyframes cursor-blink {
+      0%, 100% { background: var(--term-cursor); color: var(--term-bg); }
+      50% { background: transparent; color: inherit; }
+    }
+    .wterm.has-scrollback { overflow-y: auto; }
+    .wterm ::selection { background: rgba(37, 99, 235, 0.2); }
+
+    /* ── Nav tree ── */
+    .nav-section {
+      padding: 4px 12px;
+    }
+    .nav-section-header {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--nap-text-muted, #6d7a8a);
+      padding: 4px 0;
+    }
+    .nav-entry {
+      padding: 2px 0 2px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 12px;
+      border-radius: 3px;
+    }
+    .nav-entry:hover { background: var(--nap-bg-hover, #e1e5e9); }
+    .nav-entry.expandable::before {
+      content: '\25B6';
+      font-size: 8px;
+      margin-right: 4px;
+      display: inline-block;
+      transition: transform 0.1s;
+    }
+    .nav-entry.expandable.expanded::before {
+      transform: rotate(90deg);
+    }
+    .nav-entry .status {
+      font-size: 10px;
+      color: var(--nap-text-dim, #94a0b0);
+      margin-left: 6px;
+    }
+    .nav-children {
+      padding-left: 12px;
+    }
+    .nav-children.collapsed { display: none; }
+    .nav-file {
+      padding: 1px 0 1px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--nap-text-secondary, #4c566a);
+      border-radius: 3px;
+    }
+    .nav-file:hover { background: var(--nap-bg-hover, #e1e5e9); }
+
+    #nav-empty {
+      padding: 16px 12px;
+      color: var(--nap-text-dim, #94a0b0);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="nav">
+      <div id="nav-tree"></div>
+      <div id="nav-empty">Clone a .nap repo in the terminal to get started.</div>
+    </div>
+    <div id="resize-handle"></div>
+    <div id="main">
+      <div id="tab-bar">
+        <div class="tab active" data-tab="terminal">Terminal</div>
+        <div class="tab" data-tab="editor">Editor</div>
+      </div>
+      <div id="content">
+        <div id="terminal-surface">
+          <div id="terminal-container"></div>
+        </div>
+        <div id="editor-surface" class="hidden">
+          <div id="editor-container"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="src/side-panel.ts"></script>
+</body>
+</html>

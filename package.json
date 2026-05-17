@@ -1,6 +1,6 @@
 {
   "private": true,
-  "workspaces": ["packages/v2", "packages/v3", "packages/bash-poc"],
+  "workspaces": ["packages/v2", "packages/v3", "packages/bash-poc", "packages/extension"],
   "scripts": {
     "dev:v2": "npm run dev -w packages/v2",
     "dev:v3": "npm run dev -w packages/v3",

@@ -1,0 +1,13 @@
+{
+  "cc_session_uuid": "6b94a9be-5201-4ca9-ad00-c9652ad98ddd",
+  "role": "test-eng",
+  "name": "003-test-eng-v0",
+  "napkin": "0100-v0",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779011603649,
+  "started": true,
+  "exited": false,
+  "done": true
+}
