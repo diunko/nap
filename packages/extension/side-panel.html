@@ -196,6 +196,78 @@
       color: var(--nap-text-dim, #94a0b0);
       font-size: 11px;
     }
+
+    /* ── Settings gear ── */
+    #settings-btn {
+      margin-left: auto;
+      padding: 6px 10px;
+      cursor: pointer;
+      color: var(--nap-text-muted, #6d7a8a);
+      font-size: 14px;
+      user-select: none;
+      line-height: 20px;
+    }
+    #settings-btn:hover { color: var(--nap-text, #2e3440); }
+
+    /* ── Settings overlay ── */
+    #settings-overlay {
+      position: absolute;
+      inset: 0;
+      background: var(--nap-bg, #f0f4f8);
+      z-index: 100;
+      padding: 16px;
+      overflow-y: auto;
+      display: none;
+    }
+    #settings-overlay.visible { display: block; }
+    #settings-overlay h3 {
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    #settings-overlay label {
+      display: block;
+      font-size: 11px;
+      color: var(--nap-text-muted, #6d7a8a);
+      margin-bottom: 2px;
+      margin-top: 8px;
+    }
+    #settings-overlay input {
+      width: 100%;
+      padding: 4px 6px;
+      border: 1px solid var(--nap-border, #c4cad0);
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 12px;
+      background: var(--nap-bg, #f0f4f8);
+      color: var(--nap-text, #2e3440);
+    }
+    .settings-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+    }
+    .settings-actions button {
+      padding: 4px 12px;
+      border: 1px solid var(--nap-border, #c4cad0);
+      border-radius: 3px;
+      background: var(--nap-bg-secondary, #e6eaee);
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--nap-text, #2e3440);
+    }
+    .settings-actions button:hover { background: var(--nap-bg-tertiary, #dce0e4); }
+
+    /* ── Notification bar ── */
+    #notification {
+      display: none;
+      padding: 6px 12px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 11px;
+      border-bottom: 1px solid #fcd34d;
+    }
+    #notification.visible { display: block; }
+    #notification a { color: #92400e; cursor: pointer; text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -209,8 +281,23 @@
       <div id="tab-bar">
         <div class="tab active" data-tab="terminal">Terminal</div>
         <div class="tab" data-tab="editor">Editor</div>
+        <div id="settings-btn" title="Settings">&#9881;</div>
       </div>
+      <div id="notification"></div>
       <div id="content">
+        <div id="settings-overlay">
+          <h3>Settings</h3>
+          <label for="main-repo-input">Main code repo (owner/repo)</label>
+          <input id="main-repo-input" type="text" placeholder="org/project" />
+          <label for="main-branch-input">Branch</label>
+          <input id="main-branch-input" type="text" placeholder="main" />
+          <label for="pat-input">GitHub PAT (optional, for private repos)</label>
+          <input id="pat-input" type="password" placeholder="ghp_..." />
+          <div class="settings-actions">
+            <button id="settings-save">Save</button>
+            <button id="settings-close">Close</button>
+          </div>
+        </div>
         <div id="terminal-surface">
           <div id="terminal-container"></div>
         </div>

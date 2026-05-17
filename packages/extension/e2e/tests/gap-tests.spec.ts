@@ -7,7 +7,7 @@
  * L5: panel survives browsing
  * L4: code links reuse tab (no new pages)
  */
-import { test, expect, openSidePanel, openGitHub } from './fixtures';
+import { test, expect, openSidePanel, openGitHub, cmdClickLink } from './fixtures';
 import type { Page } from '@playwright/test';
 
 const NAP_REPO_URL = 'https://github.com/diunko/nap-test-nap';
@@ -141,10 +141,8 @@ test('T5.4: file:line link navigates github tab', async ({ context, extensionId 
   });
   await panel.waitForTimeout(300);
 
-  // Trigger the link via test hook
-  await panel.evaluate(() => {
-    window.__triggerLink('/modules/server/copy_document.ts#L51');
-  });
+  // Real Cmd+click on the link
+  await cmdClickLink(panel, '/modules/server/copy_document.ts#L51');
 
   // Wait for github tab to navigate
   await ghPage.waitForURL(/copy_document\.ts/, { timeout: 10_000 });
@@ -153,7 +151,7 @@ test('T5.4: file:line link navigates github tab', async ({ context, extensionId 
   expect(ghPage.url()).toContain('copy_document.ts');
   expect(ghPage.url()).toContain('#L51');
 
-  console.log('[T5.4] PASSED: file:line link navigated github tab to correct URL');
+  console.log('[T5.4] PASSED: real Cmd+click navigated github tab');
 });
 
 // ── L5: panel survives browsing ──
@@ -235,17 +233,13 @@ test('L4: code links reuse active tab, no new pages created', async ({ context, 
   const pagesBefore = context.pages().length;
   console.log(`[L4] pages before clicks: ${pagesBefore}`);
 
-  // Click first code link
-  await panel.evaluate(() => {
-    window.__triggerLink('/modules/server/copy_document.ts#L51');
-  });
+  // Real Cmd+click first code link
+  await cmdClickLink(panel, '/modules/server/copy_document.ts#L51');
   await ghPage.waitForURL(/copy_document\.ts/, { timeout: 10_000 });
   console.log(`[L4] after first link: ${ghPage.url()}`);
 
-  // Click second code link — should reuse same tab
-  await panel.evaluate(() => {
-    window.__triggerLink('/modules/core/id_universe.ts#L12');
-  });
+  // Real Cmd+click second code link — should reuse same tab
+  await cmdClickLink(panel, '/modules/core/id_universe.ts#L12');
   await ghPage.waitForURL(/id_universe\.ts/, { timeout: 10_000 });
   console.log(`[L4] after second link: ${ghPage.url()}`);
 

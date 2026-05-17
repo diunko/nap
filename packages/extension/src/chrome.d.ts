@@ -30,10 +30,9 @@ declare namespace chrome {
 
   namespace tabs {
     function create(options: { url: string }): void;
-    function update(tabId: number, options: { url: string }): void;
+    function update(tabId: number, options: { url: string }): Promise<void>;
     function query(
       queryInfo: { active?: boolean; currentWindow?: boolean },
-      callback: (tabs: Array<{ id?: number }>) => void,
-    ): void;
+    ): Promise<Array<{ id?: number; url?: string }>>;
   }
 }

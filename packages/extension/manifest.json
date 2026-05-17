@@ -26,7 +26,11 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html"
+    "default_title": "Open nap side panel"
+  },
+  "options_ui": {
+    "page": "popup.html",
+    "open_in_tab": false
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self';"

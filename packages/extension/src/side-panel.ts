@@ -66,7 +66,7 @@ declare global {
 }
 
 async function main() {
-  console.log('[side-panel] starting');
+  console.log('[side-panel] starting — build 2026-05-17T18:40');
 
   // 1. LightningFS — single instance, store name 'nap-ext'
   lfs = new LightningFS('nap-ext');
@@ -110,6 +110,48 @@ async function main() {
   window.__editor = editor;
   console.log('[side-panel] Monaco editor created');
 
+  // Intercept Cmd+click via Monaco's own mouse event system.
+  // This is the same approach v3 uses (editor.onMouseDown + MouseTargetType.CONTENT_TEXT).
+  // Monaco's internal link handling doesn't work in extension side panel context,
+  // so we handle Cmd+click ourselves using Monaco's resolved position.
+  editor.onMouseDown((e) => {
+    const isMeta = e.event.metaKey || e.event.ctrlKey;
+    console.log(`[editor-mouse] type=${e.target.type} meta=${isMeta}`);
+    if (!isMeta) return;
+    if (e.target.type !== monaco.editor.MouseTargetType.CONTENT_TEXT) return;
+
+    const position = e.target.position;
+    if (!position) return;
+
+    const model = editor.getModel();
+    if (!model) return;
+
+    const lineContent = model.getLineContent(position.lineNumber);
+    const col = position.column;
+    console.log(`[editor-mouse] line ${position.lineNumber} col ${col}: "${lineContent.slice(0, 80)}"`);
+
+    const href = findLinkAtPosition(lineContent, col);
+    console.log(`[editor-mouse] link at position: ${href}`);
+    if (href) {
+      e.event.preventDefault();
+      activateLink(href);
+    }
+  });
+  console.log('[editor-mouse] Cmd+click listener installed');
+
+  // Also intercept window.open — Monaco's default opener may use it
+  const originalWindowOpen = window.open.bind(window);
+  window.open = (url?: string | URL, target?: string, features?: string) => {
+    const urlStr = url?.toString() ?? '';
+    console.log(`[window.open] intercepted: ${urlStr} target=${target}`);
+    if (urlStr && !urlStr.startsWith('blob:') && !urlStr.startsWith('data:')) {
+      activateLink(urlStr);
+      return null;
+    }
+    return originalWindowOpen(url, target, features);
+  };
+  console.log('[window.open] interceptor installed');
+
   // Shift-enter continuation
   registerShiftEnter(editor);
   console.log('[side-panel] shift-enter registered');
@@ -143,12 +185,19 @@ async function main() {
   const gitCommand = createGitCommand(lfs, getAuth);
   console.log('[side-panel] git command created');
 
-  // 9. Shell
+  // 9. Shell — with onCommandComplete to auto-refresh nav tree after git commands
   const shell = new BashShell({
     fs: fsAdapter,
     customCommands: [gitCommand],
     cwd: '/home/user',
     greeting: 'nap extension — browser bash + git over IndexedDB',
+    onCommandComplete: (cmd: string) => {
+      const trimmed = cmd.trim();
+      if (trimmed.startsWith('git clone') || trimmed.startsWith('git pull') || trimmed.startsWith('git checkout')) {
+        console.log(`[shell] git command completed, refreshing nav tree: ${trimmed.slice(0, 40)}`);
+        refreshNavTree();
+      }
+    },
   });
   console.log('[side-panel] shell created');
 
@@ -175,6 +224,9 @@ async function main() {
 
   // 14. Register link provider
   setupLinkProvider();
+
+  // 15. Settings UI
+  setupSettings();
 
   // 15. Test hooks
   window.__monaco = monaco;
@@ -508,9 +560,10 @@ function setupResizeHandle() {
   console.log('[resize] handle setup');
 }
 
-// ── Link provider ──
+// ── Link handling ──
 
 function setupLinkProvider() {
+  // Register link provider for visual decoration (underlines on hover)
   monaco.languages.registerLinkProvider('napkin-markdown', {
     provideLinks(model) {
       const links: monaco.languages.ILink[] = [];
@@ -524,7 +577,7 @@ function setupLinkProvider() {
         let match;
         while ((match = mdLinkRe.exec(lineContent)) !== null) {
           const href = match[2];
-          const startCol = match.index + match[1].length + 3; // after [text](
+          const startCol = match.index + match[1].length + 3;
           const endCol = startCol + href.length;
           links.push({
             range: new monaco.Range(i, startCol, i, endCol),
@@ -535,10 +588,8 @@ function setupLinkProvider() {
         // Match bare URLs: https://...
         const urlRe = /https?:\/\/[^\s)]+/g;
         while ((match = urlRe.exec(lineContent)) !== null) {
-          // Skip if this URL is already inside a markdown link
           const beforeUrl = lineContent.slice(0, match.index);
           if (beforeUrl.endsWith('](')) continue;
-
           links.push({
             range: new monaco.Range(i, match.index + 1, i, match.index + 1 + match[0].length),
             url: match[0],
@@ -549,30 +600,223 @@ function setupLinkProvider() {
       return { links };
     },
     resolveLink(link) {
-      if (!link.url || typeof link.url !== 'string') return link;
-
+      if (!link.url || typeof link.url !== 'string') {
+        console.log('[resolveLink] no url, skipping');
+        return link;
+      }
       const href = link.url;
+      console.log(`[resolveLink] resolving: ${href}`);
+
       const result = routeLink(
         { href, sourceFilePath: currentFilePath ?? '' },
         mainRepoConfig,
       );
+      console.log(`[resolveLink] routed: action=${result.action}`);
 
       if (result.action === 'openDoc') {
-        // Open .md in editor
-        link.url = undefined as any;
+        console.log(`[resolveLink] openDoc: ${result.path}`);
+        link.url = undefined as any; // prevent Monaco from opening
         openFile(result.path);
       } else if (result.action === 'openCode') {
-        // Navigate github tab (reuses active tab — no new tabs)
-        link.url = undefined as any;
+        console.log(`[resolveLink] openCode: ${result.githubUrl}`);
+        link.url = undefined as any; // prevent Monaco from opening
         navigateGitHubTab(result.githubUrl);
       } else if (result.action === 'openExternal') {
-        link.url = result.url;
+        console.log(`[resolveLink] openExternal: ${result.url}`);
+        // leave link.url — Monaco opens it in new tab
       }
-
       return link;
     },
   });
-  console.log('[links] provider registered');
+
+  // Register the "open link" action that Monaco calls on Cmd+click
+  // This replaces the broken resolveLink approach
+  editor.addAction({
+    id: 'nap-open-link',
+    label: 'Open Link',
+    keybindings: [],
+    precondition: undefined,
+    run(ed) {
+      const position = ed.getPosition();
+      if (!position) return;
+      const model = ed.getModel();
+      if (!model) return;
+
+      const lineContent = model.getLineContent(position.lineNumber);
+      const href = findLinkAtPosition(lineContent, position.column);
+      if (!href) {
+        console.log('[link-action] no link found at cursor position');
+        return;
+      }
+
+      console.log(`[link-action] activating link: ${href}`);
+      activateLink(href);
+    },
+  });
+
+  // Override Monaco's built-in openLink action to use our routing
+  // Monaco's Cmd+click calls 'editor.action.openLink' internally
+  editor.addAction({
+    id: 'editor.action.openLink',
+    label: 'Open Link (nap override)',
+    keybindings: [],
+    precondition: undefined,
+    run(ed) {
+      const position = ed.getPosition();
+      if (!position) return;
+      const model = ed.getModel();
+      if (!model) return;
+
+      const lineContent = model.getLineContent(position.lineNumber);
+      const href = findLinkAtPosition(lineContent, position.column);
+      if (!href) {
+        console.log('[link-action] no link at cursor');
+        return;
+      }
+
+      console.log(`[link-action] openLink override: ${href}`);
+      activateLink(href);
+    },
+  });
+
+  console.log('[links] provider + action registered');
+}
+
+/** Find the href of a markdown link [text](href) or bare URL at a column position. */
+function findLinkAtPosition(lineContent: string, column: number): string | null {
+  // Check markdown links [text](href)
+  const mdLinkRe = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let match;
+  while ((match = mdLinkRe.exec(lineContent)) !== null) {
+    const fullStart = match.index + 1; // 1-indexed
+    const fullEnd = fullStart + match[0].length;
+    if (column >= fullStart && column <= fullEnd) {
+      return match[2]; // the href
+    }
+  }
+
+  // Check bare URLs
+  const urlRe = /https?:\/\/[^\s)]+/g;
+  while ((match = urlRe.exec(lineContent)) !== null) {
+    const start = match.index + 1;
+    const end = start + match[0].length;
+    if (column >= start && column <= end) {
+      return match[0];
+    }
+  }
+
+  return null;
+}
+
+/** Route and activate a link href. */
+function activateLink(href: string) {
+  const result = routeLink(
+    { href, sourceFilePath: currentFilePath ?? '' },
+    mainRepoConfig,
+  );
+  console.log(`[link-action] routed: ${result.action}`);
+
+  if (result.action === 'openDoc') {
+    openFile(result.path);
+  } else if (result.action === 'openCode') {
+    if (!mainRepoConfig) {
+      showNotification(
+        'Set your main code repo in <a id="notification-settings-link">settings</a> to enable code links.'
+      );
+      // Wire the settings link
+      setTimeout(() => {
+        const link = document.getElementById('notification-settings-link');
+        if (link) link.addEventListener('click', () => {
+          document.getElementById('settings-overlay')!.classList.add('visible');
+          hideNotification();
+        });
+      }, 0);
+      return;
+    }
+    navigateGitHubTab(result.githubUrl);
+  } else if (result.action === 'openExternal') {
+    navigateGitHubTab(result.url);
+  }
+}
+
+// ── Settings UI ──
+
+function setupSettings() {
+  const btn = document.getElementById('settings-btn')!;
+  const overlay = document.getElementById('settings-overlay')!;
+  const repoInput = document.getElementById('main-repo-input') as HTMLInputElement;
+  const branchInput = document.getElementById('main-branch-input') as HTMLInputElement;
+  const patInput = document.getElementById('pat-input') as HTMLInputElement;
+  const saveBtn = document.getElementById('settings-save')!;
+  const closeBtn = document.getElementById('settings-close')!;
+
+  // Load current values
+  if (mainRepoConfig) {
+    repoInput.value = `${mainRepoConfig.owner}/${mainRepoConfig.repo}`;
+    branchInput.value = mainRepoConfig.branch;
+  }
+
+  btn.addEventListener('click', () => {
+    console.log('[settings] opening');
+    overlay.classList.add('visible');
+    // Reload from storage
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.sync.get(['mainRepo', 'mainBranch', 'pat'], (result) => {
+        if (result.mainRepo) repoInput.value = result.mainRepo;
+        if (result.mainBranch) branchInput.value = result.mainBranch;
+        if (result.pat) patInput.value = result.pat;
+      });
+    }
+  });
+
+  saveBtn.addEventListener('click', () => {
+    const repoStr = repoInput.value.trim();
+    const branch = branchInput.value.trim() || 'main';
+    const pat = patInput.value.trim();
+
+    console.log(`[settings] saving: repo=${repoStr} branch=${branch} pat=${pat ? '***' : 'none'}`);
+
+    // Set in-memory config
+    if (repoStr.includes('/')) {
+      const [owner, repo] = repoStr.split('/');
+      if (owner && repo) {
+        mainRepoConfig = { owner, repo, branch };
+        console.log(`[settings] mainRepoConfig set: ${owner}/${repo}@${branch}`);
+      }
+    }
+
+    // Persist to chrome.storage
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.sync.set({ mainRepo: repoStr, mainBranch: branch, pat });
+    }
+
+    // Hide notification if it was showing
+    hideNotification();
+
+    overlay.classList.remove('visible');
+    console.log('[settings] saved and closed');
+  });
+
+  closeBtn.addEventListener('click', () => {
+    overlay.classList.remove('visible');
+    console.log('[settings] closed without saving');
+  });
+
+  console.log('[settings] setup complete');
+}
+
+// ── Notification ──
+
+function showNotification(message: string) {
+  const el = document.getElementById('notification')!;
+  el.innerHTML = message;
+  el.classList.add('visible');
+  console.log(`[notification] ${message}`);
+}
+
+function hideNotification() {
+  const el = document.getElementById('notification')!;
+  el.classList.remove('visible');
 }
 
 // ── GitHub tab navigation (reuses active tab) ──

@@ -97,4 +97,61 @@ export async function openGitHub(
   return page;
 }
 
+/**
+ * Cmd+click a markdown link in the editor by dispatching a real mousedown
+ * with metaKey on the link's pixel position. Uses editor.onMouseDown path.
+ *
+ * @param panel  The side panel Page
+ * @param href   The href to find (e.g. '/modules/server/copy_document.ts#L51')
+ */
+export async function cmdClickLink(panel: Page, href: string): Promise<void> {
+  console.log(`[cmdClickLink] looking for link: ${href}`);
+
+  const coords = await panel.evaluate((targetHref) => {
+    const ed = window.__editor;
+    const model = ed.getModel()!;
+    const lines = model.getValue().split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      // Check markdown links [text](href)
+      const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+      let m;
+      while ((m = re.exec(lines[i])) !== null) {
+        if (m[2] === targetHref) {
+          // Click in the middle of the link text
+          const col = lines[i].indexOf(m[1]) + Math.floor(m[1].length / 2) + 1;
+          const pos = ed.getScrolledVisiblePosition({ lineNumber: i + 1, column: col });
+          console.log(`[cmdClickLink] found at line ${i + 1} col ${col} pos=${JSON.stringify(pos)}`);
+          return pos;
+        }
+      }
+    }
+    console.log(`[cmdClickLink] link not found: ${targetHref}`);
+    return null;
+  }, href);
+
+  if (!coords) throw new Error(`Link not found in editor: ${href}`);
+
+  const box = await panel.locator('.monaco-editor').boundingBox();
+  if (!box) throw new Error('Monaco editor not visible');
+
+  const x = box.x + coords.left + 5;
+  const y = box.y + coords.top + coords.height / 2;
+  console.log(`[cmdClickLink] dispatching mousedown at (${x}, ${y})`);
+
+  await panel.evaluate(({ cx, cy }) => {
+    const el = document.elementFromPoint(cx, cy);
+    if (!el) return;
+    el.dispatchEvent(new MouseEvent('mousedown', {
+      clientX: cx, clientY: cy,
+      metaKey: true, ctrlKey: false,
+      button: 0, bubbles: true, cancelable: true,
+    }));
+    el.dispatchEvent(new MouseEvent('mouseup', {
+      clientX: cx, clientY: cy,
+      metaKey: true, ctrlKey: false,
+      button: 0, bubbles: true, cancelable: true,
+    }));
+  }, { cx: x, cy: y });
+}
+
 export const expect = test.expect;

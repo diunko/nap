@@ -13,6 +13,7 @@ export interface ShellOptions {
   network?: NetworkConfig;
   fs?: IFileSystem;
   customCommands?: CustomCommand[];
+  onCommandComplete?: (command: string) => void;
 }
 
 function defaultPrompt(cwd: string): string {
@@ -39,6 +40,7 @@ export class BashShell {
   private _network?: NetworkConfig;
   private _fs?: IFileSystem;
   private _customCommands?: CustomCommand[];
+  private _onCommandComplete?: (command: string) => void;
 
   constructor(options: ShellOptions = {}) {
     this._files = options.files ?? {};
@@ -48,6 +50,7 @@ export class BashShell {
     this._network = options.network;
     this._fs = options.fs;
     this._customCommands = options.customCommands;
+    this._onCommandComplete = options.onCommandComplete;
 
     if (options.greeting === undefined) {
       this._greeting = [];
@@ -128,6 +131,7 @@ export class BashShell {
             } finally {
               this._busy = false;
             }
+            if (this._onCommandComplete) this._onCommandComplete(cmd);
           }
           write(this._prompt(this._cwd));
           return;
@@ -180,6 +184,7 @@ export class BashShell {
         } finally {
           this._busy = false;
         }
+        if (this._onCommandComplete) this._onCommandComplete(cmd);
       }
 
       write(this._prompt(this._cwd));
