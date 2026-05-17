@@ -1,0 +1,13 @@
+{
+  "cc_session_uuid": "0e63fac9-a8de-4bf5-ab30-77bd7e6c19d4",
+  "role": "fs-eng",
+  "name": "002-fs-eng-bash-poc",
+  "napkin": "0500-bash-poc",
+  "nepic": "04-books",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1778999067537,
+  "started": true,
+  "exited": false,
+  "done": true
+}
