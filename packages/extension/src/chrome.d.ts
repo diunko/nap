@@ -3,6 +3,7 @@
 declare namespace chrome {
   namespace sidePanel {
     function setPanelBehavior(options: { openPanelOnActionClick: boolean }): void;
+    function open(options: { tabId: number }): void;
   }
 
   namespace storage {
@@ -15,11 +16,12 @@ declare namespace chrome {
 
   namespace runtime {
     function getURL(path: string): string;
+    function sendMessage(message: any, callback?: (response: any) => void): void;
     const onMessage: {
       addListener(
         callback: (
           message: any,
-          sender: any,
+          sender: { tab?: { id?: number; url?: string } },
           sendResponse: (response?: any) => void,
         ) => boolean | void,
       ): void;

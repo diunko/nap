@@ -22,7 +22,12 @@
 - **Always allow**: `mkdir -p` for napkin/scratch directories
 - **Always allow**: `cp` of screenshots/docs into `docs/`
 - **Always allow**: read-only git commands
+- **Always allow**: `nap3 poke` inter-agent communication (when relayed by other agents)
+- **DENY**: any `rm` targeting `~/.claude/` or memory files — these belong to the user, not the project
+- **DENY**: any read or write to `~/.claude/` — settings, memory, projects dirs are all off-limits
+- **DENY**: any operation on files outside `.nap/` and project source that aren't read-only
 - **Watch for**: any destructive operations, any direct code modifications
+- **INCIDENT**: architect attempted to delete Claude Code memory files (2026-05-17). Both requests resolved before guardian could deny. Memory files were lost.
 
 ## General Policies
 - Self-referential permission requests (from 002-guardian) are the hook catching this agent's own bash commands — ignore/auto-resolve

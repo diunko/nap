@@ -58,6 +58,10 @@ declare global {
     __fs: LightningFsAdapter;
     __openFile: (path: string) => Promise<void>;
     __refreshNavTree: () => Promise<void>;
+    __setMainRepoConfig: (config: MainRepoConfig) => void;
+    __triggerLink: (href: string) => void;
+    __monaco: typeof monaco;
+    __lastNavigatedUrl: string | null;
   }
 }
 
@@ -171,6 +175,28 @@ async function main() {
 
   // 14. Register link provider
   setupLinkProvider();
+
+  // 15. Test hooks
+  window.__monaco = monaco;
+  window.__lastNavigatedUrl = null;
+  window.__setMainRepoConfig = (config: MainRepoConfig) => {
+    mainRepoConfig = config;
+    console.log(`[test-hook] mainRepoConfig set: ${config.owner}/${config.repo}@${config.branch}`);
+  };
+  window.__triggerLink = (href: string) => {
+    console.log(`[test-hook] triggerLink: ${href}`);
+    const result = routeLink(
+      { href, sourceFilePath: currentFilePath ?? '' },
+      mainRepoConfig,
+    );
+    if (result.action === 'openDoc') {
+      openFile(result.path);
+    } else if (result.action === 'openCode') {
+      navigateGitHubTab(result.githubUrl);
+    } else if (result.action === 'openExternal') {
+      navigateGitHubTab(result.url);
+    }
+  };
 
   console.log('[side-panel] ready');
 }
@@ -536,8 +562,9 @@ function setupLinkProvider() {
         link.url = undefined as any;
         openFile(result.path);
       } else if (result.action === 'openCode') {
-        // Open GitHub URL
-        link.url = result.githubUrl;
+        // Navigate github tab (reuses active tab — no new tabs)
+        link.url = undefined as any;
+        navigateGitHubTab(result.githubUrl);
       } else if (result.action === 'openExternal') {
         link.url = result.url;
       }
@@ -546,6 +573,23 @@ function setupLinkProvider() {
     },
   });
   console.log('[links] provider registered');
+}
+
+// ── GitHub tab navigation (reuses active tab) ──
+
+async function navigateGitHubTab(url: string) {
+  console.log(`[navigate] ${url}`);
+  window.__lastNavigatedUrl = url;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      await chrome.tabs.update(tab.id, { url });
+      console.log(`[navigate] tab ${tab.id} updated to ${url}`);
+    }
+  } catch (e) {
+    console.log(`[navigate] chrome.tabs not available, falling back to window.open`);
+    window.open(url, '_blank');
+  }
 }
 
 // ── Auth ──
