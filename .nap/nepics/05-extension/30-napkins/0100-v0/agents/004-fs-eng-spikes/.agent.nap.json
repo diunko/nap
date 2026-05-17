@@ -1,13 +1,13 @@
 {
-  "cc_session_uuid": "d3c361eb-9d9a-4177-9890-5bfccdb18a4e",
+  "cc_session_uuid": "d7212ae1-8ad2-450c-8765-31e612d8e949",
   "role": "fs-eng",
-  "name": "002-fs-eng-v0",
+  "name": "004-fs-eng-spikes",
   "napkin": "0100-v0",
   "nepic": "05-extension",
   "parent": null,
   "parent_id": null,
-  "created_at": 1779010517764,
+  "created_at": 1779024949295,
   "started": true,
   "exited": false,
-  "done": false
+  "done": true
 }

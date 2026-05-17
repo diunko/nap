@@ -1,0 +1,17 @@
+{
+  "name": "spike-panel",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && cp manifest.json dist/manifest.json && cp side-panel.html dist/side-panel.html",
+    "typecheck": "tsc --noEmit",
+    "test:medium": "playwright test",
+    "test:medium:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+"typescript": "^5.5.0",
+    "vite": "^6.0.0"
+  }
+}

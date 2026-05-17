@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "spike-panel",
+  "version": "0.0.1",
+  "permissions": ["sidePanel", "activeTab", "tabs"],
+  "side_panel": { "default_path": "side-panel.html" },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [{
+    "matches": ["https://github.com/*"],
+    "js": ["content.js"]
+  }],
+  "commands": {
+    "_execute_action": {},
+    "open-panel": {
+      "suggested_key": { "default": "Ctrl+Shift+Y", "mac": "Command+Shift+Y" },
+      "description": "Open side panel"
+    }
+  },
+  "action": { "default_title": "Open Panel" }
+}
