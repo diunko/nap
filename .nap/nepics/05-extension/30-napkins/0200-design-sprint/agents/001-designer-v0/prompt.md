@@ -98,6 +98,12 @@ Before anything else, load these two skills — they define the format you'll be
 /napkin-format
 ```
 
-Napkins are the core artifact. Everything in NAP is bullets — `*` all the way down.
+Napkins are the core artifact. Everything in NAP is bullets — `*` all the way down. Nesting is zooming in.
+
+The nav tree is NOT a chapter list — it's a window into the napkin's file tree. A napkin is a directory. It contains files (.nap.md, .spec.md, .stories.md), subdirectories (mini-book/, scratch/), and an agents/ dir. Each agent is also a directory with its own files (prompt.md, response.md, scratch/). A mini-book can be anywhere under the napkin — it's just a subfolder with numbered .md files.
+
+Everything is visible and navigatable. The nav renders the full tree as nested `*` bullets with indentation — not a linear list of chapters, not folders with triangles. Click any .md file → opens in editor. The nav is spacious enough to be usable, draggable to resize, and uses `*` as the structural element.
+
+Look at the nap.app screenshot and the v2-unified.html mock: the sidebar uses `*` bullets with indentation as hierarchy. Dots (status indicators) sit alongside names. Agents show under their parent napkin with role + status dot. Files are leaves.
 
 CRITICAL: when you are done, write your response to `.nap/nepics/05-extension/30-napkins/0200-design-sprint/agents/001-designer-v0/response.md`, then run `nap3 done` in your terminal (no message argument — just `nap3 done`). The architect is blocked waiting — without this, the pipeline stalls.
