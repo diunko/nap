@@ -3,7 +3,7 @@
 * entry: link shared by PR author
   * format: `https://github.com/{owner}/{repo}/pull/{n}#nap-repo={provider}/{nap-owner}/{nap-repo}&nap-branch={branch}&napkin={nepic}/{napkin}`
   * non-PR: `https://github.com/{owner}/{repo}/blob/{branch}/#nap-repo=...&napkin=...`
-  * provider: `github` or `gitlab` — determines clone URL + CORS proxy
+  * provider: `github` or `gitlab` — determines clone URL
     * `nap-repo=github/diunko/nap-repo` → `https://github.com/diunko/nap-repo`
     * `nap-repo=gitlab/org/nap-repo` → `https://gitlab.com/org/nap-repo`
     * main repo remains github-only (that's where the PR lives)
