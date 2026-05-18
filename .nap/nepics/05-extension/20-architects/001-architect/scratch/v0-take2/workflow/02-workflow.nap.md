@@ -63,7 +63,9 @@
   * add // comments → auto-save to IDB
   * terminal: `git add . && git commit -m "review" && git push`
   * needs PAT for private repos
-  * CORS proxy needed (public for now, own proxy for prod)
+  * no CORS proxy needed — extension host_permissions bypass CORS (verified)
+    * tokens stay between browser and server, never proxied
+    * VPN-internal GitLab works — requests originate from user's machine
 
 * what's v0 vs v1
   * v0: main branch only, auto-clone, napkin focus, fetch latest, link-based entry
