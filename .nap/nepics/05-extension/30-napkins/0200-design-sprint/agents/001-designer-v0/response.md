@@ -12,11 +12,13 @@
 - No ephemeral/permanent tab distinction
 - Overall: worse than what the app already has
 
-### take 2 (mock-e)
+### take 2 (mock-e) — THE RESULT
 
-One mock, faithful port of the app's nav+map to the extension context. Written after reading Sidebar.tsx, TabBar.tsx, dot-style.ts, themes.ts, napkin-markdown.ts line by line.
+One mock, faithful port of the app's nav+map to the extension context. Written after reading Sidebar.tsx, TabBar.tsx, dot-style.ts, themes.ts, napkin-markdown.ts line by line. Then iterated with DU on accent placement, resize handle behavior, and visual hierarchy.
 
-**Saved to:** `.nap/nepics/05-extension/30-napkins/0200-design-sprint/mocks/mock-e.html`
+**READ THESE TWO FILES:**
+- **Mock:** `.nap/nepics/05-extension/30-napkins/0200-design-sprint/mocks/mock-e.html` — open in Chrome, the approved design
+- **Design spec:** `.nap/nepics/05-extension/30-napkins/0200-design-sprint/mocks/design-spec.nap.md` — every adaptation decision, what was ported, what changed, and why. This is what the implementer should build from.
 
 **What it ports from the app:**
 - Sidebar.tsx card structure: collapsed header with `*` + name + agent dots + phase
