@@ -1,8 +1,13 @@
 # extension workflow v2
 
 * entry: link shared by PR author
-  * format: `https://github.com/{owner}/{repo}/pull/{n}#nap-repo={nap-owner}/{nap-repo}&nap-branch={branch}&napkin={nepic}/{napkin}`
+  * format: `https://github.com/{owner}/{repo}/pull/{n}#nap-repo={provider}/{nap-owner}/{nap-repo}&nap-branch={branch}&napkin={nepic}/{napkin}`
   * non-PR: `https://github.com/{owner}/{repo}/blob/{branch}/#nap-repo=...&napkin=...`
+  * provider: `github` or `gitlab` — determines clone URL + CORS proxy
+    * `nap-repo=github/diunko/nap-repo` → `https://github.com/diunko/nap-repo`
+    * `nap-repo=gitlab/org/nap-repo` → `https://gitlab.com/org/nap-repo`
+    * main repo remains github-only (that's where the PR lives)
+    * change is limited to clone-time (URL + transport) and parse-time only
   * nap-branch defaults to `main` (v0 only supports main, placeholder for checkout in v1)
   * who generates: nap.app (`nap3 share-link` or similar) — outside extension scope
   * extension documents expected format
