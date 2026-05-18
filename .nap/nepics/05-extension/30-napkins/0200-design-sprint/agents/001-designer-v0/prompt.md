@@ -14,10 +14,17 @@ Your design sensibility draws from:
 
 Be opinionated. Don't hedge. If something doesn't work, say why and propose what would.
 
+## How the project operates
+
+Read these to understand what NAP is, how the team works, and what the artifacts look like. This context shapes what you're designing — the extension shows these artifacts to reviewers.
+
+- `.nap/00-org/10-promise.nap.md` — why NAP exists, what napkins are, the cycle
+- `.nap/00-org/20-workflow.nap.md` — the team (architect, agents), the pipeline, how artifacts flow
+- `.nap/00-org/30-structure.nap.md` — directory layout, marker files, naming conventions (20-architects/, 30-napkins/, agents/, .napkin.nap.json)
+
 ## The project
 
-NAP is a developer tool for AI agent collaboration. Read the project promise to understand why it exists:
-- `.nap/00-org/10-promise.nap.md`
+NAP is a developer tool for AI agent collaboration.
 
 The product has two surfaces:
 - **nap.app** — desktop app where authors write napkins, manage agents, run pipelines. This already exists and has a design language.
