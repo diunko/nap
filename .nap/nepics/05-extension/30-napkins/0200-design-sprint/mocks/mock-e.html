@@ -214,15 +214,7 @@ html, body {
 }
 @keyframes cursor-blink { 50% { opacity: 0; } }
 
-/* ── Resize handle (between main and nav) — from index.tsx:100-115 ── */
-#resize-handle {
-  width: 4px;
-  cursor: col-resize;
-  flex-shrink: 0;
-  background: transparent;
-  z-index: 5;
-}
-#resize-handle:hover { background: var(--nap-accent); }
+/* #resize-handle removed — nav-drag is the single resizer */
 
 /* ── Nav sidebar (right) — from Sidebar.tsx ── */
 #nav {
@@ -553,9 +545,6 @@ d2f6a4c initial structure</span>
     </div>
   </div>
 
-  <!-- ═══ Resize handle ═══ -->
-  <div id="resize-handle"></div>
-
   <!-- ═══ Nav sidebar (right) — faithful port of Sidebar.tsx ═══ -->
   <div id="nav">
     <div id="nav-drag"></div>
@@ -681,6 +670,24 @@ d2f6a4c initial structure</span>
           <span class="name">0200-crust-validation</span>
           <span class="phase" style="color:var(--phase-backlog)">backlog</span>
         </div>
+        <div class="card-body" style="display:none">
+          <div class="file-row" style="padding-left:16px" onclick="navClick('0200-crust-validation.nap.md')">
+            <span class="bullet">*</span>
+            <span class="fname is-main">0200-crust-validation.nap.md</span>
+          </div>
+          <div class="dir-row" style="padding-left:16px">
+            <span class="bullet">*</span>
+            <span class="dname">mini-book/</span>
+          </div>
+            <div class="file-row" style="padding-left:32px" onclick="navClick('01-crust-types.md')">
+              <span class="bullet">*</span>
+              <span class="fname is-link">01-crust-types.md</span>
+            </div>
+            <div class="file-row" style="padding-left:32px" onclick="navClick('02-transit-degradation.md')">
+              <span class="bullet">*</span>
+              <span class="fname is-link">02-transit-degradation.md</span>
+            </div>
+        </div>
       </div>
 
       <!-- Show all toggle -->
@@ -705,8 +712,6 @@ function switchTab(tab) {
 // ── Nav toggle ──
 function toggleNav() {
   document.getElementById('nav').classList.toggle('collapsed');
-  document.getElementById('resize-handle').style.display =
-    document.getElementById('nav').classList.contains('collapsed') ? 'none' : '';
 }
 
 // ── Nav file click ──
@@ -798,41 +803,7 @@ function showToast(msg) {
   });
 })();
 
-// ── Main resize handle (between editor and nav) ──
-(function() {
-  const handle = document.getElementById('resize-handle');
-  const main = document.getElementById('main');
-  const nav = document.getElementById('nav');
-  let dragging = false, startX = 0, startMainW = 0, startNavW = 0;
-
-  handle.addEventListener('mousedown', (e) => {
-    dragging = true;
-    startX = e.clientX;
-    startMainW = main.offsetWidth;
-    startNavW = nav.offsetWidth;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    function onMove(ev) {
-      if (!dragging) return;
-      const delta = ev.clientX - startX;
-      const totalW = startMainW + startNavW;
-      const newMain = Math.max(200, Math.min(totalW - 180, startMainW + delta));
-      main.style.flex = '0 0 ' + newMain + 'px';
-      nav.style.width = (totalW - newMain) + 'px';
-    }
-    function onUp() {
-      dragging = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      main.style.flex = '1';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-})();
+// (single resizer — nav-drag handles all resizing)
 </script>
 </body>
 </html>
