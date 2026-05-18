@@ -24,10 +24,16 @@ Constraints for the designer.
   * flat visual weight — dots and indentation ARE the hierarchy, no extra chrome
   * bullet markers dimmed, content normal color
   * // comments in green, //DU: //A: with role colors
+    * hash-based palette: `packages/v3/src/renderer/role-palette.ts`
+    * known prefixes: A=#2563eb (blue), DU=#16a34a (green), FS=#16a34a, TA=#d97706 (orange), TE=#6b7280 (gray)
+    * unknown prefixes: djb2 hash → 20 evenly-spaced HSL hues
   * sparse, scannable, high information density
 * what's different:
-  * light theme (lightBlue: bg #f0f4f8, text #2e3440)
-  * terminal is dark (bg #1e1e1e) — not light
+  * light theme: `packages/v3/src/renderer/themes.ts` → lightBlue definition
+    * editor bg #f0f4f8, text #2e3440, bullet markers #7a8a9a, comments #16a34a
+    * shell CSS vars: --nap-bg, --nap-text, --nap-border, etc.
+  * terminal is dark — `packages/bash-poc/index.html` has the working dark palette
+    * bg #1e1e1e, fg #e5e5e5, prompt green #22c55e, cursor #e5e5e5
   * no gutter (nap.app has nepic gutter — extension has one nepic context from URL)
   * no kanban (extension is reading, not project management)
 

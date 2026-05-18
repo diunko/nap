@@ -41,7 +41,10 @@
   * monospace throughout (Menlo/Monaco)
 
 * deliverable
-  * one self-contained HTML file: mock-v0-extension.html
-  * interactive: tab switching, nav expand/collapse, link hover states
-  * populated with real space-pizza fixture content
+  * 4 diverse HTML mocks — different layout/styling approaches, same end goal
+    * mock-a.html, mock-b.html, mock-c.html, mock-d.html
+    * each self-contained (HTML+CSS+JS, open in browser)
+    * each a different take on nav placement, density, chrome, reading feel
+  * all interactive: tab switching, nav expand/collapse, link hover states
+  * all populated with real space-pizza fixture content
   * save to: .nap/nepics/05-extension/30-napkins/0200-design-sprint/mocks/
