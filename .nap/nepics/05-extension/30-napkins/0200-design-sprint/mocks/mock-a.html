@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mock A — Linear Density</title>
+<style>
+  /* ── Reset ── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #b0b8c0; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #8a929a; }
+  * { scrollbar-width: thin; scrollbar-color: #b0b8c0 transparent; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #2e3440;
+    background: #f0f4f8;
+  }
+
+  /* ── Shell ── */
+  .shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+  }
+
+  /* ── Header ── */
+  .header {
+    height: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #c4cad0;
+    background: #f0f4f8;
+    padding: 0 10px;
+    gap: 8px;
+    user-select: none;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .napkin-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2e3440;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tabs {
+    display: flex;
+    gap: 2px;
+  }
+  .tab {
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: #6d7a8a;
+    border: none;
+    background: none;
+    font-family: inherit;
+    border-bottom: 2px solid transparent;
+    transition: color 0.1s, border-color 0.1s;
+  }
+  .tab:hover { color: #2e3440; }
+  .tab.active {
+    color: #2e3440;
+    border-bottom-color: #2563eb;
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .header-btn {
+    font-size: 11px;
+    padding: 2px 8px;
+    cursor: pointer;
+    color: #4c566a;
+    background: #e6eaee;
+    border: 1px solid #c4cad0;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: background 0.1s;
+  }
+  .header-btn:hover { background: #dce0e4; }
+
+  /* ── Body ── */
+  .body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── Editor / Terminal pane ── */
+  .content-pane {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .content-pane.editor-mode {
+    background: #f0f4f8;
+    padding: 12px 16px 40px 16px;
+  }
+  .content-pane.terminal-mode {
+    background: #1e1e1e;
+    padding: 12px 16px 40px 16px;
+  }
+
+  /* ── Nav ── */
+  .nav {
+    width: 200px;
+    min-width: 200px;
+    border-left: 1px solid #c4cad0;
+    background: #f0f4f8;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 0;
+    user-select: none;
+    transition: width 0.15s, min-width 0.15s, padding 0.15s, border 0.15s;
+  }
+  .nav.collapsed {
+    width: 0;
+    min-width: 0;
+    padding: 0;
+    border-left: none;
+    overflow: hidden;
+  }
+
+  /* ── Nav tree ── */
+  .nav-section {
+    padding: 0 8px;
+    margin-bottom: 8px;
+  }
+  .nav-section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+  }
+  .nav-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #2e3440;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .nav-section-status {
+    font-size: 10px;
+    color: #6d7a8a;
+    flex-shrink: 0;
+    margin-left: 6px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: baseline;
+    padding: 1px 4px;
+    cursor: default;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #2e3440;
+  }
+  .nav-item.clickable {
+    cursor: pointer;
+  }
+  .nav-item.clickable:hover {
+    background: #e1e5e9;
+  }
+  .nav-item.active {
+    background: #dce0e4;
+  }
+  .nav-bullet {
+    color: #94a0b0;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+  .nav-filename {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .nav-agent-status {
+    margin-left: auto;
+    padding-left: 4px;
+    flex-shrink: 0;
+  }
+  .dot-done {
+    color: #2563eb;
+    font-size: 8px;
+  }
+  .dot-running {
+    color: #22c55e;
+    font-size: 8px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .status-label {
+    font-size: 10px;
+    color: #6d7a8a;
+    margin-left: 3px;
+  }
+
+  .show-all-toggle {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: #4c566a;
+    cursor: pointer;
+    border-top: 1px solid #e6eaee;
+    margin-top: 4px;
+  }
+  .show-all-toggle:hover { color: #2563eb; }
+  .backlog-section { display: none; }
+  .backlog-section.visible { display: block; }
+
+  /* ── Editor tokens ── */
+  .editor-line {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    min-height: 1.4em;
+  }
+  .editor-line.heading {
+    font-weight: 700;
+    color: #1a1a2e;
+  }
+  .editor-line.code-block-line {
+    background: #e0e8f0;
+    display: block;
+    padding: 0 4px;
+    margin: 0 -4px;
+  }
+  .editor-line.code-fence {
+    background: #e0e8f0;
+    display: block;
+    padding: 0 4px;
+    margin: 0 -4px;
+  }
+  .t-dim { color: #7a8a9a; }
+  .t-bold { font-weight: 700; }
+  .t-link { color: #1e50c0; text-decoration: underline; cursor: pointer; }
+  .t-link:hover { color: #2563eb; background: #e0e8f0; }
+  .t-inline-code {
+    background: #e0e8f0;
+    color: #a0522d;
+    padding: 0 3px;
+  }
+  .t-comment-green { color: #16a34a; }
+  .t-comment-blue { color: #2563eb; }
+  .t-comment-orange { color: #d97706; }
+  .t-comment-gray { color: #6b7280; }
+  .t-code { color: #2e3440; }
+  .t-fence-dim { color: #94a0b0; }
+
+  /* ── Terminal ── */
+  .terminal-content {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #cccccc;
+  }
+  .terminal-content .prompt { color: #22c55e; }
+  .terminal-content .command { color: #e5e5e5; }
+  .terminal-content .output { color: #cccccc; }
+  .terminal-content .modified { color: #d97706; }
+  .terminal-line {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    min-height: 1.5em;
+  }
+  .cursor-block {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    background: #aeafad;
+    vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <span class="napkin-name">0100-delivery-pipeline</span>
+      <div class="tabs">
+        <button class="tab active" data-tab="editor">Editor</button>
+        <button class="tab" data-tab="terminal">Terminal</button>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="header-btn" id="btn-fetch">fetch latest</button>
+      <button class="header-btn" id="btn-settings">&#9881;</button>
+      <button class="header-btn" id="btn-collapse">&#9776;</button>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+    <!-- Content -->
+    <div class="content-pane editor-mode" id="content-pane">
+      <!-- Editor and Terminal content injected by JS -->
+    </div>
+    <!-- Nav -->
+    <div class="nav" id="nav">
+      <div class="nav-section">
+        <div class="nav-section-header">
+          <span class="nav-section-title">0100-delivery-pipeline</span>
+          <span class="nav-section-status">doing</span>
+        </div>
+        <!-- tree -->
+        <div class="nav-item clickable" data-file="0100-delivery-pipeline.nap.md" style="padding-left:8px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">0100-delivery-pipeline.nap.md</span>
+        </div>
+        <div class="nav-item" style="padding-left:8px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename" style="color:#4c566a">mini-book/</span>
+        </div>
+        <div class="nav-item clickable active" data-file="01-order-routing.md" style="padding-left:24px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">01-order-routing.md</span>
+        </div>
+        <div class="nav-item clickable" data-file="02-warp-queue.md" style="padding-left:24px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">02-warp-queue.md</span>
+        </div>
+        <div class="nav-item clickable" data-file="03-dispatch.md" style="padding-left:24px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">03-dispatch.md</span>
+        </div>
+        <div class="nav-item clickable" data-file="04-tracking.md" style="padding-left:24px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">04-tracking.md</span>
+        </div>
+        <div class="nav-item clickable" data-file="05-putting-it-together.md" style="padding-left:24px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">05-putting-it-together.md</span>
+        </div>
+        <div class="nav-item" style="padding-left:8px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename" style="color:#4c566a">agents/</span>
+        </div>
+        <div class="nav-item" style="padding-left:24px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">001-test-arch-routing</span>
+          <span class="nav-agent-status"><span class="dot-done">&#9679;</span><span class="status-label">done</span></span>
+        </div>
+        <div class="nav-item clickable" data-file="001-prompt.md" style="padding-left:40px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">prompt.md</span>
+        </div>
+        <div class="nav-item clickable" data-file="001-response.md" style="padding-left:40px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">response.md</span>
+        </div>
+        <div class="nav-item" style="padding-left:24px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">002-fs-eng-routing</span>
+          <span class="nav-agent-status"><span class="dot-done">&#9679;</span><span class="status-label">done</span></span>
+        </div>
+        <div class="nav-item clickable" data-file="002-prompt.md" style="padding-left:40px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">prompt.md</span>
+        </div>
+        <div class="nav-item clickable" data-file="002-response.md" style="padding-left:40px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">response.md</span>
+        </div>
+        <div class="nav-item" style="padding-left:24px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">003-test-eng-routing</span>
+          <span class="nav-agent-status"><span class="dot-running">&#9675;</span><span class="status-label">running</span></span>
+        </div>
+        <div class="nav-item clickable" data-file="003-prompt.md" style="padding-left:40px">
+          <span class="nav-bullet">*</span>
+          <span class="nav-filename">prompt.md</span>
+        </div>
+      </div>
+
+      <div class="show-all-toggle" id="show-all-toggle">show all</div>
+
+      <div class="backlog-section" id="backlog-section">
+        <div class="nav-section">
+          <div class="nav-section-header">
+            <span class="nav-section-title">0200-crust-validation</span>
+            <span class="nav-section-status">backlog</span>
+          </div>
+          <div class="nav-item clickable" data-file="0200-crust-validation.nap.md" style="padding-left:8px">
+            <span class="nav-bullet">*</span>
+            <span class="nav-filename">0200-crust-validation.nap.md</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Editor content as tokenized HTML ──
+function buildEditorHTML() {
+  // Helper: produce one editor-line div
+  function L(cls, html) {
+    const c = cls ? ` ${cls}` : '';
+    return `<div class="editor-line${c}">${html || ''}</div>`;
+  }
+  // Shortcuts
+  const dim = s => `<span class="t-dim">${s}</span>`;
+  const bold = s => `<span class="t-bold">${s}</span>`;
+  const link = (text, href) => `<span class="t-dim">[</span><a class="t-link" title="${href}">${text}</a><span class="t-dim">](${href})</span>`;
+  const icode = s => `<span class="t-inline-code">${s}</span>`;
+
+  const lines = [];
+
+  // # Chapter 1
+  lines.push(L('heading', '# Chapter 1: How an Order Gets from Earth to Mars'));
+  lines.push(L('', ''));
+
+  // ## The Journey
+  lines.push(L('heading', '## The Journey'));
+  lines.push(L('', ''));
+
+  lines.push(L('', `A customer on Earth orders a pizza for delivery to Mars. Between &quot;order placed&quot; and &quot;pizza arrives&quot; are four steps, each in its own module. This chapter covers the first and most important: routing.`));
+  lines.push(L('', ''));
+  lines.push(L('', `The router's job: given an order, pick the best warp gate and queue the order at that gate. Simple to state, but the details matter &mdash; the wrong gate choice means an extra 15 minutes waiting for the next alignment window, and by then the crust is compromised.`));
+  lines.push(L('', ''));
+
+  // ## The Entry Point
+  lines.push(L('heading', '## The Entry Point'));
+  lines.push(L('', ''));
+
+  lines.push(L('', `${dim('**')}${bold('routeOrder()')}${dim('**')} in ${link('order-router.ts:54', '/modules/delivery/order-router.ts#L54')} is where every order starts.`));
+  lines.push(L('', ''));
+  lines.push(L('', 'It does three things, in this order:'));
+  lines.push(L('', ''));
+
+  lines.push(L('', `${dim('1.')} ${dim('**')}${bold('Validate')}${dim('**')} &mdash; call validateOrder() to check crust/destination compatibility and topping limits. This is synchronous and fast (${link('crust-validator.ts:40', '/modules/validation/crust-validator.ts#L40')}). Rejected orders never touch the queue.`));
+  lines.push(L('', ''));
+  lines.push(L('', `${dim('2.')} ${dim('**')}${bold('Find the best gate')}${dim('**')} &mdash; each destination has a cluster of 2-3 gates. The router picks the one with the shortest queue (${link('warp-queue.ts:31', '/modules/queue/warp-queue.ts#L31')}). If ALL gates are at max capacity (50 orders), the order enters a hold queue.`));
+  lines.push(L('', ''));
+  lines.push(L('', `${dim('3.')} ${dim('**')}${bold('Queue and track')}${dim('**')} &mdash; the order goes into the gate's queue, and the tracker starts monitoring it (${link('delivery-tracker.ts:41', '/modules/tracking/delivery-tracker.ts#L41')}).`));
+  lines.push(L('', ''));
+
+  // Code block
+  lines.push(L('code-fence', `${dim('```typescript')}`));
+  lines.push(L('code-block-line', `<span class="t-code">const bestGate = await queue.findShortestQueue(gates);</span>`));
+  lines.push(L('code-block-line', `<span class="t-code">if (!bestGate) {</span>`));
+  lines.push(L('code-block-line', `<span class="t-code">  await queue.holdOrder(order.id, order.destination);</span>`));
+  lines.push(L('code-block-line', `<span class="t-code">  return { orderId: order.id, gateId: '', estimatedTransitMs: 0, status: 'hold' };</span>`));
+  lines.push(L('code-block-line', `<span class="t-code">}</span>`));
+  lines.push(L('code-fence', `${dim('```')}`));
+  lines.push(L('', ''));
+
+  lines.push(L('', `The hold path is important &mdash; it's not a failure. It means &quot;all gates are busy, we'll try again when one frees up.&quot; The customer sees &quot;queued&quot; either way; the difference is internal.`));
+  lines.push(L('', ''));
+
+  // ## Gate Clusters
+  lines.push(L('heading', '## Gate Clusters'));
+  lines.push(L('', ''));
+
+  lines.push(L('', `Each destination has its own gates. This is a physical constraint &mdash; a gate tuned for Mars can't reach Titan. The clusters are defined in ${link('order-router.ts:33', '/modules/delivery/order-router.ts#L33')}:`));
+  lines.push(L('', ''));
+
+  lines.push(L('code-fence', `${dim('```')}`));
+  lines.push(L('code-block-line', `<span class="t-code">mars:   gate-m1, gate-m2, gate-m3  (3 gates &mdash; Mars is popular)</span>`));
+  lines.push(L('code-block-line', `<span class="t-code">europa: gate-e1, gate-e2           (2 gates)</span>`));
+  lines.push(L('code-block-line', `<span class="t-code">titan:  gate-t1                    (1 gate &mdash; Titan is niche)</span>`));
+  lines.push(L('code-fence', `${dim('```')}`));
+  lines.push(L('', ''));
+
+  // Comments
+  lines.push(L('', `<span class="t-comment-green">//DU: should we add a gate-t2? single point of failure for Titan</span>`));
+  lines.push(L('', `<span class="t-comment-blue">//A: not yet &mdash; Titan orders are &lt;1% of volume. one gate handles it. if it goes down, orders hold until it recovers. adding a gate is expensive (alignment calibration takes weeks).</span>`));
+  lines.push(L('', ''));
+
+  // ## Transit Times
+  lines.push(L('heading', '## Transit Times'));
+  lines.push(L('', ''));
+
+  lines.push(L('', `After dispatch, the pizza is in warp. Transit times are fixed per destination (${link('order-router.ts:40', '/modules/delivery/order-router.ts#L40')}):`));
+  lines.push(L('', ''));
+
+  lines.push(L('', `${dim('-')} ${dim('**')}${bold('Mars:')}${dim('**')} 3 minutes &mdash; practically instant. This is why Mars deliveries dominate.`));
+  lines.push(L('', `${dim('-')} ${dim('**')}${bold('Europa:')}${dim('**')} 40 minutes &mdash; Jupiter distance. Crust quality degrades but is still edible.`));
+  lines.push(L('', `${dim('-')} ${dim('**')}${bold('Titan:')}${dim('**')} 80 minutes &mdash; Saturn. Only thin crust and stuffed survive the transit. Deep-dish arrives as a brick.`));
+  lines.push(L('', ''));
+
+  lines.push(L('', `The ETA the customer sees includes both transit time AND wait time in the queue. Each position in the queue adds ~30 seconds.`));
+  lines.push(L('', ''));
+
+  // ## What Happens Next
+  lines.push(L('heading', '## What Happens Next'));
+  lines.push(L('', ''));
+
+  lines.push(L('', `The order is now sitting in a gate's queue. Chapter 2 covers what happens when it reaches the front: the alignment window check and dispatch decision.`));
+  lines.push(L('', ''));
+  lines.push(L('', `Next: ${link('02-warp-queue.md', '02-warp-queue.md')}`));
+
+  return lines.join('\n');
+}
+
+// ── Terminal content ──
+function buildTerminalHTML() {
+  const lines = [
+    '<span class="prompt">$</span> <span class="command">cd space-pizza-nap</span>',
+    '<span class="prompt">$</span> <span class="command">git status</span>',
+    '<span class="output">On branch main</span>',
+    '<span class="output">Your branch is up to date with \'origin/main\'.</span>',
+    '',
+    '<span class="output">Changes not staged for commit:</span>',
+    '<span class="output">  (use "git add &lt;file&gt;..." to update what will be committed)</span>',
+    '',
+    '<span class="output">  <span class="modified">modified:   nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/01-order-routing.md</span></span>',
+    '',
+    '<span class="prompt">$</span> <span class="command">git log --oneline -5</span>',
+    '<span class="output">a3f2e1c review: delivery pipeline questions</span>',
+    '<span class="output">b8d4c2a feat: add dispatch alignment check</span>',
+    '<span class="output">c1e5f3b feat: order routing through warp gates</span>',
+    '<span class="output">d2f6a4c initial structure</span>',
+    '',
+    '<span class="prompt">$</span> <span class="cursor-block"></span>',
+  ];
+  return '<div class="terminal-content">' +
+    lines.map(l => `<div class="terminal-line">${l}</div>`).join('\n') +
+    '</div>';
+}
+
+// ── State ──
+let currentTab = 'editor';
+let navCollapsed = false;
+let showAll = false;
+
+const contentPane = document.getElementById('content-pane');
+const nav = document.getElementById('nav');
+const tabs = document.querySelectorAll('.tab');
+const btnCollapse = document.getElementById('btn-collapse');
+const showAllToggle = document.getElementById('show-all-toggle');
+const backlogSection = document.getElementById('backlog-section');
+
+// ── Render ──
+function render() {
+  if (currentTab === 'editor') {
+    contentPane.className = 'content-pane editor-mode';
+    contentPane.innerHTML = buildEditorHTML();
+  } else {
+    contentPane.className = 'content-pane terminal-mode';
+    contentPane.innerHTML = buildTerminalHTML();
+  }
+}
+
+// ── Tab switching ──
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    tabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentTab = tab.dataset.tab;
+    render();
+  });
+});
+
+// ── Nav collapse ──
+btnCollapse.addEventListener('click', () => {
+  navCollapsed = !navCollapsed;
+  nav.classList.toggle('collapsed', navCollapsed);
+});
+
+// ── Show all toggle ──
+showAllToggle.addEventListener('click', () => {
+  showAll = !showAll;
+  backlogSection.classList.toggle('visible', showAll);
+  showAllToggle.textContent = showAll ? 'hide backlog' : 'show all';
+});
+
+// ── Nav file click ──
+nav.addEventListener('click', (e) => {
+  const item = e.target.closest('.nav-item.clickable');
+  if (!item) return;
+  nav.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  item.classList.add('active');
+});
+
+// ── Initial render ──
+render();
+</script>
+</body>
+</html>

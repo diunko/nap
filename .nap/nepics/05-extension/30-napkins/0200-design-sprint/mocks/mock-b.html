@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mock B — Tufte Reading</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    /* lightBlue theme */
+    --bg: #f0f4f8;
+    --text: #2e3440;
+    --text-secondary: #4c566a;
+    --text-muted: #6d7a8a;
+    --text-dim: #94a0b0;
+    --border: #c4cad0;
+    --bg-secondary: #e6eaee;
+    --bg-hover: #e1e5e9;
+    --accent: #2563eb;
+    --link: #1e50c0;
+
+    /* terminal */
+    --term-bg: #1e1e1e;
+    --term-text: #e5e5e5;
+    --term-green: #22c55e;
+
+    /* role colors */
+    --comment-green: #16a34a;
+    --comment-blue: #2563eb;
+    --comment-orange: #d97706;
+
+    /* editor syntax */
+    --heading-color: #1a1a2e;
+    --bold-marker: #7a8a9a;
+    --code-bg: #e0e8f0;
+    --code-inline: #a0522d;
+    --list-marker: #7a8a9a;
+
+    --font: 'Menlo', 'Monaco', 'Consolas', monospace;
+    --nav-width: 200px;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--text-dim); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* ── Shell ── */
+  .shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 900px;
+    margin: 0 auto;
+    background: var(--bg);
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 14px 20px 10px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .breadcrumb {
+    font-size: 13px;
+    color: var(--text-secondary);
+    letter-spacing: 0.01em;
+  }
+  .breadcrumb .sep { color: var(--text-dim); margin: 0 5px; }
+  .breadcrumb .current { color: var(--text); }
+
+  .header-controls {
+    display: flex;
+    gap: 12px;
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+  .header-controls button {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 14px;
+    cursor: pointer;
+    font-family: var(--font);
+    padding: 2px;
+    transition: color 0.15s;
+  }
+  .header-controls button:hover { color: var(--text); }
+
+  /* ── Main body ── */
+  .body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ── Editor pane ── */
+  .editor-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 24px;
+    padding: 12px 20px 0 20px;
+    flex-shrink: 0;
+  }
+
+  .tab {
+    background: none;
+    border: none;
+    font-family: var(--font);
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px 0 10px 0;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ── Content area ── */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+  }
+
+  /* ── Editor content ── */
+  .editor-content {
+    padding: 20px 20px 40px 20px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .editor-content .line {
+    display: block;
+  }
+
+  .editor-content .blank-line {
+    display: block;
+    height: 10px;
+  }
+
+  .editor-content .paragraph-gap {
+    display: block;
+    height: 6px;
+  }
+
+  /* Syntax tokens */
+  .h1 { font-weight: bold; color: var(--heading-color); font-size: 15px; }
+  .h2 { font-weight: bold; color: var(--heading-color); }
+  .h-marker { color: var(--text-dim); font-weight: bold; }
+
+  .bold { font-weight: bold; color: var(--text); }
+  .bold-marker { color: var(--bold-marker); }
+
+  .link-bracket { color: var(--bold-marker); }
+  .link-text { color: var(--link); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  .link-url { color: var(--bold-marker); font-size: 12px; }
+
+  .code-block {
+    display: block;
+    background: var(--code-bg);
+    padding: 12px 14px;
+    margin: 6px 0;
+    border-radius: 3px;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+  .code-fence { color: var(--text-dim); }
+
+  .code-inline {
+    background: var(--code-bg);
+    color: var(--code-inline);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  .list-marker { color: var(--list-marker); }
+  .num-marker { color: var(--list-marker); }
+
+  .comment-du { color: var(--comment-green); }
+  .comment-a { color: var(--comment-blue); }
+  .comment-ta { color: var(--comment-orange); }
+  .comment-generic { color: var(--comment-green); }
+
+  /* ── Terminal content ── */
+  .terminal-content {
+    background: var(--term-bg);
+    color: var(--term-text);
+    padding: 20px 20px 40px 20px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 13px;
+    line-height: 1.7;
+    min-height: 100%;
+  }
+  .terminal-content .prompt { color: var(--term-green); }
+  .terminal-content .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 15px;
+    background: var(--term-text);
+    vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* ── Nav pane ── */
+  .nav-pane {
+    width: var(--nav-width);
+    min-width: var(--nav-width);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.2s, min-width 0.2s, opacity 0.2s, padding 0.2s;
+  }
+  .nav-pane.collapsed {
+    width: 0;
+    min-width: 0;
+    border-left: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .nav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 8px 14px;
+    flex-shrink: 0;
+  }
+  .nav-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+
+  .nav-toggle {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 13px;
+    cursor: pointer;
+    font-family: var(--font);
+    padding: 2px 4px;
+    transition: color 0.15s;
+  }
+  .nav-toggle:hover { color: var(--text); }
+
+  .nav-tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 14px 20px 14px;
+  }
+
+  .tree-item {
+    display: block;
+    padding: 3px 6px;
+    margin-bottom: 2px;
+    border-radius: 3px;
+    cursor: default;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: background 0.1s;
+  }
+  .tree-item.clickable { cursor: pointer; }
+  .tree-item.clickable:hover { background: var(--bg-hover); }
+  .tree-item.active {
+    background: var(--bg-hover);
+    color: var(--text);
+    font-weight: 600;
+  }
+  .tree-item .bullet { color: var(--text-dim); margin-right: 4px; }
+  .tree-item .status-done { color: var(--comment-green); font-size: 10px; margin-left: 4px; }
+  .tree-item .status-running { color: var(--comment-orange); font-size: 10px; margin-left: 4px; }
+  .tree-item .status-label { color: var(--text-dim); font-size: 11px; margin-left: 4px; }
+
+  .tree-section-label {
+    font-size: 12px;
+    color: var(--text);
+    padding: 6px 6px 3px 6px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tree-section-label .status-label { font-weight: 400; }
+
+  .tree-spacer { height: 8px; }
+
+  .tree-indent-1 { padding-left: 20px; }
+  .tree-indent-2 { padding-left: 36px; }
+  .tree-indent-3 { padding-left: 52px; }
+
+  .show-all-toggle {
+    display: block;
+    background: none;
+    border: none;
+    font-family: var(--font);
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 10px 6px 4px 6px;
+    transition: color 0.15s;
+  }
+  .show-all-toggle:hover { color: var(--text-secondary); }
+
+  .backlog-section { display: none; }
+  .backlog-section.visible { display: block; }
+
+  /* ── External nav toggle (when collapsed) ── */
+  .nav-expand-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 13px;
+    cursor: pointer;
+    font-family: var(--font);
+    padding: 2px 6px;
+    display: none;
+    transition: color 0.15s;
+    z-index: 10;
+  }
+  .nav-expand-btn:hover { color: var(--text); }
+  .nav-expand-btn.visible { display: block; }
+
+  /* ── Terminal tab full dark background ── */
+  .content.terminal-active {
+    background: var(--term-bg);
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- Header -->
+  <div class="header">
+    <div class="breadcrumb">
+      nepics<span class="sep">/</span>01-v1<span class="sep">/</span>30-napkins<span class="sep">/</span><span class="current">0100-delivery-pipeline</span>
+    </div>
+    <div class="header-controls">
+      <button title="Refresh">&#x27F3;</button>
+      <button title="Settings">&#x2699;</button>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+    <!-- Editor pane -->
+    <div class="editor-pane">
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" data-tab="editor">Editor</button>
+        <button class="tab" data-tab="terminal">Terminal</button>
+      </div>
+
+      <!-- Content -->
+      <div class="content" id="content">
+        <!-- Editor content -->
+        <div class="editor-content" id="editor-tab"></div>
+
+        <!-- Terminal content -->
+        <div class="terminal-content" id="terminal-tab" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Nav pane -->
+    <div class="nav-pane" id="nav-pane">
+      <div class="nav-header">
+        <span class="nav-title">Files</span>
+        <button class="nav-toggle" id="nav-collapse-btn" title="Collapse nav">&raquo;</button>
+      </div>
+      <div class="nav-tree" id="nav-tree"></div>
+    </div>
+  </div>
+
+  <!-- Expand button (shown when nav collapsed) -->
+  <button class="nav-expand-btn" id="nav-expand-btn" title="Show nav">&laquo;</button>
+</div>
+
+<script>
+(function () {
+  // ── Editor content (raw markdown with syntax highlighting) ──
+
+  const editorLines = [
+    { type: 'h1', text: '# Chapter 1: How an Order Gets from Earth to Mars' },
+    { type: 'blank' },
+    { type: 'h2', text: '## The Journey' },
+    { type: 'blank' },
+    { type: 'p', text: 'A customer on Earth orders a pizza for delivery to Mars. Between "order placed" and "pizza arrives" are four steps, each in its own module. This chapter covers the first and most important: routing.' },
+    { type: 'pgap' },
+    { type: 'p', text: 'The router\'s job: given an order, pick the best warp gate and queue the order at that gate. Simple to state, but the details matter \u2014 the wrong gate choice means an extra 15 minutes waiting for the next alignment window, and by then the crust is compromised.' },
+    { type: 'blank' },
+    { type: 'h2', text: '## The Entry Point' },
+    { type: 'blank' },
+    { type: 'p', text: '**routeOrder()** in [order-router.ts:54](/modules/delivery/order-router.ts#L54) is where every order starts.' },
+    { type: 'pgap' },
+    { type: 'p', text: 'It does three things, in this order:' },
+    { type: 'pgap' },
+    { type: 'li', num: '1.', text: '**Validate** \u2014 call validateOrder() to check crust/destination compatibility and topping limits. This is synchronous and fast ([crust-validator.ts:40](/modules/validation/crust-validator.ts#L40)). Rejected orders never touch the queue.' },
+    { type: 'pgap' },
+    { type: 'li', num: '2.', text: '**Find the best gate** \u2014 each destination has a cluster of 2-3 gates. The router picks the one with the shortest queue ([warp-queue.ts:31](/modules/queue/warp-queue.ts#L31)). If ALL gates are at max capacity (50 orders), the order enters a hold queue.' },
+    { type: 'pgap' },
+    { type: 'li', num: '3.', text: '**Queue and track** \u2014 the order goes into the gate\'s queue, and the tracker starts monitoring it ([delivery-tracker.ts:41](/modules/tracking/delivery-tracker.ts#L41)).' },
+    { type: 'blank' },
+    { type: 'code-fence', text: '```typescript' },
+    { type: 'code', text: 'const bestGate = await queue.findShortestQueue(gates);' },
+    { type: 'code', text: 'if (!bestGate) {' },
+    { type: 'code', text: '  await queue.holdOrder(order.id, order.destination);' },
+    { type: 'code', text: "  return { orderId: order.id, gateId: '', estimatedTransitMs: 0, status: 'hold' };" },
+    { type: 'code', text: '}' },
+    { type: 'code-fence', text: '```' },
+    { type: 'blank' },
+    { type: 'p', text: 'The hold path is important \u2014 it\'s not a failure. It means "all gates are busy, we\'ll try again when one frees up." The customer sees "queued" either way; the difference is internal.' },
+    { type: 'blank' },
+    { type: 'h2', text: '## Gate Clusters' },
+    { type: 'blank' },
+    { type: 'p', text: 'Each destination has its own gates. This is a physical constraint \u2014 a gate tuned for Mars can\'t reach Titan. The clusters are defined in [order-router.ts:33](/modules/delivery/order-router.ts#L33):' },
+    { type: 'blank' },
+    { type: 'code-fence', text: '```' },
+    { type: 'code', text: 'mars:   gate-m1, gate-m2, gate-m3  (3 gates \u2014 Mars is popular)' },
+    { type: 'code', text: 'europa: gate-e1, gate-e2           (2 gates)' },
+    { type: 'code', text: 'titan:  gate-t1                    (1 gate \u2014 Titan is niche)' },
+    { type: 'code-fence', text: '```' },
+    { type: 'blank' },
+    { type: 'comment-du', text: '//DU: should we add a gate-t2? single point of failure for Titan' },
+    { type: 'comment-a', text: '//A: not yet \u2014 Titan orders are <1% of volume. one gate handles it. if it goes down, orders hold until it recovers. adding a gate is expensive (alignment calibration takes weeks).' },
+    { type: 'blank' },
+    { type: 'h2', text: '## Transit Times' },
+    { type: 'blank' },
+    { type: 'p', text: 'After dispatch, the pizza is in warp. Transit times are fixed per destination ([order-router.ts:40](/modules/delivery/order-router.ts#L40)):' },
+    { type: 'pgap' },
+    { type: 'ul', text: '**Mars:** 3 minutes \u2014 practically instant. This is why Mars deliveries dominate.' },
+    { type: 'ul', text: '**Europa:** 40 minutes \u2014 Jupiter distance. Crust quality degrades but is still edible.' },
+    { type: 'ul', text: '**Titan:** 80 minutes \u2014 Saturn. Only thin crust and stuffed survive the transit. Deep-dish arrives as a brick.' },
+    { type: 'pgap' },
+    { type: 'p', text: 'The ETA the customer sees includes both transit time AND wait time in the queue. Each position in the queue adds ~30 seconds.' },
+    { type: 'blank' },
+    { type: 'h2', text: '## What Happens Next' },
+    { type: 'blank' },
+    { type: 'p', text: 'The order is now sitting in a gate\'s queue. Chapter 2 covers what happens when it reaches the front: the alignment window check and dispatch decision.' },
+    { type: 'pgap' },
+    { type: 'p', text: 'Next: [02-warp-queue.md](02-warp-queue.md)' },
+  ];
+
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderInlineMarkdown(text) {
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+      // bold **...**
+      if (text[i] === '*' && text[i + 1] === '*') {
+        const end = text.indexOf('**', i + 2);
+        if (end !== -1) {
+          const inner = text.slice(i + 2, end);
+          out += '<span class="bold-marker">**</span><span class="bold">' + esc(inner) + '</span><span class="bold-marker">**</span>';
+          i = end + 2;
+          continue;
+        }
+      }
+      // link [text](url)
+      if (text[i] === '[') {
+        const closeBracket = text.indexOf(']', i + 1);
+        if (closeBracket !== -1 && text[closeBracket + 1] === '(') {
+          const closeParen = text.indexOf(')', closeBracket + 2);
+          if (closeParen !== -1) {
+            const linkText = text.slice(i + 1, closeBracket);
+            const linkUrl = text.slice(closeBracket + 2, closeParen);
+            out += '<span class="link-bracket">[</span><span class="link-text">' + esc(linkText) + '</span><span class="link-bracket">]</span><span class="link-bracket">(</span><span class="link-url">' + esc(linkUrl) + '</span><span class="link-bracket">)</span>';
+            i = closeParen + 1;
+            continue;
+          }
+        }
+      }
+      // inline code `...`
+      if (text[i] === '`') {
+        const end = text.indexOf('`', i + 1);
+        if (end !== -1) {
+          const inner = text.slice(i + 1, end);
+          out += '<span class="code-inline">' + esc(inner) + '</span>';
+          i = end + 1;
+          continue;
+        }
+      }
+      out += esc(text[i]);
+      i++;
+    }
+    return out;
+  }
+
+  function buildEditorHTML() {
+    let html = '';
+    let inCodeBlock = false;
+    let codeBlockContent = '';
+
+    for (const line of editorLines) {
+      if (line.type === 'code-fence') {
+        if (!inCodeBlock) {
+          inCodeBlock = true;
+          html += '<span class="line"><span class="code-fence">' + esc(line.text) + '</span></span>\n';
+          codeBlockContent = '';
+        } else {
+          html += '<span class="code-block">' + codeBlockContent + '</span>';
+          html += '<span class="line"><span class="code-fence">' + esc(line.text) + '</span></span>\n';
+          inCodeBlock = false;
+        }
+        continue;
+      }
+      if (inCodeBlock) {
+        codeBlockContent += esc(line.text) + '\n';
+        continue;
+      }
+
+      switch (line.type) {
+        case 'h1': {
+          const marker = line.text.match(/^(#+\s)/)[1];
+          const rest = line.text.slice(marker.length);
+          html += '<span class="line"><span class="h-marker">' + esc(marker) + '</span><span class="h1">' + esc(rest) + '</span></span>\n';
+          break;
+        }
+        case 'h2': {
+          const marker = line.text.match(/^(#+\s)/)[1];
+          const rest = line.text.slice(marker.length);
+          html += '<span class="line"><span class="h-marker">' + esc(marker) + '</span><span class="h2">' + esc(rest) + '</span></span>\n';
+          break;
+        }
+        case 'blank':
+          html += '<span class="blank-line"></span>\n';
+          break;
+        case 'pgap':
+          html += '<span class="paragraph-gap"></span>\n';
+          break;
+        case 'p':
+          html += '<span class="line">' + renderInlineMarkdown(line.text) + '</span>\n';
+          break;
+        case 'li':
+          html += '<span class="line"><span class="num-marker">' + esc(line.num) + '</span> ' + renderInlineMarkdown(line.text) + '</span>\n';
+          break;
+        case 'ul':
+          html += '<span class="line"><span class="list-marker">-</span> ' + renderInlineMarkdown(line.text) + '</span>\n';
+          break;
+        case 'comment-du':
+          html += '<span class="line"><span class="comment-du">' + esc(line.text) + '</span></span>\n';
+          break;
+        case 'comment-a':
+          html += '<span class="line"><span class="comment-a">' + esc(line.text) + '</span></span>\n';
+          break;
+        case 'comment-ta':
+          html += '<span class="line"><span class="comment-ta">' + esc(line.text) + '</span></span>\n';
+          break;
+        default:
+          html += '<span class="line">' + esc(line.text || '') + '</span>\n';
+      }
+    }
+
+    return html;
+  }
+
+  // ── Terminal content ──
+
+  function buildTerminalHTML() {
+    return '<span class="prompt">$ </span>cd space-pizza-nap\n' +
+      '<span class="prompt">$ </span>git status\n' +
+      'On branch main\n' +
+      'Your branch is up to date with \'origin/main\'.\n' +
+      '\n' +
+      'Changes not staged for commit:\n' +
+      '  modified:   nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/01-order-routing.md\n' +
+      '\n' +
+      '<span class="prompt">$ </span>git log --oneline -5\n' +
+      'a3f2e1c review: delivery pipeline questions\n' +
+      'b8d4c2a feat: add dispatch alignment check\n' +
+      'c1e5f3b feat: order routing through warp gates\n' +
+      'd2f6a4c initial structure\n' +
+      '\n' +
+      '<span class="prompt">$ </span><span class="cursor"></span>';
+  }
+
+  // ── Nav tree ──
+
+  const navTree = [
+    { label: '0100-delivery-pipeline', type: 'section', status: 'doing' },
+    { label: '0100-delivery-pipeline.nap.md', indent: 1, clickable: true },
+    { label: 'mini-book/', indent: 1 },
+    { label: '01-order-routing.md', indent: 2, clickable: true, active: true },
+    { label: '02-warp-queue.md', indent: 2, clickable: true },
+    { label: '03-dispatch.md', indent: 2, clickable: true },
+    { label: '04-tracking.md', indent: 2, clickable: true },
+    { label: '05-putting-it-together.md', indent: 2, clickable: true },
+    { label: 'agents/', indent: 1 },
+    { label: '001-test-arch-routing', indent: 2, statusIcon: '\u25CF', statusType: 'done', statusLabel: 'done' },
+    { label: 'prompt.md', indent: 3, clickable: true },
+    { label: 'response.md', indent: 3, clickable: true },
+    { label: '002-fs-eng-routing', indent: 2, statusIcon: '\u25CF', statusType: 'done', statusLabel: 'done' },
+    { label: 'prompt.md', indent: 3, clickable: true },
+    { label: 'response.md', indent: 3, clickable: true },
+    { label: '003-test-eng-routing', indent: 2, statusIcon: '\u25CB', statusType: 'running', statusLabel: 'running' },
+    { label: 'prompt.md', indent: 3, clickable: true },
+  ];
+
+  const backlogTree = [
+    { label: '0200-crust-validation', type: 'section', status: 'backlog' },
+  ];
+
+  function buildNavHTML() {
+    let html = '';
+
+    for (const item of navTree) {
+      if (item.type === 'section') {
+        html += '<div class="tree-section-label">' + esc(item.label) + '<span class="status-label">' + esc(item.status) + '</span></div>';
+        continue;
+      }
+
+      const indentClass = item.indent ? ' tree-indent-' + item.indent : '';
+      const activeClass = item.active ? ' active' : '';
+      const clickableClass = item.clickable ? ' clickable' : '';
+
+      html += '<div class="tree-item' + indentClass + activeClass + clickableClass + '" data-file="' + esc(item.label) + '">';
+      html += '<span class="bullet">*</span>' + esc(item.label);
+
+      if (item.statusIcon) {
+        const statusClass = item.statusType === 'done' ? 'status-done' : 'status-running';
+        html += ' <span class="' + statusClass + '">' + item.statusIcon + ' ' + esc(item.statusLabel) + '</span>';
+      }
+
+      html += '</div>';
+    }
+
+    // Show all toggle
+    html += '<button class="show-all-toggle" id="show-all-btn">show all</button>';
+
+    // Backlog section
+    html += '<div class="backlog-section" id="backlog-section">';
+    html += '<div class="tree-spacer"></div>';
+    for (const item of backlogTree) {
+      if (item.type === 'section') {
+        html += '<div class="tree-section-label">' + esc(item.label) + '<span class="status-label">' + esc(item.status) + '</span></div>';
+      }
+    }
+    html += '</div>';
+
+    return html;
+  }
+
+  // ── Render ──
+
+  document.getElementById('editor-tab').innerHTML = buildEditorHTML();
+  document.getElementById('terminal-tab').innerHTML = buildTerminalHTML();
+  document.getElementById('nav-tree').innerHTML = buildNavHTML();
+
+  // ── Tab switching ──
+
+  const tabs = document.querySelectorAll('.tab');
+  const editorTab = document.getElementById('editor-tab');
+  const terminalTab = document.getElementById('terminal-tab');
+  const contentEl = document.getElementById('content');
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+
+      const target = tab.getAttribute('data-tab');
+      if (target === 'editor') {
+        editorTab.style.display = '';
+        terminalTab.style.display = 'none';
+        contentEl.classList.remove('terminal-active');
+      } else {
+        editorTab.style.display = 'none';
+        terminalTab.style.display = '';
+        contentEl.classList.add('terminal-active');
+      }
+    });
+  });
+
+  // ── Nav collapse/expand ──
+
+  const navPane = document.getElementById('nav-pane');
+  const collapseBtn = document.getElementById('nav-collapse-btn');
+  const expandBtn = document.getElementById('nav-expand-btn');
+
+  collapseBtn.addEventListener('click', function () {
+    navPane.classList.add('collapsed');
+    expandBtn.classList.add('visible');
+  });
+
+  expandBtn.addEventListener('click', function () {
+    navPane.classList.remove('collapsed');
+    expandBtn.classList.remove('visible');
+  });
+
+  // ── Nav file click ──
+
+  document.getElementById('nav-tree').addEventListener('click', function (e) {
+    const item = e.target.closest('.tree-item.clickable');
+    if (!item) return;
+    document.querySelectorAll('.tree-item.active').forEach(function (el) {
+      el.classList.remove('active');
+    });
+    item.classList.add('active');
+  });
+
+  // ── Show all toggle ──
+
+  var showAllExpanded = false;
+  document.getElementById('show-all-btn').addEventListener('click', function () {
+    showAllExpanded = !showAllExpanded;
+    var section = document.getElementById('backlog-section');
+    var btn = document.getElementById('show-all-btn');
+    if (showAllExpanded) {
+      section.classList.add('visible');
+      btn.textContent = 'hide backlog';
+    } else {
+      section.classList.remove('visible');
+      btn.textContent = 'show all';
+    }
+  });
+})();
+</script>
+</body>
+</html>

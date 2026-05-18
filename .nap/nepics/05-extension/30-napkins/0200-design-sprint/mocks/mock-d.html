@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mock D — Overlay Terminal</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    /* lightBlue theme — editor + nav */
+    --bg:           #f0f4f8;
+    --text:         #2e3440;
+    --secondary:    #4c566a;
+    --muted:        #6d7a8a;
+    --dim:          #94a0b0;
+    --border:       #c4cad0;
+    --bg-secondary: #e6eaee;
+    --bg-hover:     #e1e5e9;
+    --accent:       #2563eb;
+    --link:         #1e50c0;
+
+    /* terminal dark */
+    --term-bg:      #1e1e1e;
+    --term-text:    #e5e5e5;
+    --term-green:   #22c55e;
+
+    /* role colors */
+    --role-du: #16a34a;
+    --role-a:  #2563eb;
+    --role-ta: #d97706;
+
+    /* typography */
+    --font: 'Menlo', 'Monaco', 'Consolas', monospace;
+    --font-size: 13px;
+    --line-height: 1.6;
+
+    /* layout */
+    --header-h: 30px;
+    --nav-w: 170px;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: var(--font);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
+    color: var(--text);
+    background: #d0d4d8;
+  }
+
+  /* ── SHELL ── */
+  .shell {
+    width: 650px;
+    height: 100vh;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    height: var(--header-h);
+    min-height: var(--header-h);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    z-index: 10;
+  }
+  .breadcrumb {
+    color: var(--muted);
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .breadcrumb .seg { color: var(--dim); }
+  .breadcrumb .sep { color: var(--dim); margin: 0 3px; }
+  .breadcrumb .active { color: var(--secondary); }
+  .header-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .hdr-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 13px;
+    width: 26px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .hdr-btn:hover { background: var(--bg-hover); color: var(--text); }
+  .hdr-btn.active-toggle { color: var(--accent); }
+
+  /* ── BODY (nav + editor) ── */
+  .body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+  }
+
+  /* ── NAV ── */
+  .nav {
+    width: var(--nav-w);
+    min-width: 0;
+    border-right: 1px solid var(--border);
+    background: var(--bg);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 0 8px 10px;
+    transition: width .22s ease, padding .22s ease, opacity .18s ease;
+    flex-shrink: 0;
+  }
+  .nav.collapsed {
+    width: 0;
+    padding: 0;
+    opacity: 0;
+    border-right: none;
+    pointer-events: none;
+  }
+  .nav-tree { list-style: none; }
+  .nav-tree ul { list-style: none; padding-left: 12px; }
+  .nav-tree li { white-space: nowrap; }
+  .nav-item {
+    display: flex;
+    align-items: baseline;
+    padding: 1px 6px 1px 0;
+    border-radius: 3px;
+    cursor: default;
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--secondary);
+    gap: 4px;
+  }
+  .nav-item .bullet { color: var(--dim); flex-shrink: 0; font-size: 10px; }
+  .nav-item .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .nav-item .tag {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--dim);
+    flex-shrink: 0;
+    padding-right: 4px;
+  }
+  .nav-item.clickable { cursor: pointer; }
+  .nav-item.clickable:hover { background: var(--bg-hover); }
+  .nav-item.active-file {
+    background: var(--bg-hover);
+    color: var(--text);
+    font-weight: 600;
+  }
+  .nav-item .dot-done {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    display: inline-block;
+    flex-shrink: 0;
+    margin-left: 3px;
+    position: relative;
+    top: -1px;
+  }
+  .nav-item .dot-running {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--term-green);
+    display: inline-block;
+    flex-shrink: 0;
+    margin-left: 3px;
+    position: relative;
+    top: -1px;
+    animation: pulse-dot 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .45; transform: scale(.7); }
+  }
+  .nav-folder > .nav-item .label { color: var(--text); }
+  .show-all-toggle {
+    margin-top: 6px;
+    padding: 2px 6px;
+    font-size: 10.5px;
+    color: var(--dim);
+    cursor: pointer;
+    user-select: none;
+  }
+  .show-all-toggle:hover { color: var(--muted); }
+  .backlog-section { display: none; margin-top: 2px; }
+  .backlog-section.visible { display: block; }
+
+  /* ── EDITOR ── */
+  .editor-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+  .editor {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 18px 40px 18px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* editor styled tokens */
+  .ed-h1 { font-size: 15px; font-weight: 700; color: #1a1a2e; margin: 0 0 10px 0; }
+  .ed-h2 { font-size: 13.5px; font-weight: 700; color: #1a1a2e; margin: 18px 0 6px 0; }
+  .ed-p  { margin: 0 0 8px 0; color: var(--text); }
+  .ed-hash { color: var(--dim); font-weight: 700; }
+  .ed-bold-delim { color: #7a8a9a; }
+  .ed-bold { font-weight: 700; }
+  .ed-link-bracket { color: #7a8a9a; }
+  .ed-link-text { color: var(--link); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; cursor: pointer; }
+  .ed-link-text:hover { color: var(--accent); }
+  .ed-link-url { color: #7a8a9a; font-size: 12px; }
+  .ed-code-block {
+    background: #e0e8f0;
+    border-radius: 3px;
+    padding: 8px 10px;
+    margin: 6px 0 10px 0;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .ed-inline-code {
+    background: #e0e8f0;
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+  .ed-list-marker { color: #7a8a9a; }
+  .ed-role-du { color: var(--role-du); }
+  .ed-role-a  { color: var(--role-a); }
+  .ed-em { color: var(--muted); font-style: italic; }
+  .ed-dim { color: #7a8a9a; }
+
+  /* ── TERMINAL OVERLAY ── */
+  .term-overlay {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 50%;
+    background: var(--term-bg);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    box-shadow: 0 -2px 12px rgba(0,0,0,.25);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform .28s cubic-bezier(.4,.0,.2,1);
+  }
+  .term-overlay.open {
+    transform: translateY(0);
+  }
+  .term-header {
+    height: 26px;
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    border-bottom: 1px solid #333;
+    color: var(--term-text);
+    font-size: 11px;
+  }
+  .term-header .term-title { color: #aaa; }
+  .term-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 15px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 2px;
+    font-family: var(--font);
+  }
+  .term-close:hover { color: #ccc; }
+  .term-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    color: var(--term-text);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .term-prompt { color: var(--term-green); }
+  .term-cursor {
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    background: var(--term-text);
+    vertical-align: text-bottom;
+    animation: blink-cursor .9s step-end infinite;
+  }
+  @keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  .term-body::-webkit-scrollbar-thumb { background: #555; }
+  .term-body::-webkit-scrollbar-thumb:hover { background: #777; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- HEADER -->
+  <div class="header">
+    <div class="breadcrumb">
+      <span class="seg">0100-delivery-pipeline</span><span class="sep">&#8250;</span><span class="seg">mini-book</span><span class="sep">&#8250;</span><span class="active">01-order-routing.md</span>
+    </div>
+    <div class="header-actions">
+      <button class="hdr-btn" id="btn-term" title="Toggle terminal">&gt;_</button>
+      <button class="hdr-btn" id="btn-nav" title="Toggle nav">&#9776;</button>
+      <button class="hdr-btn" title="Settings">&#9881;</button>
+      <button class="hdr-btn" title="Fetch">&#10227;</button>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+    <!-- NAV -->
+    <div class="nav" id="nav">
+      <ul class="nav-tree">
+        <!-- root napkin -->
+        <li class="nav-folder">
+          <div class="nav-item"><span class="bullet">*</span><span class="label">0100-delivery-pipeline</span><span class="tag">doing</span></div>
+          <ul>
+            <li><div class="nav-item clickable"><span class="bullet">*</span><span class="label">0100-delivery-pipeline.nap.md</span></div></li>
+            <li class="nav-folder">
+              <div class="nav-item"><span class="bullet">*</span><span class="label">mini-book/</span></div>
+              <ul>
+                <li><div class="nav-item clickable active-file" data-file="01-order-routing.md"><span class="bullet">*</span><span class="label">01-order-routing.md</span></div></li>
+                <li><div class="nav-item clickable" data-file="02-warp-queue.md"><span class="bullet">*</span><span class="label">02-warp-queue.md</span></div></li>
+                <li><div class="nav-item clickable" data-file="03-dispatch.md"><span class="bullet">*</span><span class="label">03-dispatch.md</span></div></li>
+                <li><div class="nav-item clickable" data-file="04-tracking.md"><span class="bullet">*</span><span class="label">04-tracking.md</span></div></li>
+                <li><div class="nav-item clickable" data-file="05-putting-it-together.md"><span class="bullet">*</span><span class="label">05-putting-it-together.md</span></div></li>
+              </ul>
+            </li>
+            <li class="nav-folder">
+              <div class="nav-item"><span class="bullet">*</span><span class="label">agents/</span></div>
+              <ul>
+                <li class="nav-folder">
+                  <div class="nav-item"><span class="bullet">*</span><span class="label">001-test-arch-routing</span><span class="dot-done"></span></div>
+                  <ul>
+                    <li><div class="nav-item clickable"><span class="bullet">*</span><span class="label">prompt.md</span></div></li>
+                    <li><div class="nav-item clickable"><span class="bullet">*</span><span class="label">response.md</span></div></li>
+                  </ul>
+                </li>
+                <li class="nav-folder">
+                  <div class="nav-item"><span class="bullet">*</span><span class="label">002-fs-eng-routing</span><span class="dot-done"></span></div>
+                  <ul>
+                    <li><div class="nav-item clickable"><span class="bullet">*</span><span class="label">prompt.md</span></div></li>
+                    <li><div class="nav-item clickable"><span class="bullet">*</span><span class="label">response.md</span></div></li>
+                  </ul>
+                </li>
+                <li class="nav-folder">
+                  <div class="nav-item"><span class="bullet">*</span><span class="label">003-test-eng-routing</span><span class="dot-running"></span></div>
+                  <ul>
+                    <li><div class="nav-item clickable"><span class="bullet">*</span><span class="label">prompt.md</span></div></li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+      </ul>
+      <!-- show all -->
+      <div class="show-all-toggle" id="show-all">show all</div>
+      <div class="backlog-section" id="backlog">
+        <ul class="nav-tree">
+          <li>
+            <div class="nav-item"><span class="bullet">*</span><span class="label">0200-crust-validation</span><span class="tag">backlog</span></div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- EDITOR -->
+    <div class="editor-wrap">
+      <div class="editor" id="editor">
+
+        <!-- Chapter 1 heading -->
+        <div class="ed-h1"><span class="ed-hash"># </span>Chapter 1: How an Order Gets from Earth to Mars</div>
+
+        <!-- ## The Journey -->
+        <div class="ed-h2"><span class="ed-hash">## </span>The Journey</div>
+
+        <p class="ed-p">A customer on Earth orders a pizza for delivery to Mars. Between &ldquo;order placed&rdquo; and &ldquo;pizza arrives&rdquo; are four steps, each in its own module. This chapter covers the first and most important: routing.</p>
+
+        <p class="ed-p">The router&rsquo;s job: given an order, pick the best warp gate and queue the order at that gate. Simple to state, but the details matter &mdash; the wrong gate choice means an extra 15 minutes waiting for the next alignment window, and by then the crust is compromised.</p>
+
+        <!-- ## The Entry Point -->
+        <div class="ed-h2"><span class="ed-hash">## </span>The Entry Point</div>
+
+        <p class="ed-p"><span class="ed-bold-delim">**</span><span class="ed-bold">routeOrder()</span><span class="ed-bold-delim">**</span> in <span class="ed-link-bracket">[</span><span class="ed-link-text">order-router.ts:54</span><span class="ed-link-bracket">](</span><span class="ed-link-url">/modules/delivery/order-router.ts#L54</span><span class="ed-link-bracket">)</span> is where every order starts.</p>
+
+        <p class="ed-p">It does three things, in this order:</p>
+
+        <p class="ed-p"><span class="ed-list-marker">1. </span><span class="ed-bold-delim">**</span><span class="ed-bold">Validate</span><span class="ed-bold-delim">**</span> &mdash; call <span class="ed-inline-code">validateOrder()</span> to check crust/destination compatibility and topping limits. This is synchronous and fast (<span class="ed-link-bracket">[</span><span class="ed-link-text">crust-validator.ts:40</span><span class="ed-link-bracket">](</span><span class="ed-link-url">/modules/validation/crust-validator.ts#L40</span><span class="ed-link-bracket">)</span>). Rejected orders never touch the queue.</p>
+
+        <p class="ed-p"><span class="ed-list-marker">2. </span><span class="ed-bold-delim">**</span><span class="ed-bold">Find the best gate</span><span class="ed-bold-delim">**</span> &mdash; each destination has a cluster of 2&ndash;3 gates. The router picks the one with the shortest queue (<span class="ed-link-bracket">[</span><span class="ed-link-text">warp-queue.ts:31</span><span class="ed-link-bracket">](</span><span class="ed-link-url">/modules/queue/warp-queue.ts#L31</span><span class="ed-link-bracket">)</span>). If ALL gates are at max capacity (50 orders), the order enters a hold queue.</p>
+
+        <p class="ed-p"><span class="ed-list-marker">3. </span><span class="ed-bold-delim">**</span><span class="ed-bold">Queue and track</span><span class="ed-bold-delim">**</span> &mdash; the order goes into the gate&rsquo;s queue, and the tracker starts monitoring it (<span class="ed-link-bracket">[</span><span class="ed-link-text">delivery-tracker.ts:41</span><span class="ed-link-bracket">](</span><span class="ed-link-url">/modules/tracking/delivery-tracker.ts#L41</span><span class="ed-link-bracket">)</span>).</p>
+
+        <div class="ed-code-block"><span class="ed-dim">```typescript</span>
+<span style="color:#c586c0">const</span> bestGate = <span style="color:#c586c0">await</span> queue.<span style="color:#dcdcaa">findShortestQueue</span>(gates);
+<span style="color:#c586c0">if</span> (!bestGate) {
+  <span style="color:#c586c0">await</span> queue.<span style="color:#dcdcaa">holdOrder</span>(order.id, order.destination);
+  <span style="color:#c586c0">return</span> { orderId: order.id, gateId: <span style="color:#ce9178">''</span>, estimatedTransitMs: <span style="color:#b5cea8">0</span>, status: <span style="color:#ce9178">'hold'</span> };
+}
+<span class="ed-dim">```</span></div>
+
+        <p class="ed-p">The hold path is important &mdash; it&rsquo;s not a failure. It means &ldquo;all gates are busy, we&rsquo;ll try again when one frees up.&rdquo; The customer sees &ldquo;queued&rdquo; either way; the difference is internal.</p>
+
+        <!-- ## Gate Clusters -->
+        <div class="ed-h2"><span class="ed-hash">## </span>Gate Clusters</div>
+
+        <p class="ed-p">Each destination has its own gates. This is a physical constraint &mdash; a gate tuned for Mars can&rsquo;t reach Titan. The clusters are defined in <span class="ed-link-bracket">[</span><span class="ed-link-text">order-router.ts:33</span><span class="ed-link-bracket">](</span><span class="ed-link-url">/modules/delivery/order-router.ts#L33</span><span class="ed-link-bracket">)</span>:</p>
+
+        <div class="ed-code-block"><span class="ed-dim">```</span>
+mars:   gate-m1, gate-m2, gate-m3  (3 gates &mdash; Mars is popular)
+europa: gate-e1, gate-e2           (2 gates)
+titan:  gate-t1                    (1 gate &mdash; Titan is niche)
+<span class="ed-dim">```</span></div>
+
+        <p class="ed-p"><span class="ed-role-du">//DU:</span> should we add a gate-t2? single point of failure for Titan</p>
+        <p class="ed-p"><span class="ed-role-a">//A:</span> not yet &mdash; Titan orders are &lt;1% of volume. one gate handles it. if it goes down, orders hold until it recovers. adding a gate is expensive (alignment calibration takes weeks).</p>
+
+        <!-- ## Transit Times -->
+        <div class="ed-h2"><span class="ed-hash">## </span>Transit Times</div>
+
+        <p class="ed-p">After dispatch, the pizza is in warp. Transit times are fixed per destination (<span class="ed-link-bracket">[</span><span class="ed-link-text">order-router.ts:40</span><span class="ed-link-bracket">](</span><span class="ed-link-url">/modules/delivery/order-router.ts#L40</span><span class="ed-link-bracket">)</span>):</p>
+
+        <p class="ed-p"><span class="ed-list-marker">- </span><span class="ed-bold-delim">**</span><span class="ed-bold">Mars:</span><span class="ed-bold-delim">**</span> 3 minutes &mdash; practically instant. This is why Mars deliveries dominate.</p>
+        <p class="ed-p"><span class="ed-list-marker">- </span><span class="ed-bold-delim">**</span><span class="ed-bold">Europa:</span><span class="ed-bold-delim">**</span> 40 minutes &mdash; Jupiter distance. Crust quality degrades but is still edible.</p>
+        <p class="ed-p"><span class="ed-list-marker">- </span><span class="ed-bold-delim">**</span><span class="ed-bold">Titan:</span><span class="ed-bold-delim">**</span> 80 minutes &mdash; Saturn. Only thin crust and stuffed survive the transit. Deep-dish arrives as a brick.</p>
+
+        <p class="ed-p">The ETA the customer sees includes both transit time AND wait time in the queue. Each position in the queue adds ~30 seconds.</p>
+
+        <!-- ## What Happens Next -->
+        <div class="ed-h2"><span class="ed-hash">## </span>What Happens Next</div>
+
+        <p class="ed-p">The order is now sitting in a gate&rsquo;s queue. Chapter 2 covers what happens when it reaches the front: the alignment window check and dispatch decision.</p>
+
+        <p class="ed-p">Next: <span class="ed-link-bracket">[</span><span class="ed-link-text">02-warp-queue.md</span><span class="ed-link-bracket">](</span><span class="ed-link-url">02-warp-queue.md</span><span class="ed-link-bracket">)</span></p>
+
+      </div>
+
+      <!-- TERMINAL OVERLAY -->
+      <div class="term-overlay" id="term-overlay">
+        <div class="term-header">
+          <span class="term-title">Terminal</span>
+          <button class="term-close" id="btn-term-close">&times;</button>
+        </div>
+        <div class="term-body">
+          <div><span class="term-prompt">$ </span>cd space-pizza-nap</div>
+          <div><span class="term-prompt">$ </span>git status</div>
+          <div>On branch main</div>
+          <div>Changes not staged for commit:</div>
+          <div>&nbsp;&nbsp;modified:&nbsp;&nbsp; nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/01-order-routing.md</div>
+          <div>&nbsp;</div>
+          <div><span class="term-prompt">$ </span>git log --oneline -5</div>
+          <div>a3f2e1c review: delivery pipeline questions</div>
+          <div>b8d4c2a feat: add dispatch alignment check</div>
+          <div>c1e5f3b feat: order routing through warp gates</div>
+          <div>d2f6a4c initial structure</div>
+          <div>&nbsp;</div>
+          <div><span class="term-prompt">$ </span><span class="term-cursor"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Terminal toggle
+  const termOverlay = document.getElementById('term-overlay');
+  const btnTerm = document.getElementById('btn-term');
+  const btnTermClose = document.getElementById('btn-term-close');
+  let termOpen = false;
+
+  function toggleTerm() {
+    termOpen = !termOpen;
+    termOverlay.classList.toggle('open', termOpen);
+    btnTerm.classList.toggle('active-toggle', termOpen);
+  }
+
+  btnTerm.addEventListener('click', toggleTerm);
+  btnTermClose.addEventListener('click', toggleTerm);
+
+  // Nav toggle
+  const nav = document.getElementById('nav');
+  const btnNav = document.getElementById('btn-nav');
+  let navVisible = true;
+
+  btnNav.addEventListener('click', function() {
+    navVisible = !navVisible;
+    nav.classList.toggle('collapsed', !navVisible);
+    btnNav.classList.toggle('active-toggle', !navVisible);
+  });
+
+  // Nav file click — highlight active
+  const navItems = document.querySelectorAll('.nav-item.clickable');
+  navItems.forEach(function(item) {
+    item.addEventListener('click', function() {
+      document.querySelectorAll('.nav-item.active-file').forEach(function(el) {
+        el.classList.remove('active-file');
+      });
+      item.classList.add('active-file');
+      // Update breadcrumb active segment
+      var file = item.getAttribute('data-file');
+      if (file) {
+        document.querySelector('.breadcrumb .active').textContent = file;
+      }
+    });
+  });
+
+  // Show all toggle
+  const showAll = document.getElementById('show-all');
+  const backlog = document.getElementById('backlog');
+  let backlogVisible = false;
+
+  showAll.addEventListener('click', function() {
+    backlogVisible = !backlogVisible;
+    backlog.classList.toggle('visible', backlogVisible);
+    showAll.textContent = backlogVisible ? 'hide backlog' : 'show all';
+  });
+})();
+</script>
+</body>
+</html>
