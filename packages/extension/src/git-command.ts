@@ -7,7 +7,8 @@ import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import { defineCommand } from 'just-bash';
 
-const CORS_PROXY = 'https://cors.isomorphic-git.org';
+// No CORS proxy needed — Chrome extension pages with host_permissions
+// can make cross-origin requests directly. Tokens stay between browser and server.
 
 function repoName(url: string): string {
   const last = url.replace(/\/+$/, '').split('/').pop() ?? 'repo';
@@ -55,7 +56,6 @@ export function createGitCommand(
         const auth = await onAuth();
         await git.clone({
           fs, http, dir, url,
-          corsProxy: CORS_PROXY,
           singleBranch: true,
           depth: 20,
           ...(auth ? { onAuth: () => auth } : {}),
@@ -144,7 +144,6 @@ export function createGitCommand(
 
         await git.push({
           fs, http, dir: cwd,
-          corsProxy: CORS_PROXY,
           onAuth: () => auth,
         });
         return { stdout: 'push complete\n', stderr: '', exitCode: 0 };
