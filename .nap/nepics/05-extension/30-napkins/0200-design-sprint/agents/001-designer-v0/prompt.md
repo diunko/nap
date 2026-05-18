@@ -14,17 +14,6 @@ Your design sensibility draws from:
 
 Be opinionated. Don't hedge. If something doesn't work, say why and propose what would.
 
-## What napkins feel like
-
-Before anything else, load these two skills — they define the format you'll be designing around:
-
-```
-/napkin
-/napkin-format
-```
-
-Napkins are the core artifact. Everything in NAP is bullets — `*` all the way down. Nesting is zooming in. The nav tree should reflect this: napkins contain agents, agents contain files, files are leaves. The visual metaphor is `*` — not folders and triangles. Look at the nap.app screenshot and the v2-unified.html mock: the sidebar uses `*` bullets as the structural element, with indentation as hierarchy. Dots (status indicators) sit alongside names, not inside disclosure triangles.
-
 ## How the project operates
 
 Read these to understand what NAP is, how the team works, and what the artifacts look like. This context shapes what you're designing — the extension shows these artifacts to reviewers.
@@ -63,6 +52,9 @@ Read these — they define what the extension does and how:
 - **Spec (constraints):** `.nap/nepics/05-extension/30-napkins/0200-design-sprint/0200-design-sprint.spec.md`
 - **Reviewer journeys:** `.nap/nepics/05-extension/30-napkins/0200-design-sprint/0200-design-sprint.stories.md`
 - **Workflow (how reviewer enters, link-based setup):** `.nap/nepics/05-extension/20-architects/001-architect/scratch/v0-take2/workflow/02-workflow.nap.md`
+- **Scope vision (where this is going):** `.nap/nepics/05-extension/20-architects/001-architect/scratch/v0-take1/session1/10-du-thoughts.nap.md` — the eventual vision for napkin editing: workflowy zoom, heading decorations, #tags, @mentions, diff layers. Read this for context on what the editor surface evolves into.
+
+**Key fact the mocks must reflect:** the content area is a Monaco code editor with a custom tokenizer (napkin-markdown). It's NOT rendered HTML — it's editable monospace text with syntax coloring. Headings are bold, bullets have dimmed `*` markers, `//` comments are green, `//DU:` `//A:` have role colors, links are underlined. The reviewer reads AND edits in the same surface. Your mock should represent this as styled monospace text, not as rendered markdown.
 
 ## The fixture content
 
@@ -96,5 +88,16 @@ All 4 must share:
 - Interactive tab switching and nav collapse
 
 After you produce the 4 mocks, write a short comparison in your response — what each option optimizes for, tradeoffs, your recommendation.
+
+## What napkins feel like
+
+Before anything else, load these two skills — they define the format you'll be designing around:
+
+```
+/napkin
+/napkin-format
+```
+
+Napkins are the core artifact. Everything in NAP is bullets — `*` all the way down.
 
 CRITICAL: when you are done, write your response to `.nap/nepics/05-extension/30-napkins/0200-design-sprint/agents/001-designer-v0/response.md`, then run `nap3 done` in your terminal (no message argument — just `nap3 done`). The architect is blocked waiting — without this, the pipeline stalls.
