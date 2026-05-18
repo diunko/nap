@@ -64,3 +64,66 @@ Use mock-e as the design target for the extension's real implementation. The exi
 5. Make nav width draggable
 
 The editor side (Monaco + napkin-markdown tokenizer) is already close — the extension already uses the same tokenizer. The gap is in the nav tree and tab system.
+
+---
+
+## update: mock-e iteration (post-review with DU)
+
+### what we iterated on
+
+After the initial mock-e delivery, DU tested in Chrome at various zoom levels and found two issues:
+
+**1. Double resizer bug**
+
+Mock-e had TWO resize handles at the nav boundary:
+- `#resize-handle` — a 4px flex element between main and nav
+- `#nav-drag` — a 4px absolute-positioned element on nav's left edge
+
+Both covered the same boundary, creating two blue hover zones. Fixed by removing `#resize-handle` entirely — `#nav-drag` is now the single resizer.
+
+**2. Blue accent bar placement**
+
+The focused card's blue `border-left: 3px solid var(--nap-accent)` created a "too much blue" problem when the resizer hovered blue on the same edge. We explored:
+
+- **Mock F experiment: border-right** — moved the accent to the right edge (far from content, matching the app's pattern where the accent is on the far side from content). But at the screen edge, the accent got lost — not enough visual breathing room.
+
+- **Back to border-left** — with the double resizer eliminated, the real question became: what color/weight should the drag handle hover be so it doesn't clash with the blue accent?
+
+### the drag handle color journey
+
+We went through several iterations on the `#nav-drag:hover` color:
+
+1. **`var(--nap-accent)` (#2563eb, blue)** — original. Clashed with the focused card accent — looked like the selection was expanding.
+
+2. **`var(--nap-text-dim)` (#94a0b0, light gray)** — less intense than the blue accent, so it felt like hovering *removed* the selection instead of adding a drag affordance.
+
+3. **`var(--nap-text)` (#2e3440, near-black)** — assertive, clearly "infrastructure" not "selection." Better — felt like Chrome UI. But too intense; the contrast spike was jarring.
+
+4. **`var(--nap-text-muted)` (#6d7a8a, medium gray)** — the sweet spot. Visible enough to signal "drag me," muted enough to not compete with the blue accent. Feels like a structural element, not a semantic one.
+
+### drag handle width
+
+We also tested matching the drag handle width (4px) to the accent bar (3px):
+
+- **3px handle** — visually merged with the accent bar. Selection looked like it expanded to both sides. Bad.
+- **4px handle (kept)** — the 1px difference is enough. The handle is visibly wider, which subtly reinforces "I'm a different element" even on the same edge. Combined with the gray color, it reads as "chrome you can grab" rather than "selection indicator."
+
+### 0200 content added
+
+Both mock-e and mock-f now have expandable content for `0200-crust-validation`:
+- `0200-crust-validation.nap.md` (main file, bold)
+- `mini-book/` dir with `01-crust-types.md` and `02-transit-degradation.md`
+
+This allows testing card focus switching between napkins — clicking 0200's header unfocuses 0100 and expands 0200.
+
+### final state of mock-e
+
+The design mock that DU approved:
+- **Single resizer**: `#nav-drag`, 4px, hovers `var(--nap-text-muted)` (#6d7a8a)
+- **Focused card accent**: `border-left: 3px solid var(--nap-accent)` (#2563eb) — stays on the left (content-adjacent) side
+- **Card switching**: click napkin header to focus/unfocus, "show all" reveals other napkins
+- **Works well at various zoom levels and nav widths** — confirmed by DU testing
+
+### design principle discovered
+
+Blue = semantic (selection, focus, meaning). Gray = structural (chrome, handles, infrastructure). When two visual elements share an edge, they need different signal types or they merge into ambiguity. The accent bar (blue, 3px) and drag handle (gray, 4px) coexist on the same edge because they speak different visual languages.
