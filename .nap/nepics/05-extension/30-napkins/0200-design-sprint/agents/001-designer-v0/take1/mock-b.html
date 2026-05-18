@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mock B — Dense Linear (Compact, Drawer Terminal)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #f0f4f8;
+  --bg-secondary: #e6eaee;
+  --bg-tertiary: #dce0e4;
+  --bg-hover: #e1e5e9;
+  --border: #c4cad0;
+  --text: #2e3440;
+  --text-secondary: #4c566a;
+  --text-muted: #6d7a8a;
+  --text-dim: #94a0b0;
+  --accent: #2563eb;
+  --link: #1e50c0;
+  --comment: #16a34a;
+  --role-a: #2563eb;
+  --role-du: #16a34a;
+  --role-ta: #d97706;
+  --role-te: #6b7280;
+  --bullet-marker: #7a8a9a;
+  --code-bg: #e0e8f0;
+  --code-color: #a0522d;
+  --dot-done: #3b82f6;
+  --dot-running: #22c55e;
+  --dot-backlog: #94a0b0;
+  --term-bg: #1e1e1e;
+  --term-fg: #e5e5e5;
+  --term-prompt: #22c55e;
+  --term-border: #3c3c3c;
+  --term-panel: #252526;
+  --font: 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', monospace;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* ── Header — ultra compact ── */
+#header {
+  height: 30px;
+  min-height: 30px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+}
+#header .napkin-name {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 12px;
+}
+#header .status-pill {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 0 5px;
+  border-left: 1px solid var(--border);
+  margin-left: 2px;
+  padding-left: 8px;
+}
+.hdr-spacer { flex: 1; }
+.hdr-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: all 0.12s;
+}
+.hdr-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+/* ── Main area ── */
+#main { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+/* ── Content ── */
+#content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Inline tab-switcher (pill style) ── */
+#tab-pills {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  gap: 2px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  height: 28px;
+  min-height: 28px;
+}
+.pill {
+  padding: 2px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.12s;
+  user-select: none;
+}
+.pill:hover { background: var(--bg-hover); color: var(--text-secondary); }
+.pill.active { background: var(--accent); color: white; }
+.pill-spacer { flex: 1; }
+.pill-hint { font-size: 10px; color: var(--text-dim); }
+
+/* ── Editor ── */
+#editor-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+}
+
+/* ── Terminal drawer ── */
+#terminal-drawer {
+  height: 0;
+  min-height: 0;
+  background: var(--term-bg);
+  color: var(--term-fg);
+  overflow: hidden;
+  transition: height 0.2s ease;
+  border-top: 1px solid var(--term-border);
+  font-size: 12px;
+  line-height: 1.4;
+}
+#terminal-drawer.open {
+  height: 200px;
+  min-height: 200px;
+}
+#terminal-drawer-inner {
+  padding: 10px 14px;
+  overflow-y: auto;
+  height: 100%;
+}
+#drawer-handle {
+  height: 24px;
+  background: var(--term-panel);
+  border-bottom: 1px solid var(--term-border);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+#drawer-handle span { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+#drawer-handle .close-x { font-size: 13px; color: #6b7280; }
+#drawer-handle .close-x:hover { color: var(--term-fg); }
+
+/* ── Nav (right, ultra-compact) ── */
+#nav {
+  width: 140px;
+  min-width: 140px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 6px 0;
+  font-size: 11px;
+  transition: width 0.15s, min-width 0.15s;
+}
+#nav.collapsed { width: 0; min-width: 0; overflow: hidden; border-left: none; }
+
+.n-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  padding: 4px 8px 2px;
+  font-weight: 700;
+}
+.n-heading {
+  padding: 2px 8px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.n-heading:hover { color: var(--text); }
+.n-heading .tri { font-size: 8px; }
+.n-heading .st { font-size: 9px; color: var(--text-dim); font-weight: 400; margin-left: auto; }
+.n-item {
+  padding: 1px 8px 1px 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 2px;
+}
+.n-item:hover { background: var(--bg-hover); color: var(--text-secondary); }
+.n-item.active { background: var(--accent); color: white; }
+.n-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.n-dot.done { background: var(--dot-done); }
+.n-dot.backlog { border: 1px solid var(--dot-backlog); }
+.n-sub { padding-left: 26px; }
+.n-divider { height: 1px; background: var(--border); margin: 4px 8px; }
+
+/* ── Dense editor typography ── */
+.ch h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0 0 10px 0;
+  line-height: 1.2;
+}
+.ch h2 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 14px 0 6px 0;
+  line-height: 1.2;
+}
+.ch p {
+  margin: 0 0 8px 0;
+  color: var(--text);
+  word-wrap: break-word;
+  font-size: 12px;
+}
+.ch ol, .ch ul {
+  margin: 0 0 8px 0;
+  padding-left: 0;
+  list-style: none;
+}
+.ch li {
+  margin: 2px 0;
+  padding-left: 14px;
+  position: relative;
+  font-size: 12px;
+}
+.ch ol li::before {
+  content: attr(data-num) ".";
+  position: absolute;
+  left: 0;
+  color: var(--bullet-marker);
+  font-size: 11px;
+}
+.ch ul li::before {
+  content: "•";
+  position: absolute;
+  left: 4px;
+  color: var(--bullet-marker);
+}
+.ch strong { font-weight: 700; }
+.ch code {
+  background: var(--code-bg);
+  color: var(--code-color);
+  padding: 0 4px;
+  border-radius: 2px;
+  font-size: 11px;
+}
+.ch pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px 10px;
+  margin: 4px 0 10px 0;
+  overflow-x: auto;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.ch pre code { background: none; padding: 0; color: var(--text); }
+.ch a, .ch .file-link {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.ch a:hover { color: var(--accent); }
+.comment-du { color: var(--role-du); font-size: 12px; }
+.comment-a { color: var(--role-a); font-size: 12px; }
+.comment-ta { color: var(--role-ta); font-size: 12px; }
+.comment-block { margin: 4px 0; padding: 3px 0; }
+.ch .next-link {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+/* ── Terminal lines ── */
+.term-line { white-space: pre-wrap; word-wrap: break-word; }
+.term-prompt { color: var(--term-prompt); }
+.term-cmd { color: #d4d4d4; }
+.term-output { color: #a0a0a0; }
+.term-file { color: #9cdcfe; }
+.term-branch { color: #ce9178; }
+.term-hash { color: #dcdcaa; }
+
+@keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <div id="header">
+    <span class="napkin-name">0100-delivery-pipeline</span>
+    <span class="status-pill">doing</span>
+    <span class="hdr-spacer"></span>
+    <button class="hdr-btn" onclick="alert('Fetching...')">fetch</button>
+    <button class="hdr-btn" title="Settings">&#9881;</button>
+    <button class="hdr-btn" id="nav-toggle" onclick="toggleNav()">&#9776;</button>
+  </div>
+
+  <div id="main">
+    <div id="content">
+      <!-- Pill tabs -->
+      <div id="tab-pills">
+        <div class="pill active" id="pill-editor" onclick="switchTab('editor')">Editor</div>
+        <div class="pill" id="pill-terminal" onclick="switchTab('terminal')">Terminal</div>
+        <span class="pill-spacer"></span>
+        <span class="pill-hint">01-order-routing.md</span>
+      </div>
+
+      <!-- Editor -->
+      <div id="editor-view">
+        <div class="ch">
+          <h1>Chapter 1: How an Order Gets from Earth to Mars</h1>
+
+          <h2>The Journey</h2>
+          <p>A customer on Earth orders a pizza for delivery to Mars. Between "order placed" and "pizza arrives" are four steps, each in its own module. This chapter covers the first and most important: routing.</p>
+          <p>The router's job: given an order, pick the best warp gate and queue the order at that gate. Simple to state, but the details matter — the wrong gate choice means an extra 15 minutes waiting for the next alignment window, and by then the crust is compromised.</p>
+
+          <h2>The Entry Point</h2>
+          <p><strong><code>routeOrder()</code></strong> in <a class="file-link" href="#">order-router.ts:54</a> is where every order starts.</p>
+          <p>It does three things, in this order:</p>
+
+          <ol>
+            <li data-num="1"><strong>Validate</strong> — call <code>validateOrder()</code> to check crust/destination compatibility and topping limits. This is synchronous and fast (<a class="file-link" href="#">crust-validator.ts:40</a>). Rejected orders never touch the queue.</li>
+            <li data-num="2"><strong>Find the best gate</strong> — each destination has a cluster of 2-3 gates. The router picks the one with the shortest queue (<a class="file-link" href="#">warp-queue.ts:31</a>). If ALL gates are at max capacity (50 orders), the order enters a hold queue.</li>
+            <li data-num="3"><strong>Queue and track</strong> — the order goes into the gate's queue, and the tracker starts monitoring it (<a class="file-link" href="#">delivery-tracker.ts:41</a>).</li>
+          </ol>
+
+          <pre><code>const bestGate = await queue.findShortestQueue(gates);
+if (!bestGate) {
+  await queue.holdOrder(order.id, order.destination);
+  return { orderId: order.id, gateId: '', estimatedTransitMs: 0, status: 'hold' };
+}</code></pre>
+
+          <p>The hold path is important — it's not a failure. It means "all gates are busy, we'll try again when one frees up." The customer sees "queued" either way; the difference is internal.</p>
+
+          <h2>Gate Clusters</h2>
+          <p>Each destination has its own gates. This is a physical constraint — a gate tuned for Mars can't reach Titan. The clusters are defined in <a class="file-link" href="#">order-router.ts:33</a>:</p>
+
+          <pre><code>mars:   gate-m1, gate-m2, gate-m3  (3 gates — Mars is popular)
+europa: gate-e1, gate-e2           (2 gates)
+titan:  gate-t1                    (1 gate — Titan is niche)</code></pre>
+
+          <div class="comment-block">
+            <div class="comment-du">//DU: should we add a gate-t2? single point of failure for Titan</div>
+            <div class="comment-a">//A: not yet — Titan orders are &lt;1% of volume. one gate handles it. if it goes down, orders hold until it recovers. adding a gate is expensive (alignment calibration takes weeks).</div>
+          </div>
+
+          <h2>Transit Times</h2>
+          <p>After dispatch, the pizza is in warp. Transit times are fixed per destination (<a class="file-link" href="#">order-router.ts:40</a>):</p>
+
+          <ul>
+            <li><strong>Mars:</strong> 3 minutes — practically instant. This is why Mars deliveries dominate.</li>
+            <li><strong>Europa:</strong> 40 minutes — Jupiter distance. Crust quality degrades but is still edible.</li>
+            <li><strong>Titan:</strong> 80 minutes — Saturn. Only thin crust and stuffed survive the transit. Deep-dish arrives as a brick.</li>
+          </ul>
+
+          <p>The ETA the customer sees includes both transit time AND wait time in the queue. Each position in the queue adds ~30 seconds.</p>
+
+          <h2>What Happens Next</h2>
+          <p>The order is now sitting in a gate's queue. Chapter 2 covers what happens when it reaches the front: the alignment window check and dispatch decision.</p>
+
+          <div class="next-link">Next: <a class="file-link" href="#">02-warp-queue.md</a></div>
+        </div>
+      </div>
+
+      <!-- Terminal drawer -->
+      <div id="terminal-drawer">
+        <div id="drawer-handle" onclick="closeDrawer()">
+          <span>Terminal</span>
+          <span class="close-x">&times;</span>
+        </div>
+        <div id="terminal-drawer-inner">
+          <div class="term-line"><span class="term-prompt">~ $</span> <span class="term-cmd">cd space-pizza-nap</span></div>
+          <div class="term-line"><span class="term-prompt">~/space-pizza-nap $</span> <span class="term-cmd">git status</span></div>
+          <div class="term-line"><span class="term-output">On branch <span class="term-branch">main</span></span></div>
+          <div class="term-line"><span class="term-output">Your branch is up to date with 'origin/main'.</span></div>
+          <div class="term-line"></div>
+          <div class="term-line"><span class="term-output">Changes not staged for commit:</span></div>
+          <div class="term-line"><span class="term-output">  modified:   <span class="term-file">mini-book/01-order-routing.md</span></span></div>
+          <div class="term-line"></div>
+          <div class="term-line"><span class="term-prompt">~/space-pizza-nap $</span> <span class="term-cmd">git log --oneline -5</span></div>
+          <div class="term-line"><span class="term-hash">a1b2c3d</span> <span class="term-output">review: delivery pipeline questions</span></div>
+          <div class="term-line"><span class="term-hash">f4e5d6c</span> <span class="term-output">ch05: putting it together</span></div>
+          <div class="term-line"><span class="term-hash">8g9h0i1</span> <span class="term-output">ch04: tracking system</span></div>
+          <div class="term-line"><span class="term-hash">2j3k4l5</span> <span class="term-output">ch03: dispatch logic</span></div>
+          <div class="term-line"><span class="term-hash">6m7n8o9</span> <span class="term-output">initial chapters</span></div>
+          <div class="term-line"></div>
+          <div class="term-line"><span class="term-prompt">~/space-pizza-nap $</span> <span style="display:inline-block;width:7px;height:13px;background:var(--term-fg);animation:blink 1s step-end infinite"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <div id="nav">
+      <div class="n-heading" onclick="toggleG(this)">
+        <span class="tri">&#9660;</span> 0100-delivery-pipeline
+        <span class="st">doing</span>
+      </div>
+      <div class="n-group">
+        <div class="n-label">Chapters</div>
+        <div class="n-item active">01-order-routing.md</div>
+        <div class="n-item">02-warp-queue.md</div>
+        <div class="n-item">03-dispatch.md</div>
+        <div class="n-item">04-tracking.md</div>
+        <div class="n-item">05-putting-it-together.md</div>
+        <div class="n-label">Agents</div>
+        <div class="n-item"><span class="n-dot done"></span>001-test-arch-routing</div>
+        <div class="n-item"><span class="n-dot done"></span>002-fs-eng-routing</div>
+        <div class="n-item"><span class="n-dot done"></span>003-test-eng-routing</div>
+        <div class="n-label">Files</div>
+        <div class="n-item">0100-delivery-pipeline.nap.md</div>
+      </div>
+      <div class="n-divider"></div>
+      <div class="n-heading" onclick="toggleG(this)">
+        <span class="tri">&#9654;</span> 0200-crust-validation
+        <span class="st">backlog</span>
+      </div>
+      <div class="n-group" style="display:none">
+        <div class="n-item">0200-crust-validation.nap.md</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(tab) {
+  const editor = document.getElementById('editor-view');
+  const drawer = document.getElementById('terminal-drawer');
+  const pe = document.getElementById('pill-editor');
+  const pt = document.getElementById('pill-terminal');
+
+  if (tab === 'editor') {
+    editor.style.display = 'block';
+    drawer.classList.remove('open');
+    pe.classList.add('active');
+    pt.classList.remove('active');
+  } else {
+    editor.style.display = 'block'; // keep editor visible
+    drawer.classList.add('open');
+    pt.classList.add('active');
+    pe.classList.remove('active');
+  }
+}
+
+function closeDrawer() {
+  document.getElementById('terminal-drawer').classList.remove('open');
+  document.getElementById('pill-editor').classList.add('active');
+  document.getElementById('pill-terminal').classList.remove('active');
+}
+
+function toggleNav() {
+  document.getElementById('nav').classList.toggle('collapsed');
+}
+
+function toggleG(el) {
+  const group = el.nextElementSibling;
+  if (group && group.classList.contains('n-group')) {
+    const hidden = group.style.display === 'none';
+    group.style.display = hidden ? '' : 'none';
+    const tri = el.querySelector('.tri');
+    if (tri) tri.innerHTML = hidden ? '&#9660;' : '&#9654;';
+  }
+}
+</script>
+</body>
+</html>

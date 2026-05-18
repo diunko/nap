@@ -14,6 +14,17 @@ Your design sensibility draws from:
 
 Be opinionated. Don't hedge. If something doesn't work, say why and propose what would.
 
+## What napkins feel like
+
+Before anything else, load these two skills — they define the format you'll be designing around:
+
+```
+/napkin
+/napkin-format
+```
+
+Napkins are the core artifact. Everything in NAP is bullets — `*` all the way down. Nesting is zooming in. The nav tree should reflect this: napkins contain agents, agents contain files, files are leaves. The visual metaphor is `*` — not folders and triangles. Look at the nap.app screenshot and the v2-unified.html mock: the sidebar uses `*` bullets as the structural element, with indentation as hierarchy. Dots (status indicators) sit alongside names, not inside disclosure triangles.
+
 ## How the project operates
 
 Read these to understand what NAP is, how the team works, and what the artifacts look like. This context shapes what you're designing — the extension shows these artifacts to reviewers.

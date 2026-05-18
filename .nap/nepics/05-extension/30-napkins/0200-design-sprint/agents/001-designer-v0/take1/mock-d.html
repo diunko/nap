@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mock D — Split Pane (Top Nav, Editor + Terminal Stacked)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #f0f4f8;
+  --bg-secondary: #e6eaee;
+  --bg-tertiary: #dce0e4;
+  --bg-hover: #e1e5e9;
+  --border: #c4cad0;
+  --text: #2e3440;
+  --text-secondary: #4c566a;
+  --text-muted: #6d7a8a;
+  --text-dim: #94a0b0;
+  --accent: #2563eb;
+  --link: #1e50c0;
+  --comment: #16a34a;
+  --role-a: #2563eb;
+  --role-du: #16a34a;
+  --role-ta: #d97706;
+  --role-te: #6b7280;
+  --bullet-marker: #7a8a9a;
+  --code-bg: #e0e8f0;
+  --code-color: #a0522d;
+  --dot-done: #3b82f6;
+  --dot-running: #22c55e;
+  --dot-backlog: #94a0b0;
+  --term-bg: #1e1e1e;
+  --term-fg: #e5e5e5;
+  --term-prompt: #22c55e;
+  --term-border: #3c3c3c;
+  --term-panel: #252526;
+  --font: 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', monospace;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* ── Header with inline breadcrumb nav ── */
+#header {
+  min-height: 34px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bc { display: flex; align-items: center; gap: 0; flex: 1; min-width: 0; }
+.bc-seg {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 0;
+  white-space: nowrap;
+  transition: color 0.1s;
+}
+.bc-seg:hover { color: var(--text); }
+.bc-seg.current { color: var(--text); font-weight: 600; cursor: default; }
+.bc-sep { color: var(--text-dim); margin: 0 5px; font-size: 11px; }
+.bc-status {
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--bg-tertiary);
+  padding: 0 5px;
+  border-radius: 2px;
+  margin-left: 4px;
+}
+.hdr-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.hdr-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+/* ── Chapter tab bar (horizontal nav) ── */
+#chapter-bar {
+  min-height: 28px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  gap: 0;
+  padding: 0 6px;
+}
+.ch-tab {
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  transition: all 0.12s;
+}
+.ch-tab:hover { color: var(--text-secondary); }
+.ch-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* ── Split container ── */
+#split { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Editor pane ── */
+#editor-pane {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  min-height: 0;
+}
+
+/* ── Resize handle ── */
+#resize-handle {
+  height: 5px;
+  min-height: 5px;
+  background: var(--border);
+  cursor: row-resize;
+  position: relative;
+  transition: background 0.15s;
+}
+#resize-handle:hover { background: var(--accent); }
+#resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 3px;
+  background: var(--text-dim);
+  border-radius: 2px;
+}
+#resize-handle:hover::after { background: white; }
+
+/* ── Terminal pane ── */
+#terminal-pane {
+  height: 180px;
+  min-height: 60px;
+  background: var(--term-bg);
+  color: var(--term-fg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#terminal-pane.collapsed {
+  height: 28px;
+  min-height: 28px;
+}
+#term-tab-bar {
+  height: 28px;
+  min-height: 28px;
+  background: var(--term-panel);
+  border-top: 1px solid var(--term-border);
+  border-bottom: 1px solid var(--term-border);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+}
+.term-tab-label {
+  font-size: 11px;
+  color: #6b7280;
+  flex: 1;
+}
+.term-tab-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font);
+}
+.term-tab-btn:hover { color: var(--term-fg); }
+#term-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+#terminal-pane.collapsed #term-body { display: none; }
+#terminal-pane.collapsed #resize-handle { display: none; }
+
+/* ── Nav drawer (slides from right) ── */
+#nav-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 200px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  z-index: 50;
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+  overflow-y: auto;
+  padding: 8px 0;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.08);
+}
+#nav-drawer.open { transform: translateX(0); }
+.nd-header {
+  padding: 6px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.nd-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 15px;
+}
+.nd-close:hover { color: var(--text); }
+.nd-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  padding: 6px 10px 2px;
+  font-weight: 600;
+}
+.nd-napkin {
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  cursor: pointer;
+}
+.nd-napkin:hover { background: var(--bg-hover); }
+.nd-napkin .st { font-size: 9px; color: var(--text-dim); font-weight: 400; margin-left: auto; }
+.nd-item {
+  padding: 2px 10px 2px 20px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.nd-item:hover { background: var(--bg-hover); color: var(--text-secondary); }
+.nd-item.active { background: var(--accent); color: white; }
+.nd-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.nd-dot.done { background: var(--dot-done); }
+.nd-dot.backlog { border: 1px solid var(--dot-backlog); }
+.nd-divider { height: 1px; background: var(--border); margin: 4px 10px; }
+
+/* ── Editor typography ── */
+.ch h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0 0 12px 0;
+  line-height: 1.3;
+}
+.ch h2 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 16px 0 8px 0;
+  line-height: 1.3;
+}
+.ch p {
+  margin: 0 0 8px 0;
+  color: var(--text);
+  word-wrap: break-word;
+  font-size: 12.5px;
+}
+.ch ol, .ch ul { margin: 0 0 8px 0; padding-left: 0; list-style: none; }
+.ch li { margin: 3px 0; padding-left: 14px; position: relative; font-size: 12.5px; }
+.ch ol li::before { content: attr(data-num) "."; position: absolute; left: 0; color: var(--bullet-marker); font-size: 11px; }
+.ch ul li::before { content: "•"; position: absolute; left: 3px; color: var(--bullet-marker); }
+.ch strong { font-weight: 700; }
+.ch code {
+  background: var(--code-bg);
+  color: var(--code-color);
+  padding: 0 4px;
+  border-radius: 2px;
+  font-size: 11.5px;
+}
+.ch pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px 12px;
+  margin: 6px 0 10px 0;
+  overflow-x: auto;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.ch pre code { background: none; padding: 0; color: var(--text); }
+.ch a, .ch .file-link {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ch a:hover { color: var(--accent); }
+.comment-du { color: var(--role-du); }
+.comment-a { color: var(--role-a); }
+.comment-ta { color: var(--role-ta); }
+.comment-block { margin: 4px 0; padding: 3px 0; font-size: 12.5px; }
+.ch .next-link {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+/* Terminal lines */
+.term-line { white-space: pre-wrap; word-wrap: break-word; }
+.term-prompt { color: var(--term-prompt); }
+.term-cmd { color: #d4d4d4; }
+.term-output { color: #a0a0a0; }
+.term-file { color: #9cdcfe; }
+.term-branch { color: #ce9178; }
+.term-hash { color: #dcdcaa; }
+
+@keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Header breadcrumb -->
+  <div id="header">
+    <div class="bc">
+      <span class="bc-seg">0100-delivery-pipeline</span>
+      <span class="bc-status">doing</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-seg current">01-order-routing.md</span>
+    </div>
+    <button class="hdr-btn" onclick="alert('Fetch')">&#8635; fetch</button>
+    <button class="hdr-btn" onclick="toggleNavDrawer()">&#9776;</button>
+  </div>
+
+  <!-- Chapter tab bar (horizontal navigation) -->
+  <div id="chapter-bar">
+    <div class="ch-tab active">01 Order Routing</div>
+    <div class="ch-tab">02 Warp Queue</div>
+    <div class="ch-tab">03 Dispatch</div>
+    <div class="ch-tab">04 Tracking</div>
+    <div class="ch-tab">05 Putting It Together</div>
+  </div>
+
+  <!-- Split container -->
+  <div id="split">
+    <!-- Editor -->
+    <div id="editor-pane">
+      <div class="ch">
+        <h1>Chapter 1: How an Order Gets from Earth to Mars</h1>
+
+        <h2>The Journey</h2>
+        <p>A customer on Earth orders a pizza for delivery to Mars. Between "order placed" and "pizza arrives" are four steps, each in its own module. This chapter covers the first and most important: routing.</p>
+        <p>The router's job: given an order, pick the best warp gate and queue the order at that gate. Simple to state, but the details matter — the wrong gate choice means an extra 15 minutes waiting for the next alignment window, and by then the crust is compromised.</p>
+
+        <h2>The Entry Point</h2>
+        <p><strong><code>routeOrder()</code></strong> in <a class="file-link" href="#">order-router.ts:54</a> is where every order starts.</p>
+        <p>It does three things, in this order:</p>
+
+        <ol>
+          <li data-num="1"><strong>Validate</strong> — call <code>validateOrder()</code> to check crust/destination compatibility and topping limits. This is synchronous and fast (<a class="file-link" href="#">crust-validator.ts:40</a>). Rejected orders never touch the queue.</li>
+          <li data-num="2"><strong>Find the best gate</strong> — each destination has a cluster of 2-3 gates. The router picks the one with the shortest queue (<a class="file-link" href="#">warp-queue.ts:31</a>). If ALL gates are at max capacity (50 orders), the order enters a hold queue.</li>
+          <li data-num="3"><strong>Queue and track</strong> — the order goes into the gate's queue, and the tracker starts monitoring it (<a class="file-link" href="#">delivery-tracker.ts:41</a>).</li>
+        </ol>
+
+        <pre><code>const bestGate = await queue.findShortestQueue(gates);
+if (!bestGate) {
+  await queue.holdOrder(order.id, order.destination);
+  return { orderId: order.id, gateId: '', estimatedTransitMs: 0, status: 'hold' };
+}</code></pre>
+
+        <p>The hold path is important — it's not a failure. It means "all gates are busy, we'll try again when one frees up." The customer sees "queued" either way; the difference is internal.</p>
+
+        <h2>Gate Clusters</h2>
+        <p>Each destination has its own gates. This is a physical constraint — a gate tuned for Mars can't reach Titan. The clusters are defined in <a class="file-link" href="#">order-router.ts:33</a>:</p>
+
+        <pre><code>mars:   gate-m1, gate-m2, gate-m3  (3 gates — Mars is popular)
+europa: gate-e1, gate-e2           (2 gates)
+titan:  gate-t1                    (1 gate — Titan is niche)</code></pre>
+
+        <div class="comment-block">
+          <div class="comment-du">//DU: should we add a gate-t2? single point of failure for Titan</div>
+          <div class="comment-a">//A: not yet — Titan orders are &lt;1% of volume. one gate handles it. if it goes down, orders hold until it recovers. adding a gate is expensive (alignment calibration takes weeks).</div>
+        </div>
+
+        <h2>Transit Times</h2>
+        <p>After dispatch, the pizza is in warp. Transit times are fixed per destination (<a class="file-link" href="#">order-router.ts:40</a>):</p>
+
+        <ul>
+          <li><strong>Mars:</strong> 3 minutes — practically instant. This is why Mars deliveries dominate.</li>
+          <li><strong>Europa:</strong> 40 minutes — Jupiter distance. Crust quality degrades but is still edible.</li>
+          <li><strong>Titan:</strong> 80 minutes — Saturn. Only thin crust and stuffed survive the transit. Deep-dish arrives as a brick.</li>
+        </ul>
+
+        <p>The ETA the customer sees includes both transit time AND wait time in the queue. Each position in the queue adds ~30 seconds.</p>
+
+        <h2>What Happens Next</h2>
+        <p>The order is now sitting in a gate's queue. Chapter 2 covers what happens when it reaches the front: the alignment window check and dispatch decision.</p>
+
+        <div class="next-link">Next: <a class="file-link" href="#">02-warp-queue.md</a></div>
+      </div>
+    </div>
+
+    <!-- Resize handle -->
+    <div id="resize-handle"></div>
+
+    <!-- Terminal pane -->
+    <div id="terminal-pane">
+      <div id="term-tab-bar">
+        <span class="term-tab-label">Terminal</span>
+        <button class="term-tab-btn" onclick="toggleTermPane()">&#9650;</button>
+      </div>
+      <div id="term-body">
+        <div class="term-line"><span class="term-prompt">~/space-pizza-nap $</span> <span class="term-cmd">git status</span></div>
+        <div class="term-line"><span class="term-output">On branch <span class="term-branch">main</span></span></div>
+        <div class="term-line"><span class="term-output">Your branch is up to date with 'origin/main'.</span></div>
+        <div class="term-line"></div>
+        <div class="term-line"><span class="term-output">Changes not staged for commit:</span></div>
+        <div class="term-line"><span class="term-output">  modified:   <span class="term-file">mini-book/01-order-routing.md</span></span></div>
+        <div class="term-line"></div>
+        <div class="term-line"><span class="term-prompt">~/space-pizza-nap $</span> <span class="term-cmd">git log --oneline -5</span></div>
+        <div class="term-line"><span class="term-hash">a1b2c3d</span> <span class="term-output">review: delivery pipeline questions</span></div>
+        <div class="term-line"><span class="term-hash">f4e5d6c</span> <span class="term-output">ch05: putting it together</span></div>
+        <div class="term-line"><span class="term-hash">8g9h0i1</span> <span class="term-output">ch04: tracking system</span></div>
+        <div class="term-line"><span class="term-hash">2j3k4l5</span> <span class="term-output">ch03: dispatch logic</span></div>
+        <div class="term-line"><span class="term-hash">6m7n8o9</span> <span class="term-output">initial chapters</span></div>
+        <div class="term-line"></div>
+        <div class="term-line"><span class="term-prompt">~/space-pizza-nap $</span> <span style="display:inline-block;width:7px;height:13px;background:var(--term-fg);animation:blink 1s step-end infinite"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nav drawer (right side) -->
+  <div id="nav-drawer">
+    <div class="nd-header">
+      <span>All files</span>
+      <button class="nd-close" onclick="toggleNavDrawer()">&times;</button>
+    </div>
+
+    <div class="nd-napkin">&#9660; 0100-delivery-pipeline <span class="st">doing</span></div>
+
+    <div class="nd-label">Mini-book</div>
+    <div class="nd-item active">01-order-routing.md</div>
+    <div class="nd-item">02-warp-queue.md</div>
+    <div class="nd-item">03-dispatch.md</div>
+    <div class="nd-item">04-tracking.md</div>
+    <div class="nd-item">05-putting-it-together.md</div>
+
+    <div class="nd-label">Agents</div>
+    <div class="nd-item"><span class="nd-dot done"></span> 001-test-arch-routing</div>
+    <div class="nd-item"><span class="nd-dot done"></span> 002-fs-eng-routing</div>
+    <div class="nd-item"><span class="nd-dot done"></span> 003-test-eng-routing</div>
+
+    <div class="nd-label">Files</div>
+    <div class="nd-item">0100-delivery-pipeline.nap.md</div>
+
+    <div class="nd-divider"></div>
+
+    <div class="nd-napkin">&#9654; 0200-crust-validation <span class="st">backlog</span></div>
+    <div class="nd-item">0200-crust-validation.nap.md</div>
+  </div>
+</div>
+
+<script>
+function toggleNavDrawer() {
+  document.getElementById('nav-drawer').classList.toggle('open');
+}
+
+function toggleTermPane() {
+  const pane = document.getElementById('terminal-pane');
+  const btn = pane.querySelector('.term-tab-btn');
+  pane.classList.toggle('collapsed');
+  btn.innerHTML = pane.classList.contains('collapsed') ? '&#9660;' : '&#9650;';
+}
+
+// Simple drag-to-resize for the terminal pane
+(function() {
+  const handle = document.getElementById('resize-handle');
+  const termPane = document.getElementById('terminal-pane');
+  let startY, startH;
+
+  handle.addEventListener('mousedown', function(e) {
+    startY = e.clientY;
+    startH = termPane.offsetHeight;
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('mouseup', onUp);
+    e.preventDefault();
+  });
+
+  function onDrag(e) {
+    const delta = startY - e.clientY;
+    const newH = Math.max(60, Math.min(window.innerHeight * 0.7, startH + delta));
+    termPane.style.height = newH + 'px';
+    termPane.classList.remove('collapsed');
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onDrag);
+    document.removeEventListener('mouseup', onUp);
+  }
+})();
+</script>
+</body>
+</html>
