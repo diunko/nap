@@ -10,8 +10,9 @@ The seed napkin is `.nap/nepics/04-books/20-architects/001-architect/scratch/ext
 
 The POC is at `packages/bash-poc/` — working code, read it.
 
-## What to do
+## What to do 
 
 Break v0 into napkins. The three surfaces (terminal, editor, file tree) and their wiring are distinct features. Think about what ships incrementally — what's the first thing a user can do with the extension?
 
 Talk to the human if anything is unclear. They have strong opinions about the UX (read the // threads in the design docs).
+pls 
