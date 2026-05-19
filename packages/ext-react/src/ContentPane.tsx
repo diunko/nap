@@ -282,7 +282,22 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
 
     return () => {
       aborted = true;
-      clearTimeout(saveTimerRef.current);
+      // Flush pending auto-save before switching files — edits must not be lost
+      if (saveTimerRef.current !== undefined) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = undefined;
+        const ed = editorRef.current;
+        const currentAdapter = adapterRef.current;
+        const currentModel = modelPropRef.current;
+        if (ed && currentAdapter && activeFilePath) {
+          const content = ed.getValue();
+          currentModel?.suppressEcho(true);
+          console.log(`[contentpane] flush auto-save on file switch: ${activeFilePath}`);
+          currentAdapter.writeFile(activeFilePath, content).then(() => {
+            setTimeout(() => { currentModel?.suppressEcho(false); }, 500);
+          });
+        }
+      }
     };
   }, [activeFilePath, adapter]);
 

@@ -29,6 +29,8 @@ export interface NapModel {
   onCommandComplete: (command: string) => void;
   /** Get the discovered nepic root (null if not found yet). */
   getNepicRoot: () => string | null;
+  /** Scan for existing repos in LFS on startup (panel reopen with IDB data). */
+  scanExistingRepos: () => Promise<void>;
 }
 
 export function createModel(options: ModelOptions): NapModel {
@@ -147,6 +149,18 @@ export function createModel(options: ModelOptions): NapModel {
     }
   }
 
+  async function scanExistingRepos(): Promise<void> {
+    console.log('[model] scanning for existing repos on startup');
+    const root = await findNepicRoot(adapter);
+    if (root) {
+      console.log(`[model] startup scan found nepic root: ${root}`);
+      nepicRoot = root;
+      await refreshNavFromRoot(root);
+    } else {
+      console.log('[model] startup scan: no existing repos found');
+    }
+  }
+
   return {
     destroy: () => {
       console.log('[model] destroy');
@@ -160,6 +174,7 @@ export function createModel(options: ModelOptions): NapModel {
     },
     onCommandComplete,
     getNepicRoot: () => nepicRoot,
+    scanExistingRepos,
   };
 }
 

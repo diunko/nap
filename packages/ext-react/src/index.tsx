@@ -281,6 +281,8 @@ function App() {
     const m = createModel({ adapter });
     modelRef.current = m;
     setModel(m);
+    // Scan for existing repos in LFS (panel reopen with IDB data)
+    m.scanExistingRepos();
     return () => m.destroy();
   }, [adapter]);
 
@@ -381,3 +383,65 @@ function App() {
 const root = createRoot(document.getElementById('root')!);
 root.render(<App />);
 console.log('[store] initialized');
+
+// ── Chrome storage persistence ──
+
+if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
+  // Restore state on startup
+  chrome.storage.sync.get('napState', (result: { napState?: any }) => {
+    const data = result?.napState;
+    if (data) {
+      console.log('[chrome] restoring state from chrome.storage.sync');
+      useNapStore.setState({
+        tabs: data.tabs || [],
+        activeTabId: data.activeTabId || null,
+        activeFilePath: data.activeFilePath || null,
+        focusedCardSlug: data.focusedCardSlug || null,
+        cardViewMode: data.cardViewMode || 'collapsed',
+        mainRepoConfig: data.mainRepoConfig || null,
+        zoom: data.zoom || 1.0,
+      });
+      if (data.zoom && data.zoom !== 1.0) {
+        document.documentElement.style.zoom = String(data.zoom);
+      }
+    }
+  });
+
+  // Debounced persist on state changes
+  let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  useNapStore.subscribe((state) => {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => {
+      const payload = {
+        tabs: state.tabs,
+        activeTabId: state.activeTabId,
+        activeFilePath: state.activeFilePath,
+        focusedCardSlug: state.focusedCardSlug,
+        cardViewMode: state.cardViewMode,
+        mainRepoConfig: state.mainRepoConfig,
+        zoom: state.zoom,
+      };
+      chrome.storage.sync.set({ napState: payload });
+      console.log('[chrome] persisted state to chrome.storage.sync');
+    }, 500);
+  });
+
+  // Flush on beforeunload
+  window.addEventListener('beforeunload', () => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      const state = useNapStore.getState();
+      chrome.storage.sync.set({
+        napState: {
+          tabs: state.tabs,
+          activeTabId: state.activeTabId,
+          activeFilePath: state.activeFilePath,
+          focusedCardSlug: state.focusedCardSlug,
+          cardViewMode: state.cardViewMode,
+          mainRepoConfig: state.mainRepoConfig,
+          zoom: state.zoom,
+        },
+      });
+    }
+  });
+}
