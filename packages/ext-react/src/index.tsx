@@ -267,24 +267,24 @@ function App() {
   const modelRef = useRef<NapModel | null>(null);
   const [model, setModel] = useState<NapModel | null>(null);
 
-  // Ensure /home/user exists in LFS (shell cwd starts there)
-  useEffect(() => {
-    (async () => {
-      try { await lfs.promises.mkdir('/home'); } catch { /* exists */ }
-      try { await lfs.promises.mkdir('/home/user'); } catch { /* exists */ }
-      console.log('[adapter] ensured /home/user exists');
-    })();
-  }, [lfs]);
-
-  // Create model layer — ref for stable callbacks, state to trigger child re-renders
+  // Create model layer + ensure /home/user exists before scanning.
+  // Single effect avoids the race where scanExistingRepos reads /home/user
+  // before the mkdir completes.
   useEffect(() => {
     const m = createModel({ adapter });
     modelRef.current = m;
     setModel(m);
-    // Scan for existing repos in LFS (panel reopen with IDB data)
-    m.scanExistingRepos();
+
+    (async () => {
+      try { await lfs.promises.mkdir('/home'); } catch { /* exists */ }
+      try { await lfs.promises.mkdir('/home/user'); } catch { /* exists */ }
+      console.log('[adapter] ensured /home/user exists');
+      // Now safe to scan — /home/user guaranteed to exist
+      m.scanExistingRepos();
+    })();
+
     return () => m.destroy();
-  }, [adapter]);
+  }, [adapter, lfs]);
 
   // Stable callback that always reaches the latest model
   const handleCommandComplete = useCallback((cmd: string) => {

@@ -98,77 +98,88 @@ export async function openGitHub(
 
 /**
  * Cmd+click a markdown link in the editor.
- * Finds the link via Monaco API, scrolls it into view, and Ctrl+clicks it.
+ *
+ * Finds the rendered span containing the link display text, measures its
+ * bounding rect on screen, and dispatches a synthetic mousedown with
+ * metaKey=true at the center of that span on Monaco's overflow-guard.
  */
 export async function cmdClickLink(panel: Page, href: string): Promise<void> {
   console.log(`[cmdClickLink] looking for link: ${href}`);
 
-  // Find the link position and scroll it into view
-  const linkInfo = await panel.evaluate((targetHref) => {
+  // Step 1: find the link, set cursor on it, scroll it into view
+  await panel.evaluate((targetHref) => {
     const m = (window as any).__monaco__;
-    if (!m) return null;
+    if (!m) return;
     const ed = m.editor.getEditors()[0];
-    if (!ed) return null;
-    const model = ed.getModel();
-    if (!model) return null;
-
-    const lines = model.getValue().split('\n');
+    if (!ed?.getModel()) return;
+    const lines = ed.getModel().getValue().split('\n');
     for (let i = 0; i < lines.length; i++) {
       const re = /\[([^\]]+)\]\(([^)]+)\)/g;
       let match;
       while ((match = re.exec(lines[i])) !== null) {
         if (match[2] === targetHref) {
           const lineNumber = i + 1;
-          const col = match.index + 1 + Math.floor(match[1].length / 2) + 1; // middle of link text
-          // Scroll the line into view
-          ed.revealLineInCenter(lineNumber);
-          // Set cursor there to ensure it's focused
+          // Place cursor in the middle of the display text
+          const col = match.index + 1 + Math.floor(match[1].length / 2) + 1;
           ed.setPosition({ lineNumber, column: col });
-          return { lineNumber, column: col };
+          ed.revealLineInCenter(lineNumber);
+          return;
         }
       }
     }
-    return null;
+  }, href);
+  await panel.waitForTimeout(300); // let Monaco re-render visible lines
+
+  // Step 2: find the rendered span, measure it, dispatch mousedown
+  const result = await panel.evaluate((targetHref) => {
+    const m = (window as any).__monaco__;
+    if (!m) return { error: 'no monaco' };
+    const ed = m.editor.getEditors()[0];
+    if (!ed?.getModel()) return { error: 'no editor/model' };
+
+    // Find the display text for this href
+    const text = ed.getModel().getValue();
+    const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let linkDisplay: string | null = null;
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      if (match[2] === targetHref) { linkDisplay = match[1]; break; }
+    }
+    if (!linkDisplay) return { error: `href not found: ${targetHref}` };
+
+    // Search LEAF spans only (no child spans) — these are individual tokens
+    const spans = document.querySelectorAll('.monaco-editor .view-line span');
+    for (const span of spans) {
+      if (span.children.length > 0) continue; // skip parent spans
+      const t = span.textContent ?? '';
+      if (t.includes(linkDisplay!)) {
+        const rect = span.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) continue;
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+
+        // Dispatch on overflow-guard (where Monaco's mouse handler listens)
+        const guard = document.querySelector('.monaco-editor .overflow-guard');
+        if (!guard) return { error: 'no overflow-guard' };
+
+        guard.dispatchEvent(new MouseEvent('mousedown', {
+          clientX: cx, clientY: cy,
+          metaKey: true, ctrlKey: false,
+          button: 0, bubbles: true, cancelable: true,
+        }));
+        guard.dispatchEvent(new MouseEvent('mouseup', {
+          clientX: cx, clientY: cy,
+          metaKey: true, ctrlKey: false,
+          button: 0, bubbles: true, cancelable: true,
+        }));
+        return { ok: true, cx: Math.round(cx), cy: Math.round(cy), spanText: t.substring(0, 40) };
+      }
+    }
+    return { error: `span with "${linkDisplay}" not found in rendered DOM` };
   }, href);
 
-  if (!linkInfo) throw new Error(`Link not found in editor: ${href}`);
-  console.log(`[cmdClickLink] found at line ${linkInfo.lineNumber}, col ${linkInfo.column}`);
-
-  await panel.waitForTimeout(200); // Let Monaco scroll settle
-
-  // Get screen coordinates from Monaco after scrolling
-  const coords = await panel.evaluate((pos) => {
-    const m = (window as any).__monaco__;
-    const ed = m.editor.getEditors()[0];
-    if (!ed) return null;
-    const vp = ed.getScrolledVisiblePosition(pos);
-    if (!vp) return null;
-    // Get the editor's DOM element bounding rect
-    const domNode = ed.getDomNode();
-    if (!domNode) return null;
-    const rect = domNode.getBoundingClientRect();
-    return {
-      x: rect.left + vp.left,
-      y: rect.top + vp.top + vp.height / 2,
-    };
-  }, linkInfo);
-
-  if (!coords) throw new Error(`Could not get screen coordinates for link`);
-  // Use Playwright's locator.click with modifiers for correct ctrlKey propagation.
-  // Use the view-lines container for precise positioning within Monaco content.
-  const viewLines = panel.locator('.monaco-editor .view-lines');
-  const vlBox = await viewLines.boundingBox();
-  if (!vlBox) throw new Error('Monaco view-lines not visible');
-
-  // Translate screen coords to be relative to view-lines container
-  const relX = coords.x - vlBox.x;
-  const relY = coords.y - vlBox.y;
-  console.log(`[cmdClickLink] clicking at (${relX}, ${relY}) relative to view-lines`);
-
-  await viewLines.click({
-    position: { x: relX, y: relY },
-    modifiers: ['Control'],
-  });
+  if ('error' in result) throw new Error(`cmdClickLink failed: ${result.error}`);
+  console.log(`[cmdClickLink] clicked "${result.spanText}" at (${result.cx}, ${result.cy})`);
 }
 
 // ── Shared helpers for IM-02 through IM-08 ──

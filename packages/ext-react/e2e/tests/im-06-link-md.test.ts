@@ -3,18 +3,14 @@
  *
  * Proves .md links load in the editor instead of navigating away.
  * Maps to story S4.
- *
- * Same Playwright/side-panel limitation as IM-05: Ctrl+click doesn't propagate
- * through Monaco's event system. We trigger routeLink directly and verify the
- * store.openDoc pipeline loads the new file.
  */
 import {
-  test, expect, openGitHub, openSidePanel,
+  test, expect, openGitHub, openSidePanel, cmdClickLink,
   cloneFixtureRepo, focusNapkinCard,
   getEditorContent, waitForPanelReady,
 } from './fixtures';
 
-test('IM-06: .md link → editor loads new file', async ({ context, extensionId }) => {
+test('IM-06: Cmd+click .md link → editor loads new file', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
   await waitForPanelReady(panel);
@@ -22,7 +18,7 @@ test('IM-06: .md link → editor loads new file', async ({ context, extensionId 
   await cloneFixtureRepo(panel);
   await focusNapkinCard(panel, 'delivery-pipeline');
 
-  // Open chapter 01 (has "Next: 02-warp-queue.md" link at bottom)
+  // Open chapter 01 (has "Next: 02-warp-queue.md" link)
   await panel.evaluate(() => {
     const entries = document.querySelectorAll('[data-testid="file-entry"]');
     for (const entry of entries) {
@@ -46,43 +42,40 @@ test('IM-06: .md link → editor loads new file', async ({ context, extensionId 
   expect(contentBefore.length).toBeGreaterThan(0);
 
   // Find an .md link in the editor
-  const mdLink = await panel.evaluate(() => {
+  const mdHref = await panel.evaluate(() => {
     const m = (window as any).__monaco__;
     if (!m) return null;
     const ed = m.editor.getEditors()[0];
     if (!ed?.getModel()) return null;
     const text = ed.getModel().getValue();
-    // Look for [text](something.md) pattern
     const re = /\[([^\]]+)\]\(([^)]+\.md)\)/g;
     const match = re.exec(text);
-    return match ? { display: match[1], href: match[2] } : null;
+    return match ? match[2] : null;
   });
 
-  if (!mdLink) {
+  if (!mdHref) {
     console.log('[IM-06] SKIP: no .md link found in chapter 01');
     return;
   }
-  console.log(`[IM-06] found .md link: [${mdLink.display}](${mdLink.href})`);
+  console.log(`[IM-06] found .md link: ${mdHref}`);
 
-  // Trigger the .md link via routeLink → openDoc (same as what onMouseDown does)
-  await panel.evaluate((href) => {
-    const state = (window as any).__napStore__.getState();
-    const sourceFilePath = state.activeFilePath;
-    // Resolve relative path (same logic as link-routing.ts resolveRelative)
-    const dir = sourceFilePath.substring(0, sourceFilePath.lastIndexOf('/'));
-    const resolved = href.startsWith('/') ? href : dir + '/' + href;
-    console.log(`[links] .md link → openDoc ${resolved}`);
-    state.openDoc(resolved);
-  }, mdLink.href);
+  // Cmd+click the .md link — goes through Monaco onMouseDown → routeLink → openDoc
+  await cmdClickLink(panel, mdHref);
 
-  await panel.waitForTimeout(500);
+  // Wait for the editor to load the new file
+  await panel.waitForFunction(
+    (oldPath) => (window as any).__napStore__.getState().activeFilePath !== oldPath,
+    pathBefore,
+    { timeout: 5_000 },
+  );
+  await panel.waitForTimeout(300);
 
   // Verify: active file path changed
   const pathAfter = await panel.evaluate(
     () => (window as any).__napStore__.getState().activeFilePath,
   );
   expect(pathAfter).not.toBe(pathBefore);
-  expect(pathAfter).toContain(mdLink.href);
+  expect(pathAfter).toContain(mdHref);
 
   // Verify: editor has new content
   const contentAfter = await getEditorContent(panel);
@@ -94,7 +87,7 @@ test('IM-06: .md link → editor loads new file', async ({ context, extensionId 
     const s = (window as any).__napStore__.getState();
     return { tabCount: s.tabs.length, activeEphemeral: s.tabs.find((t: any) => t.id === s.activeTabId)?.ephemeral };
   });
-  expect(tabState.tabCount).toBe(1); // ephemeral slot reused
+  expect(tabState.tabCount).toBe(1);
   expect(tabState.activeEphemeral).toBe(true);
 
   // Verify: GitHub tab did NOT navigate

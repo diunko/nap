@@ -1,27 +1,22 @@
 /**
  * IM-05: Link navigation — file:line → GitHub tab
  *
- * Proves the two-repo bridge: .nap content links navigate to the code repo.
+ * Proves the two-repo bridge: Cmd+click on a file:line link in .nap content
+ * navigates the GitHub tab to the code repo.
  * Maps to story S9.
- *
- * Note: Playwright cannot reliably Ctrl+click within Monaco in a Chrome side panel
- * (mousedown events with modifier keys don't propagate through Monaco's internal
- * event system). This test verifies the pipeline by triggering routeLink + chrome.tabs.update
- * directly. The Monaco mousedown → routeLink wiring is verified by the fs-eng's
- * debugging scenario DS-P4-01.
  */
 import {
-  test, expect, openGitHub, openSidePanel,
-  cloneFixtureRepo, focusNapkinCard, clickFileInNav,
+  test, expect, openGitHub, openSidePanel, cmdClickLink,
+  cloneFixtureRepo, focusNapkinCard,
   waitForPanelReady,
 } from './fixtures';
 
-test('IM-05: file:line link → GitHub tab navigates', async ({ context, extensionId }) => {
+test('IM-05: Cmd+click file:line → GitHub tab navigates', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
   await waitForPanelReady(panel);
 
-  // Set main-repo config (precondition)
+  // Set main-repo config (precondition — not the action being tested)
   await panel.evaluate(() => {
     (window as any).__napStore__.getState().setMainRepo({
       owner: 'diunko',
@@ -33,7 +28,7 @@ test('IM-05: file:line link → GitHub tab navigates', async ({ context, extensi
   await cloneFixtureRepo(panel);
   await focusNapkinCard(panel, 'delivery-pipeline');
 
-  // Open a chapter with file:line links
+  // Open chapter 01 which has file:line links
   await panel.evaluate(() => {
     const entries = document.querySelectorAll('[data-testid="file-entry"]');
     for (const entry of entries) {
@@ -50,7 +45,7 @@ test('IM-05: file:line link → GitHub tab navigates', async ({ context, extensi
   );
   await panel.waitForTimeout(500);
 
-  // Find a code link in the editor and extract its href
+  // Find a code link in the editor
   const codeHref = await panel.evaluate(() => {
     const m = (window as any).__monaco__;
     if (!m) return null;
@@ -76,35 +71,8 @@ test('IM-05: file:line link → GitHub tab navigates', async ({ context, extensi
 
   const urlBefore = ghPage.url();
 
-  // Trigger the link routing pipeline: routeLink → chrome.tabs.update
-  // This verifies the pipeline from routeLink through chrome.tabs.update to GitHub tab.
-  // Cmd+click → Monaco mousedown is verified by DS-P4-01 (fs-eng debugging scenario).
-  await panel.evaluate((href) => {
-    const store = (window as any).__napStore__;
-    const state = store.getState();
-    // Import routeLink via the module's export (exposed on window for this test)
-    const sourceFilePath = state.activeFilePath;
-    const mainRepo = state.mainRepoConfig;
-
-    // Simulate what onMouseDown does: classify the link and act on it
-    const parsed = href.match(/^(.+?)#L(\d+)$/) || href.match(/^(.+?):(\d+)$/);
-    const path = parsed ? parsed[1] : href;
-    const line = parsed ? parseInt(parsed[2], 10) : undefined;
-
-    const owner = mainRepo?.owner ?? 'OWNER';
-    const repo = mainRepo?.repo ?? 'REPO';
-    const branch = mainRepo?.branch ?? 'main';
-    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-    let url = `https://github.com/${owner}/${repo}/blob/${branch}/${cleanPath}`;
-    if (line != null) url += `#L${line}`;
-
-    console.log(`[chrome] tabs.update → ${url}`);
-    chrome.tabs.query({ active: true, currentWindow: true }).then((tabs: any[]) => {
-      if (tabs[0]?.id != null) {
-        chrome.tabs.update(tabs[0].id, { url });
-      }
-    });
-  }, codeHref);
+  // Cmd+click the link — real mousedown through Monaco's onMouseDown pipeline
+  await cmdClickLink(panel, codeHref);
 
   // Wait for GitHub tab to navigate
   await ghPage.waitForURL((url) => url.toString() !== urlBefore, { timeout: 10_000 });
