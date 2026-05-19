@@ -359,18 +359,23 @@ function Panel() {
 function App() {
   const [session, setSession] = useState<Session>(() => createSession(getStateKey()));
 
-  // Listen for session key changes (content script signals PR change)
+  // Expose switchSession for console and content script use
   useEffect(() => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.onMessage) return;
-    const listener = (msg: any) => {
-      if (msg.type === 'session-key-changed' && msg.key) {
-        console.log(`[session] switching to key: ${msg.key}`);
-        session.model.destroy();
-        setSession(createSession(msg.key));
-      }
+    const switchSession = (key: string) => {
+      console.log(`[session] switching to key: ${key}`);
+      session.model.destroy();
+      setSession(createSession(key));
     };
-    chrome.runtime.onMessage.addListener(listener);
-    return () => chrome.runtime.onMessage.removeListener(listener);
+    (window as any).__switchSession__ = switchSession;
+
+    // Also listen for content script messages
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      const listener = (msg: any) => {
+        if (msg.type === 'session-key-changed' && msg.key) switchSession(msg.key);
+      };
+      chrome.runtime.onMessage.addListener(listener);
+      return () => chrome.runtime.onMessage.removeListener(listener);
+    }
   }, [session]);
 
   return (
