@@ -66,13 +66,78 @@ The terminal is a BashShell instance. To clone programmatically:
 - git-command.ts needs `fetch` and `checkout` subcommands (not currently implemented)
 - isomorphic-git has `git.fetch()` and `git.checkout()` — wire them the same way as clone
 
+## PR diff-aware link routing
+
+The link router must distinguish between files in the PR diff and files not in it.
+
+### Fetching diff ranges
+
+On panel open for a PR page (prNum > 0):
+1. Check store: if `prDiffRanges` is not null → use cached, skip fetch
+2. If null: `GET /repos/{owner}/{repo}/pulls/{n}/files` with PAT if available
+3. Parse each file's `patch` field: extract hunk ranges from `@@ -N,N +N,N @@`
+4. Build map: `Record<filepath, Array<{start, end}>>` where start/end are new-side line numbers
+5. Add ±3 to each range for GitHub's context window
+6. Store in `prDiffRanges`, Zustand persists to IDB
+
+On [fetch latest]: re-fetch, update map, persist.
+
+### Diff URL construction
+
+```typescript
+async function buildDiffAnchor(filePath: string, line: number): Promise<string> {
+  const encoded = new TextEncoder().encode(filePath);
+  const hashBuf = await crypto.subtle.digest('SHA-256', encoded);
+  const hex = [...new Uint8Array(hashBuf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  return `#diff-${hex}R${line}`;
+}
+```
+
+### Link routing decision
+
+```
+if (not a PR page):
+  → blob URL: /blob/{branch}/{path}#L{line}
+
+if (file in prDiffRanges AND line within any hunk range):
+  → diff URL: /pull/{n}/files#diff-{sha256(path)}R{line}
+
+if (file in prDiffRanges but line outside all hunks):
+  → blob URL: /blob/{pr-branch}/{path}#L{line}
+
+if (file NOT in prDiffRanges):
+  → blob URL: /blob/{pr-branch}/{path}#L{line}
+```
+
+### Hunk range parsing
+
+Port `parseGitDiff` from `packages/v3/src/main/git-diff-parser.ts` (49 lines). Adapt to parse the `patch` field format (no `---`/`+++` headers, starts directly with `@@`).
+
+### Persistence
+
+`prDiffRanges` is included in Zustand `partialize` — persisted to IDB per session key. First visit: fetch + persist. Return visit: hydrate from IDB, instant. Fetch latest: re-fetch + update.
+
+## Fixture PR
+
+Create a PR in `diunko/nap-test-main`:
+- Branch: `feature/delivery-v2` off main
+- Modify `modules/delivery/order-router.ts` — add express priority handling (~10 lines around line 54)
+- Modify `modules/queue/warp-queue.ts` — add capacity warning (~5 lines)
+- Leave `modules/validation/crust-validator.ts` unchanged
+- Keep PR open permanently
+- The mini-book links to all three files:
+  - `order-router.ts:54` → should navigate to diff view (file changed, line in hunk)
+  - `crust-validator.ts:40` → should navigate to blob view (file not changed)
+
 ## What "done" looks like
 
-- Navigate to `github.com/diunko/nap-test-main#nap-repo=github/diunko/nap-test-nap&napkin=01-v1/0100-delivery-pipeline`
+- Navigate to `github.com/diunko/nap-test-main/pull/1#nap-repo=github/diunko/nap-test-nap&napkin=01-v1/0100-delivery-pipeline`
 - Open side panel
 - Extension auto-clones nap-test-nap (loading state in nav during clone)
 - Nav populates with 0100-delivery-pipeline focused
 - file:line links just work (mainRepoConfig auto-set from URL)
+- Cmd+click `order-router.ts:54` → lands in PR Files Changed, line 54 highlighted in diff
+- Cmd+click `crust-validator.ts:40` → lands in blob view (file not in PR)
 - No manual settings step
-- Close panel, reopen → state restored from IDB, nav populates from scan
-- Click [fetch latest] → repo updates to remote HEAD
+- Close panel, reopen → state restored from IDB (including diff ranges), links work instantly
+- Click [fetch latest] → repo updates, diff ranges re-fetched
