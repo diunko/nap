@@ -1,0 +1,235 @@
+import { create } from 'zustand';
+import type { NavNode } from './nav-tree';
+
+export type CardViewMode = 'collapsed' | 'focused' | 'extended';
+
+export interface Tab {
+  id: string;
+  path: string;
+  type: 'file';
+  ephemeral: boolean;
+  scrollPos?: number;
+  cursorPos?: { lineNumber: number; column: number };
+}
+
+export interface MainRepoConfig {
+  owner: string;
+  repo: string;
+  branch: string;
+}
+
+export interface NapStore {
+  // ── Nav state (from LFS parse) ──
+  navSections: NavNode[];
+
+  // ── UI state ──
+  activeFilePath: string | null;
+  focusedCardSlug: string | null;
+  cardViewMode: CardViewMode;
+  sidebarVisible: boolean;
+  activeSurface: 'editor' | 'terminal';
+
+  // ── Tabs (single pane — no left/right split) ──
+  tabs: Tab[];
+  activeTabId: string | null;
+
+  // ── Extension-specific ──
+  mainRepoConfig: MainRepoConfig | null;
+  zoom: number;
+  settingsVisible: boolean;
+
+  // ── Actions ──
+  openDoc: (path: string) => void;
+  closeTab: (tabId: string) => void;
+  closeActiveTab: () => void;
+  pinTab: (tabId: string) => void;
+  pinActiveEphemeral: () => void;
+  saveTabScroll: (tabId: string, scrollPos: number, cursorPos?: Tab['cursorPos']) => void;
+  expandCard: (slug: string) => void;
+  extendCard: () => void;
+  collapseCard: () => void;
+  toggleSidebar: () => void;
+  setActiveSurface: (surface: 'editor' | 'terminal') => void;
+  refreshNav: (sections: NavNode[]) => void;
+  setMainRepo: (config: MainRepoConfig | null) => void;
+  setZoom: (zoom: number) => void;
+  toggleSettings: () => void;
+}
+
+let tabIdCounter = 0;
+function nextTabId(): string {
+  return `tab-${++tabIdCounter}`;
+}
+
+/** Reset counter (test-only). */
+export function _resetTabIdCounter(): void {
+  tabIdCounter = 0;
+}
+
+/** Find or create a tab for a path. Returns [updatedTabs, tabId]. */
+export function upsertTab(
+  tabs: Tab[],
+  path: string,
+  ephemeral: boolean,
+): [Tab[], string] {
+  // Existing tab with same path?
+  const existing = tabs.find((t) => t.path === path);
+  if (existing) return [tabs, existing.id];
+
+  // Reuse ephemeral slot?
+  if (ephemeral) {
+    const ephIdx = tabs.findIndex((t) => t.ephemeral);
+    if (ephIdx !== -1) {
+      const updated = [...tabs];
+      updated[ephIdx] = { ...updated[ephIdx], path };
+      return [updated, updated[ephIdx].id];
+    }
+  }
+
+  // Create new tab
+  const tab: Tab = { id: nextTabId(), path, type: 'file', ephemeral };
+  return [[...tabs, tab], tab.id];
+}
+
+/** Remove a tab and pick the next active. */
+export function removeTab(
+  tabs: Tab[],
+  tabId: string,
+  activeId: string | null,
+): [Tab[], string | null] {
+  const idx = tabs.findIndex((t) => t.id === tabId);
+  if (idx === -1) return [tabs, activeId];
+  const newTabs = tabs.filter((t) => t.id !== tabId);
+  if (newTabs.length === 0) return [newTabs, null];
+  if (activeId !== tabId) return [newTabs, activeId];
+  // Pick neighbor: prefer left, then right
+  const nextIdx = Math.min(idx, newTabs.length - 1);
+  return [newTabs, newTabs[nextIdx].id];
+}
+
+export const useNapStore = create<NapStore>((set, get) => ({
+  navSections: [],
+  activeFilePath: null,
+  focusedCardSlug: null,
+  cardViewMode: 'collapsed' as CardViewMode,
+  sidebarVisible: true,
+  activeSurface: 'terminal' as const,
+  tabs: [],
+  activeTabId: null,
+  mainRepoConfig: null,
+  zoom: 1.0,
+  settingsVisible: false,
+
+  openDoc: (path: string) => {
+    console.log(`[store] openDoc ${path}`);
+    const prev = get();
+    const [tabs, tabId] = upsertTab(prev.tabs, path, true);
+    console.log(`[store] openDoc → upsertTab → activeFilePath=${path}`);
+    set({
+      activeFilePath: path,
+      tabs,
+      activeTabId: tabId,
+      activeSurface: 'editor',
+    });
+  },
+
+  closeTab: (tabId: string) => {
+    console.log(`[store] closeTab ${tabId}`);
+    const prev = get();
+    const [tabs, nextActive] = removeTab(prev.tabs, tabId, prev.activeTabId);
+    const activeTab = tabs.find((t) => t.id === nextActive);
+    set({
+      tabs,
+      activeTabId: nextActive,
+      activeFilePath: activeTab?.path ?? null,
+    });
+  },
+
+  closeActiveTab: () => {
+    const state = get();
+    if (state.activeTabId) state.closeTab(state.activeTabId);
+  },
+
+  pinTab: (tabId: string) => {
+    console.log(`[store] pinTab ${tabId}`);
+    const tabs = get().tabs.map((t) => (t.id === tabId ? { ...t, ephemeral: false } : t));
+    set({ tabs });
+  },
+
+  pinActiveEphemeral: () => {
+    const state = get();
+    const tab = state.tabs.find((t) => t.id === state.activeTabId);
+    if (tab?.ephemeral) {
+      console.log(`[store] pinActiveEphemeral → tab pinned`);
+      state.pinTab(tab.id);
+    }
+  },
+
+  saveTabScroll: (tabId: string, scrollPos: number, cursorPos?: Tab['cursorPos']) => {
+    const tabs = get().tabs.map((t) =>
+      t.id === tabId ? { ...t, scrollPos, ...(cursorPos ? { cursorPos } : {}) } : t,
+    );
+    set({ tabs });
+  },
+
+  expandCard: (slug: string) => {
+    console.log(`[store] expandCard ${slug}`);
+    const { focusedCardSlug } = get();
+    if (focusedCardSlug === slug) {
+      set({ focusedCardSlug: null, cardViewMode: 'collapsed' });
+    } else {
+      set({ focusedCardSlug: slug, cardViewMode: 'focused' });
+    }
+  },
+
+  extendCard: () => {
+    const { focusedCardSlug, cardViewMode } = get();
+    if (!focusedCardSlug) return;
+    if (cardViewMode === 'focused') {
+      set({ cardViewMode: 'extended' });
+    } else if (cardViewMode === 'extended') {
+      set({ cardViewMode: 'focused' });
+    }
+  },
+
+  collapseCard: () => {
+    set({ focusedCardSlug: null, cardViewMode: 'collapsed' });
+  },
+
+  toggleSidebar: () => {
+    set({ sidebarVisible: !get().sidebarVisible });
+  },
+
+  setActiveSurface: (surface: 'editor' | 'terminal') => {
+    console.log(`[store] setActiveSurface ${surface}`);
+    set({ activeSurface: surface });
+  },
+
+  refreshNav: (sections: NavNode[]) => {
+    console.log(`[store] refreshNav → navSections updated (${sections.length} sections)`);
+    set({ navSections: sections });
+  },
+
+  setMainRepo: (config: MainRepoConfig | null) => {
+    console.log(`[store] setMainRepo`, config);
+    set({ mainRepoConfig: config });
+  },
+
+  setZoom: (zoom: number) => {
+    const clamped = Math.max(0.5, Math.min(2.0, zoom));
+    console.log(`[chrome] zoom ${get().zoom} → ${clamped}`);
+    set({ zoom: clamped });
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.zoom = String(clamped);
+    }
+  },
+
+  toggleSettings: () => {
+    set({ settingsVisible: !get().settingsVisible });
+  },
+}));
+
+// Expose store for Playwright tests (same pattern as app)
+if (typeof window !== 'undefined') {
+  (window as any).__napStore__ = useNapStore;
+}
