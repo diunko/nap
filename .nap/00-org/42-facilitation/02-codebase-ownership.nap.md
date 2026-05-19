@@ -31,6 +31,18 @@
   * agents build to the mock instead of the behavior — mock shows 3 files, agent renders 3 files, real repo has 20
   * tests pass against stale assumptions — 51 green, extension broken in 5 minutes of clicking
 
+* how to read
+  * read the source files yourself — don't delegate understanding to agents
+  * use opus Explore agents for orientation (file counts, structure, finding things) — never haiku
+  * be strategic: read the files that matter, not every file
+    * state management / store — shows all state transitions
+    * tests — show what behaviors the team thought mattered
+    * the main rendering component — shows how state becomes UI
+    * skip: utility files, config, types (read those when you hit a reference you don't understand)
+  * budget: spending 100-200k tokens reading the codebase is cheap
+    * it compensates for a vast amount of guessing
+    * every token spent reading saves multiple agent rounds of building the wrong thing
+
 * the time investment
   * reading the relevant source + tests for a feature area: 30 minutes
   * the cost of not reading: multiple agent rounds, manual bug discovery, retros explaining what went wrong
