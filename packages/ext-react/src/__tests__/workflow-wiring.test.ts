@@ -237,14 +237,19 @@ describe('WW-M03: model.fetchLatest', () => {
     const mockExec = vi.fn();
 
     store.getState().setMainRepo({ owner: 'diunko', repo: 'nap-test-main', branch: 'feature/delivery-v2' });
+    // applyConfig sets the model's internal config (including napBranch and cloneUrl)
+    model.applyConfig(makeConfig({ napBranch: 'main' }));
     model.registerShell(mockExec);
 
     model.fetchLatest();
 
-    expect(mockExec).toHaveBeenCalledTimes(1);
-    const cmd = mockExec.mock.calls[0][0];
+    // fetchLatest should send cd + fetch + checkout using napBranch (not mainRepoConfig.branch)
+    const fetchCall = mockExec.mock.calls.find((c: any) => c[0].includes('git fetch'));
+    expect(fetchCall).toBeDefined();
+    const cmd = fetchCall![0];
+    expect(cmd).toContain('cd /home/user/nap-test-nap');
     expect(cmd).toContain('git fetch origin');
-    expect(cmd).toContain('git checkout origin/feature/delivery-v2');
+    expect(cmd).toContain('git checkout origin/main'); // napBranch, not mainRepoConfig.branch
 
     model.destroy();
   });
@@ -253,6 +258,7 @@ describe('WW-M03: model.fetchLatest', () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
     const model = createModel({ adapter, store });
+    model.applyConfig(makeConfig());
 
     // No shell registered — should not throw
     model.fetchLatest();
