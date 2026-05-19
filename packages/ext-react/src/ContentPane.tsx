@@ -53,13 +53,8 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const roleDecorationsRef = useRef<string[]>([]);
   const shiftEnterDisposableRef = useRef<monaco.IDisposable | null>(null);
-  // Refs for stable access inside closures (auto-save, event handlers)
-  const adapterRef = useRef(adapter);
-  adapterRef.current = adapter;
-  const modelPropRef = useRef(model);
-  modelPropRef.current = model;
-  const storeRef = useRef(store);
-  storeRef.current = store;
+  // With key={session.key} on Panel, this component remounts on session change.
+  // Closures safely capture adapter, model, store — they're stable for this lifetime.
 
   // Create editor once
   useEffect(() => {
@@ -95,18 +90,18 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     editor.onDidChangeModelContent(() => {
       refreshRoleDecorations();
       clearTimeout(saveTimerRef.current);
-      const filePath = storeRef.current.getState().activeFilePath;
+      const filePath = store.getState().activeFilePath;
       if (!filePath || !adapter) return;
 
       // Pin ephemeral tab on first edit
       console.log(`[contentpane] contentChanged → pinActiveEphemeral`);
-      storeRef.current.getState().pinActiveEphemeral();
+      store.getState().pinActiveEphemeral();
 
       saveTimerRef.current = setTimeout(async () => {
         console.log(`[contentpane] autoSave debounce 1000ms`);
         const content = editor.getValue();
-        const currentModel = modelPropRef.current;
-        const currentAdapter = adapterRef.current;
+        const currentModel = model;
+        const currentAdapter = adapter;
         if (!currentAdapter) return;
         currentModel?.suppressEcho(true);
         console.log(`[adapter] writeFile ${filePath}`);
@@ -132,7 +127,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
         const editorModel = editor.getModel();
         if (!editorModel) return;
         const lineContent = editorModel.getLineContent(position.lineNumber);
-        const sourceFilePath = storeRef.current.getState().activeFilePath;
+        const sourceFilePath = store.getState().activeFilePath;
         if (!sourceFilePath) return;
         const col = position.column;
 
@@ -144,7 +139,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
           const end = match.index + match[0].length + 1;
           if (col >= start && col < end) {
             e.event.preventDefault();
-            handleLinkResult(routeLink({ href: match[2], sourceFilePath }, storeRef.current.getState().mainRepoConfig ?? undefined));
+            handleLinkResult(routeLink({ href: match[2], sourceFilePath }, store.getState().mainRepoConfig ?? undefined));
             return;
           }
         }
@@ -156,7 +151,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
           const end = match.index + match[0].length + 1;
           if (col >= start && col < end) {
             e.event.preventDefault();
-            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, storeRef.current.getState().mainRepoConfig ?? undefined));
+            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, store.getState().mainRepoConfig ?? undefined));
             return;
           }
         }
@@ -172,7 +167,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
             const token = lineContent.slice(i + 1);
             if (/^https?:\/\//.test(token)) continue;
             e.event.preventDefault();
-            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, storeRef.current.getState().mainRepoConfig ?? undefined));
+            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, store.getState().mainRepoConfig ?? undefined));
             return;
           }
         }
@@ -225,7 +220,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
   function handleLinkResult(result: LinkResult) {
     console.log(`[links] routeLink →`, result);
     if (result.action === 'openDoc') {
-      storeRef.current.getState().openDoc(result.path);
+      store.getState().openDoc(result.path);
     } else if (result.action === 'openCode') {
       console.log(`[chrome] tabs.update → ${result.githubUrl}`);
       // Navigate the GitHub tab
@@ -284,7 +279,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
       console.log(`[contentpane] refreshRoleDecorations`);
 
       // Restore scroll/cursor from tab state
-      const state = storeRef.current.getState();
+      const state = store.getState();
       const tab = state.tabs.find((t) => t.id === state.activeTabId);
       if (tab?.scrollPos != null) {
         editor.setScrollTop(tab.scrollPos);
@@ -301,8 +296,8 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = undefined;
         const ed = editorRef.current;
-        const currentAdapter = adapterRef.current;
-        const currentModel = modelPropRef.current;
+        const currentAdapter = adapter;
+        const currentModel = model;
         if (ed && currentAdapter && activeFilePath) {
           const content = ed.getValue();
           currentModel?.suppressEcho(true);
@@ -320,7 +315,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     if (!adapter) return;
     function handleExternalChange(e: Event) {
       const detail = (e as CustomEvent).detail;
-      if (detail.path !== storeRef.current.getState().activeFilePath) return;
+      if (detail.path !== store.getState().activeFilePath) return;
       const editor = editorRef.current;
       const currentModel = monacoModelRef.current;
       if (!editor || !currentModel) return;
@@ -345,7 +340,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     return () => {
       const editor = editorRef.current;
       if (!editor) return;
-      const state = storeRef.current.getState();
+      const state = store.getState();
       if (state.activeTabId) {
         state.saveTabScroll(state.activeTabId, editor.getScrollTop(), editor.getPosition() ?? undefined);
       }

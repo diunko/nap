@@ -257,8 +257,6 @@ function Panel() {
   const { store, lfs, adapter, model } = React.useContext(SessionContext)!;
   const activeSurface = useNapStore((s) => s.activeSurface);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
-  const storeRef = useRef(store);
-  storeRef.current = store;
 
   // Init model (filesystem bootstrap + repo scan)
   useEffect(() => {
@@ -274,7 +272,7 @@ function Panel() {
   // Zoom keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const s = storeRef.current.getState();
+      const s = store.getState();
       if (e.ctrlKey && e.shiftKey) {
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
@@ -377,7 +375,7 @@ function App() {
 
   return (
     <SessionContext.Provider value={session}>
-      <Panel />
+      <Panel key={session.key} />
     </SessionContext.Provider>
   );
 }
