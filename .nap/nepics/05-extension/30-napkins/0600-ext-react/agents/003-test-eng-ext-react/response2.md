@@ -86,3 +86,25 @@ Written as `0600-ext-react.state.test.md`. Defines SS-01 through SS-06 (vitest) 
 ## Story coverage
 
 All 15 stories covered. IM-02-DOM and IM-07-DOM verify what the user actually sees.
+
+---
+
+## Addendum: console verification + docs
+
+### Session switching verified from browser console
+
+Exposed `__switchSession__(key)` on window. Verified live:
+
+```
+__switchSession__('pr-99')  → empty panel (no tabs, no nav, fresh terminal)
+__switchSession__('default') → state restored (tabs, nav, editor content)
+```
+
+### Documentation
+
+Created `packages/ext-react/docs/` with four docs:
+
+1. `01-architecture.md` — package structure, key abstractions (session, store, model, adapter), component hierarchy
+2. `02-data-flow.md` — push pipeline, file load sequence, terminal↔editor, echo suppression, auto-save flush
+3. `03-session-and-state.md` — keyed isolation, IndexedDB layout, Zustand persist, key switching, wipe script
+4. `04-testing.md` — model vs DOM layers, all test suites, cmdClickLink, console utilities
