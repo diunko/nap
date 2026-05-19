@@ -79,10 +79,10 @@ test('L1: clone nap repo, read chapter, verify file:line link', async ({ context
   await panel.evaluate(() => window.__refreshNavTree());
   await panel.waitForTimeout(500);
 
-  // Check nav tree has napkins section
+  // Check nav tree has napkin cards
   const navText = await panel.locator('#nav-tree').textContent();
   console.log(`[L1] nav tree: ${navText?.slice(0, 200)}`);
-  expect(navText).toContain('napkins');
+  expect(navText).toContain('0100-feature');
   console.log('[L1] nav tree populated');
 
   // Open the chapter file directly via LFS path
@@ -262,6 +262,6 @@ test('L6: close panel, reopen, IDB persists', async ({ context, extensionId }) =
 
   const navText = await panel2.locator('#nav-tree').textContent();
   console.log(`[L6] nav tree: ${navText?.slice(0, 200)}`);
-  expect(navText).toContain('napkins');
+  expect(navText).toContain('0100-feature');
   console.log('[L6] PASSED: IDB persists across panel close/reopen');
 });

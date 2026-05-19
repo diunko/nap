@@ -1,7 +1,7 @@
 /**
  * Smoke test — step by step, tight timeouts.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.setTimeout(10_000);
 

@@ -1,17 +1,18 @@
 /**
- * Side panel entry point — wires Monaco, terminal, nav tree, tab bar, link routing.
+ * Side panel entry point — orchestration layer.
+ * Wires Monaco, terminal, nav renderer, tab manager, link routing.
  *
- * Priority order (matches test gates):
- * 1. Monaco boots (T1.1)
- * 2. Monaco reads from LFS (T2.1)
- * 3. Auto-save to LFS (T2.2)
- * 4. Terminal surface
- * 5. Bidirectional LFS sharing
- * 6. Nav tree
- * 7. Tab bar
- * 8. Link routing
- * 9. Theme
- * 10. Auth
+ * Modules:
+ * - nav-tree.ts — pure parser (data)
+ * - nav-renderer.ts — card system DOM rendering
+ * - tab-manager.ts — ephemeral/permanent tab lifecycle
+ * - dot-style.ts — agent dot styling
+ * - theme.ts — Monaco theme + CSS variables
+ * - link-routing.ts — link classification + GitHub URL builder
+ * - napkin-markdown.ts — tokenizer + shift-enter
+ * - fs-adapter.ts — LightningFS → IFileSystem
+ * - git-command.ts — isomorphic-git custom command
+ * - shell.ts — BashShell
  */
 import { Buffer } from 'buffer';
 (globalThis as any).Buffer = Buffer;
@@ -26,10 +27,10 @@ import { registerNapkinMarkdown, registerShiftEnter } from './napkin-markdown';
 import { registerTheme, applyTheme } from './theme';
 import { routeLink, type MainRepoConfig } from './link-routing';
 import { parseNavTree, type NavNode, type DirEntry } from './nav-tree';
+import { NavRenderer } from './nav-renderer';
+import { TabManager, type Tab } from './tab-manager';
 
 // ── Monaco worker configuration for extension CSP ──
-// Monaco tries to load workers via blob: URLs, which extension CSP may block.
-// Configure getWorkerUrl to use bundled worker as extension asset.
 (self as any).MonacoEnvironment = {
   getWorker(_workerId: string, _label: string) {
     console.log(`[monaco-env] getWorker called: label=${_label}`);
@@ -47,8 +48,11 @@ let editor: monaco.editor.IStandaloneCodeEditor;
 let currentFilePath: string | null = null;
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let mainRepoConfig: MainRepoConfig | undefined;
+let tabManager: TabManager;
+let navRenderer: NavRenderer;
+let isLoadingFile = false;
 
-const AUTO_SAVE_DELAY = 1000; // 1 second debounce
+const AUTO_SAVE_DELAY = 1000;
 
 // ── Expose for Playwright tests ──
 declare global {
@@ -66,19 +70,18 @@ declare global {
 }
 
 async function main() {
-  console.log('[side-panel] starting — build 2026-05-17T18:40');
+  console.log('[side-panel] starting — build 2026-05-19T00:00');
 
-  // 1. LightningFS — single instance, store name 'nap-ext'
+  // 1. LightningFS
   lfs = new LightningFS('nap-ext');
   window.__lfs = lfs;
   console.log('[side-panel] LightningFS created (store: nap-ext)');
 
-  // Create /home/user
   try { await lfs.promises.mkdir('/home'); } catch { /* exists */ }
   try { await lfs.promises.mkdir('/home/user'); } catch { /* exists */ }
   console.log('[side-panel] /home/user ready');
 
-  // 2. fs adapter for just-bash
+  // 2. FS adapter
   fsAdapter = new LightningFsAdapter(lfs);
   window.__fs = fsAdapter;
   console.log('[side-panel] fs adapter created');
@@ -110,55 +113,47 @@ async function main() {
   window.__editor = editor;
   console.log('[side-panel] Monaco editor created');
 
-  // Intercept Cmd+click via Monaco's own mouse event system.
-  // This is the same approach v3 uses (editor.onMouseDown + MouseTargetType.CONTENT_TEXT).
-  // Monaco's internal link handling doesn't work in extension side panel context,
-  // so we handle Cmd+click ourselves using Monaco's resolved position.
+  // Cmd+click via Monaco's mouse event system
   editor.onMouseDown((e) => {
     const isMeta = e.event.metaKey || e.event.ctrlKey;
-    console.log(`[editor-mouse] type=${e.target.type} meta=${isMeta}`);
     if (!isMeta) return;
     if (e.target.type !== monaco.editor.MouseTargetType.CONTENT_TEXT) return;
 
     const position = e.target.position;
     if (!position) return;
-
     const model = editor.getModel();
     if (!model) return;
 
     const lineContent = model.getLineContent(position.lineNumber);
-    const col = position.column;
-    console.log(`[editor-mouse] line ${position.lineNumber} col ${col}: "${lineContent.slice(0, 80)}"`);
-
-    const href = findLinkAtPosition(lineContent, col);
-    console.log(`[editor-mouse] link at position: ${href}`);
+    const href = findLinkAtPosition(lineContent, position.column);
     if (href) {
       e.event.preventDefault();
       activateLink(href);
     }
   });
-  console.log('[editor-mouse] Cmd+click listener installed');
 
-  // Also intercept window.open — Monaco's default opener may use it
+  // Intercept window.open
   const originalWindowOpen = window.open.bind(window);
   window.open = (url?: string | URL, target?: string, features?: string) => {
     const urlStr = url?.toString() ?? '';
-    console.log(`[window.open] intercepted: ${urlStr} target=${target}`);
     if (urlStr && !urlStr.startsWith('blob:') && !urlStr.startsWith('data:')) {
       activateLink(urlStr);
       return null;
     }
     return originalWindowOpen(url, target, features);
   };
-  console.log('[window.open] interceptor installed');
 
   // Shift-enter continuation
   registerShiftEnter(editor);
-  console.log('[side-panel] shift-enter registered');
 
-  // 5. Auto-save: editor changes -> debounced LFS write
+  // 5. Auto-save: editor changes → debounced LFS write + pin ephemeral tab
   editor.onDidChangeModelContent(() => {
     if (!currentFilePath) return;
+    if (isLoadingFile) return;
+
+    // Pin ephemeral tab on first edit
+    tabManager.pinActiveEphemeral();
+
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(async () => {
       if (!currentFilePath) return;
@@ -183,7 +178,6 @@ async function main() {
 
   // 8. Git command with auth
   const gitCommand = createGitCommand(lfs, getAuth);
-  console.log('[side-panel] git command created');
 
   // 9. Shell — with onCommandComplete to auto-refresh nav tree after git commands
   const shell = new BashShell({
@@ -199,7 +193,6 @@ async function main() {
       }
     },
   });
-  console.log('[side-panel] shell created');
 
   // 10. Terminal
   const termContainer = document.getElementById('terminal-container')!;
@@ -207,28 +200,52 @@ async function main() {
   await term.init();
   console.log('[side-panel] terminal initialized');
 
-  // Wire I/O
   await shell.attach((data: string) => term.write(data));
   term.onData = (data: string) => shell.handleInput(data);
-  console.log('[side-panel] shell attached');
 
-  // 11. Tab bar
-  setupTabBar();
+  // 11. Tab manager
+  const tabBarEl = document.getElementById('tab-bar')!;
+  tabManager = new TabManager(tabBarEl, {
+    onActivate: (tab: Tab) => {
+      if (tab.type === 'terminal') {
+        switchToTerminal();
+      } else {
+        // Only switch surface — file loading is handled by the caller
+        switchToEditor();
+      }
+    },
+    onClose: (_tab: Tab) => {
+      // If active tab was closed, TabManager already activated a neighbor
+    },
+  });
 
-  // 12. Nav tree
-  window.__openFile = openFile;
-  window.__refreshNavTree = refreshNavTree;
+  // 12. Nav renderer
+  const navTreeEl = document.getElementById('nav-tree')!;
+  navRenderer = new NavRenderer(navTreeEl, {
+    onFileClick: async (path: string, _fileName: string) => {
+      // openFile handles both content loading and tab management
+      await openFile(path);
+    },
+    onTerminalClick: () => {
+      tabManager.activateTerminal();
+    },
+  });
 
   // 13. Resize handle
   setupResizeHandle();
 
-  // 14. Register link provider
+  // 14. Link provider
   setupLinkProvider();
 
   // 15. Settings UI
   setupSettings();
 
-  // 15. Test hooks
+  // 16. Header buttons
+  setupHeader();
+
+  // 17. Test hooks
+  window.__openFile = openFile;
+  window.__refreshNavTree = refreshNavTree;
   window.__monaco = monaco;
   window.__lastNavigatedUrl = null;
   window.__setMainRepoConfig = (config: MainRepoConfig) => {
@@ -262,7 +279,9 @@ async function openFile(path: string) {
     console.log(`[open-file] read ${content.length} chars from ${path}`);
 
     currentFilePath = path;
+    if (navRenderer) navRenderer.setActiveFile(path);
 
+    isLoadingFile = true;
     const model = editor.getModel();
     if (model) {
       model.setValue(content);
@@ -270,64 +289,54 @@ async function openFile(path: string) {
       const newModel = monaco.editor.createModel(content, 'napkin-markdown');
       editor.setModel(newModel);
     }
+    isLoadingFile = false;
 
-    // Switch to editor tab
-    switchTab('editor');
+    // Create/update tab for this file
+    const fileName = path.split('/').pop() ?? path;
+    if (tabManager) tabManager.openEphemeral(path, fileName);
+
+    // Switch to editor
+    switchToEditor();
     console.log(`[open-file] done: ${path}`);
   } catch (e) {
     console.error(`[open-file] failed: ${path}`, e);
   }
 }
 
-// ── Tab bar ──
+// ── Surface switching ──
 
-function setupTabBar() {
-  const tabs = document.querySelectorAll('.tab');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const tabName = (tab as HTMLElement).dataset.tab!;
-      switchTab(tabName);
-    });
-  });
-  console.log('[tab-bar] setup complete');
-}
-
-function switchTab(tabName: string) {
-  console.log(`[tab-bar] switching to ${tabName}`);
-  const tabs = document.querySelectorAll('.tab');
-  tabs.forEach(t => t.classList.toggle('active', (t as HTMLElement).dataset.tab === tabName));
-
+function switchToEditor() {
   const editorSurface = document.getElementById('editor-surface')!;
   const terminalSurface = document.getElementById('terminal-surface')!;
+  editorSurface.classList.remove('hidden');
+  terminalSurface.classList.add('hidden');
+  editor.layout();
 
-  if (tabName === 'editor') {
-    editorSurface.classList.remove('hidden');
-    terminalSurface.classList.add('hidden');
-    editor.layout();
-    // Refresh-on-focus: re-read file from LFS if modified externally
-    if (currentFilePath) {
-      lfs.promises.readFile(currentFilePath, 'utf8').then((content) => {
-        const currentContent = editor.getModel()?.getValue();
-        if (content !== currentContent) {
-          console.log(`[refresh-on-focus] file changed externally, reloading ${currentFilePath}`);
-          editor.getModel()?.setValue(content as string);
-        }
-      }).catch(() => {});
-    }
-  } else {
-    editorSurface.classList.add('hidden');
-    terminalSurface.classList.remove('hidden');
+  // Refresh-on-focus: re-read file from LFS if modified externally
+  if (currentFilePath) {
+    lfs.promises.readFile(currentFilePath, 'utf8').then((content) => {
+      const currentContent = editor.getModel()?.getValue();
+      if (content !== currentContent) {
+        console.log(`[refresh-on-focus] file changed externally, reloading ${currentFilePath}`);
+        editor.getModel()?.setValue(content as string);
+      }
+    }).catch(() => {});
   }
 }
 
-// ── Nav tree rendering ──
+function switchToTerminal() {
+  const editorSurface = document.getElementById('editor-surface')!;
+  const terminalSurface = document.getElementById('terminal-surface')!;
+  editorSurface.classList.add('hidden');
+  terminalSurface.classList.remove('hidden');
+}
+
+// ── Nav tree ──
 
 async function refreshNavTree() {
   console.log('[nav-tree] refreshing');
-  const navTreeEl = document.getElementById('nav-tree')!;
   const navEmpty = document.getElementById('nav-empty')!;
 
-  // Find cloned repos in /home/user
   let repos: string[];
   try {
     repos = await lfs.promises.readdir('/home/user');
@@ -336,8 +345,8 @@ async function refreshNavTree() {
   }
   console.log(`[nav-tree] repos in /home/user: ${repos.join(', ')}`);
 
-  // For each repo, look for nepics dirs
   const allTrees: NavNode[] = [];
+  const jsonCache = new Map<string, Record<string, unknown>>();
 
   for (const repo of repos) {
     const repoPath = `/home/user/${repo}`;
@@ -346,14 +355,14 @@ async function refreshNavTree() {
       if (!stat.isDirectory()) continue;
     } catch { continue; }
 
-    // Look for .nap/nepics/ or nepics/ at root
-    const nepicsPath = `${repoPath}/.nap/nepics`;
-    const altNepicsPath = `${repoPath}/nepics`;
-    // Also handle the case where the repo IS a .nap repo (nepics at root)
-    const rootNepicsPath = `${repoPath}`;
+    // Look for .nap/nepics/ or nepics/ or nap-style structure
+    const candidates = [
+      `${repoPath}/.nap/nepics`,
+      `${repoPath}/nepics`,
+    ];
 
     let targetPath: string | null = null;
-    for (const candidate of [nepicsPath, altNepicsPath]) {
+    for (const candidate of candidates) {
       try {
         const entries = await lfs.promises.readdir(candidate);
         if (entries.length > 0) {
@@ -363,22 +372,21 @@ async function refreshNavTree() {
       } catch { continue; }
     }
 
-    // If no nepics subdir found, try to parse the repo root itself
-    // (the cloned repo might BE a nepics-style structure)
+    // If no nepics subdir, check if repo root has nap-style dirs
     if (!targetPath) {
       try {
-        const rootEntries = await lfs.promises.readdir(rootNepicsPath);
+        const rootEntries = await lfs.promises.readdir(repoPath);
         const hasNapDirs = rootEntries.some(e =>
           e.startsWith('10-') || e.startsWith('15-') || e.startsWith('20-') || e.startsWith('30-')
         );
         if (hasNapDirs) {
-          targetPath = rootNepicsPath;
+          targetPath = repoPath;
         }
       } catch { continue; }
     }
 
+    // Try one more: scan for subdirs with nap-style content
     if (!targetPath) {
-      // Try one more pattern: nepics/<nepic-name>/
       try {
         const rootEntries = await lfs.promises.readdir(repoPath);
         for (const entry of rootEntries) {
@@ -401,33 +409,23 @@ async function refreshNavTree() {
 
     if (!targetPath) continue;
 
-    // If targetPath is a nepics dir, parse each nepic inside
     try {
       const entries = await lfs.promises.readdir(targetPath);
-      const dirs = entries.filter(async (e) => {
-        try {
-          const s = await lfs.promises.stat(`${targetPath}/${e}`);
-          return s.isDirectory();
-        } catch { return false; }
-      });
-
-      // Check if targetPath itself has 20-architects, 30-napkins etc
       const hasNapDirs = entries.some(e =>
         e.startsWith('10-') || e.startsWith('15-') || e.startsWith('20-') || e.startsWith('30-')
       );
 
       if (hasNapDirs) {
-        // targetPath is itself a nepic-level directory
-        const tree = await parseNavTree(targetPath, readDirLfs, readJsonLfs);
+        const tree = await parseNavTree(targetPath, readDirLfs, readJsonLfsCached(jsonCache));
         allTrees.push(...tree);
       } else {
-        // targetPath is a nepics/ container — parse each subdirectory
+        // Container of nepics
         for (const entry of entries) {
           const nepicPath = `${targetPath}/${entry}`;
           try {
             const s = await lfs.promises.stat(nepicPath);
             if (!s.isDirectory()) continue;
-            const tree = await parseNavTree(nepicPath, readDirLfs, readJsonLfs);
+            const tree = await parseNavTree(nepicPath, readDirLfs, readJsonLfsCached(jsonCache));
             allTrees.push(...tree);
           } catch { continue; }
         }
@@ -438,21 +436,28 @@ async function refreshNavTree() {
   }
 
   if (allTrees.length === 0) {
-    navTreeEl.innerHTML = '';
+    navRenderer.renderWithCache([]);
     navEmpty.style.display = 'block';
     console.log('[nav-tree] empty');
     return;
   }
 
   navEmpty.style.display = 'none';
-  navTreeEl.innerHTML = '';
-  for (const node of allTrees) {
-    navTreeEl.appendChild(renderNavNode(node));
+  navRenderer.setJsonCache(jsonCache);
+  navRenderer.renderWithCache(allTrees);
+
+  // Update header napkin name
+  const napkins = allTrees.find(s => s.name.startsWith('30-napkins'));
+  if (napkins?.children?.[0]) {
+    const headerName = document.getElementById('header-napkin-name');
+    if (headerName) headerName.textContent = napkins.children[0].name;
   }
+
   console.log(`[nav-tree] rendered ${allTrees.length} sections`);
 }
 
-// LFS-backed callbacks for nav tree parser
+// ── LFS callbacks for nav tree parser ──
+
 async function readDirLfs(path: string): Promise<DirEntry[]> {
   const names = await lfs.promises.readdir(path);
   const entries: DirEntry[] = [];
@@ -467,103 +472,71 @@ async function readDirLfs(path: string): Promise<DirEntry[]> {
   return entries;
 }
 
-async function readJsonLfs(path: string): Promise<Record<string, unknown> | undefined> {
-  try {
-    const content = await lfs.promises.readFile(path, 'utf8') as string;
-    return JSON.parse(content);
-  } catch {
-    return undefined;
-  }
-}
-
-function renderNavNode(node: NavNode): HTMLElement {
-  if (node.type === 'file') {
-    const el = document.createElement('div');
-    el.className = 'nav-file';
-    el.textContent = node.displayName;
-    el.addEventListener('click', () => {
-      console.log(`[nav] click file: ${node.path}`);
-      openFile(node.path);
-    });
-    return el;
-  }
-
-  const section = document.createElement('div');
-  section.className = 'nav-section';
-
-  // Header
-  const header = document.createElement('div');
-  if (node.type === 'section') {
-    header.className = 'nav-section-header';
-    header.textContent = node.displayName;
-  } else {
-    header.className = 'nav-entry expandable';
-    if (node.expanded) header.classList.add('expanded');
-    let label = node.displayName;
-    if (node.status) label += ` `;
-    header.innerHTML = label;
-    if (node.status) {
-      const statusSpan = document.createElement('span');
-      statusSpan.className = 'status';
-      statusSpan.textContent = node.status;
-      header.appendChild(statusSpan);
+function readJsonLfsCached(cache: Map<string, Record<string, unknown>>) {
+  return async (path: string): Promise<Record<string, unknown> | undefined> => {
+    try {
+      const content = await lfs.promises.readFile(path, 'utf8') as string;
+      const parsed = JSON.parse(content);
+      cache.set(path, parsed);
+      return parsed;
+    } catch {
+      return undefined;
     }
-  }
-  section.appendChild(header);
-
-  // Children
-  if (node.children && node.children.length > 0) {
-    const childContainer = document.createElement('div');
-    childContainer.className = 'nav-children' + (node.expanded ? '' : ' collapsed');
-
-    for (const child of node.children) {
-      childContainer.appendChild(renderNavNode(child));
-    }
-    section.appendChild(childContainer);
-
-    // Toggle expand/collapse
-    header.addEventListener('click', () => {
-      const isExpanded = header.classList.toggle('expanded');
-      childContainer.classList.toggle('collapsed', !isExpanded);
-    });
-  }
-
-  return section;
+  };
 }
 
 // ── Resize handle ──
 
 function setupResizeHandle() {
-  const handle = document.getElementById('resize-handle')!;
   const nav = document.getElementById('nav')!;
+  const handle = document.getElementById('nav-drag')!;
+  let dragging = false;
   let startX = 0;
-  let startWidth = 0;
+  let startW = 0;
 
   handle.addEventListener('mousedown', (e) => {
+    dragging = true;
     startX = e.clientX;
-    startWidth = nav.offsetWidth;
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    e.preventDefault();
+    startW = nav.offsetWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(ev: MouseEvent) {
+      if (!dragging) return;
+      // Nav is on the right, so moving left = wider
+      const delta = startX - ev.clientX;
+      nav.style.width = Math.max(180, Math.min(600, startW + delta)) + 'px';
+      editor.layout();
+    }
+    function onUp() {
+      dragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  console.log('[resize] handle setup');
+}
+
+// ── Header buttons ──
+
+function setupHeader() {
+  document.getElementById('nav-toggle')!.addEventListener('click', () => {
+    document.getElementById('nav')!.classList.toggle('collapsed');
   });
 
-  function onMouseMove(e: MouseEvent) {
-    const diff = e.clientX - startX;
-    nav.style.width = Math.max(120, Math.min(600, startWidth + diff)) + 'px';
-    editor.layout();
-  }
-
-  function onMouseUp() {
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-  }
-  console.log('[resize] handle setup');
+  document.getElementById('fetch-btn')!.addEventListener('click', () => {
+    console.log('[header] fetch latest');
+    // TODO: implement git fetch + checkout origin/main
+  });
 }
 
 // ── Link handling ──
 
 function setupLinkProvider() {
-  // Register link provider for visual decoration (underlines on hover)
   monaco.languages.registerLinkProvider('napkin-markdown', {
     provideLinks(model) {
       const links: monaco.languages.ILink[] = [];
@@ -572,7 +545,6 @@ function setupLinkProvider() {
       for (let i = 1; i <= lineCount; i++) {
         const lineContent = model.getLineContent(i);
 
-        // Match markdown links: [text](href)
         const mdLinkRe = /\[([^\]]+)\]\(([^)]+)\)/g;
         let match;
         while ((match = mdLinkRe.exec(lineContent)) !== null) {
@@ -585,7 +557,6 @@ function setupLinkProvider() {
           });
         }
 
-        // Match bare URLs: https://...
         const urlRe = /https?:\/\/[^\s)]+/g;
         while ((match = urlRe.exec(lineContent)) !== null) {
           const beforeUrl = lineContent.slice(0, match.index);
@@ -600,62 +571,26 @@ function setupLinkProvider() {
       return { links };
     },
     resolveLink(link) {
-      if (!link.url || typeof link.url !== 'string') {
-        console.log('[resolveLink] no url, skipping');
-        return link;
-      }
+      if (!link.url || typeof link.url !== 'string') return link;
       const href = link.url;
-      console.log(`[resolveLink] resolving: ${href}`);
 
       const result = routeLink(
         { href, sourceFilePath: currentFilePath ?? '' },
         mainRepoConfig,
       );
-      console.log(`[resolveLink] routed: action=${result.action}`);
 
       if (result.action === 'openDoc') {
-        console.log(`[resolveLink] openDoc: ${result.path}`);
-        link.url = undefined as any; // prevent Monaco from opening
+        link.url = undefined as any;
         openFile(result.path);
       } else if (result.action === 'openCode') {
-        console.log(`[resolveLink] openCode: ${result.githubUrl}`);
-        link.url = undefined as any; // prevent Monaco from opening
+        link.url = undefined as any;
         navigateGitHubTab(result.githubUrl);
-      } else if (result.action === 'openExternal') {
-        console.log(`[resolveLink] openExternal: ${result.url}`);
-        // leave link.url — Monaco opens it in new tab
       }
       return link;
     },
   });
 
-  // Register the "open link" action that Monaco calls on Cmd+click
-  // This replaces the broken resolveLink approach
-  editor.addAction({
-    id: 'nap-open-link',
-    label: 'Open Link',
-    keybindings: [],
-    precondition: undefined,
-    run(ed) {
-      const position = ed.getPosition();
-      if (!position) return;
-      const model = ed.getModel();
-      if (!model) return;
-
-      const lineContent = model.getLineContent(position.lineNumber);
-      const href = findLinkAtPosition(lineContent, position.column);
-      if (!href) {
-        console.log('[link-action] no link found at cursor position');
-        return;
-      }
-
-      console.log(`[link-action] activating link: ${href}`);
-      activateLink(href);
-    },
-  });
-
-  // Override Monaco's built-in openLink action to use our routing
-  // Monaco's Cmd+click calls 'editor.action.openLink' internally
+  // Override Monaco's openLink action
   editor.addAction({
     id: 'editor.action.openLink',
     label: 'Open Link (nap override)',
@@ -669,33 +604,24 @@ function setupLinkProvider() {
 
       const lineContent = model.getLineContent(position.lineNumber);
       const href = findLinkAtPosition(lineContent, position.column);
-      if (!href) {
-        console.log('[link-action] no link at cursor');
-        return;
-      }
-
-      console.log(`[link-action] openLink override: ${href}`);
-      activateLink(href);
+      if (href) activateLink(href);
     },
   });
 
   console.log('[links] provider + action registered');
 }
 
-/** Find the href of a markdown link [text](href) or bare URL at a column position. */
 function findLinkAtPosition(lineContent: string, column: number): string | null {
-  // Check markdown links [text](href)
   const mdLinkRe = /\[([^\]]+)\]\(([^)]+)\)/g;
   let match;
   while ((match = mdLinkRe.exec(lineContent)) !== null) {
-    const fullStart = match.index + 1; // 1-indexed
+    const fullStart = match.index + 1;
     const fullEnd = fullStart + match[0].length;
     if (column >= fullStart && column <= fullEnd) {
-      return match[2]; // the href
+      return match[2];
     }
   }
 
-  // Check bare URLs
   const urlRe = /https?:\/\/[^\s)]+/g;
   while ((match = urlRe.exec(lineContent)) !== null) {
     const start = match.index + 1;
@@ -708,13 +634,11 @@ function findLinkAtPosition(lineContent: string, column: number): string | null 
   return null;
 }
 
-/** Route and activate a link href. */
 function activateLink(href: string) {
   const result = routeLink(
     { href, sourceFilePath: currentFilePath ?? '' },
     mainRepoConfig,
   );
-  console.log(`[link-action] routed: ${result.action}`);
 
   if (result.action === 'openDoc') {
     openFile(result.path);
@@ -723,7 +647,6 @@ function activateLink(href: string) {
       showNotification(
         'Set your main code repo in <a id="notification-settings-link">settings</a> to enable code links.'
       );
-      // Wire the settings link
       setTimeout(() => {
         const link = document.getElementById('notification-settings-link');
         if (link) link.addEventListener('click', () => {
@@ -750,16 +673,13 @@ function setupSettings() {
   const saveBtn = document.getElementById('settings-save')!;
   const closeBtn = document.getElementById('settings-close')!;
 
-  // Load current values
   if (mainRepoConfig) {
     repoInput.value = `${mainRepoConfig.owner}/${mainRepoConfig.repo}`;
     branchInput.value = mainRepoConfig.branch;
   }
 
   btn.addEventListener('click', () => {
-    console.log('[settings] opening');
     overlay.classList.add('visible');
-    // Reload from storage
     if (typeof chrome !== 'undefined' && chrome.storage) {
       chrome.storage.sync.get(['mainRepo', 'mainBranch', 'pat'], (result) => {
         if (result.mainRepo) repoInput.value = result.mainRepo;
@@ -774,35 +694,24 @@ function setupSettings() {
     const branch = branchInput.value.trim() || 'main';
     const pat = patInput.value.trim();
 
-    console.log(`[settings] saving: repo=${repoStr} branch=${branch} pat=${pat ? '***' : 'none'}`);
-
-    // Set in-memory config
     if (repoStr.includes('/')) {
       const [owner, repo] = repoStr.split('/');
       if (owner && repo) {
         mainRepoConfig = { owner, repo, branch };
-        console.log(`[settings] mainRepoConfig set: ${owner}/${repo}@${branch}`);
       }
     }
 
-    // Persist to chrome.storage
     if (typeof chrome !== 'undefined' && chrome.storage) {
       chrome.storage.sync.set({ mainRepo: repoStr, mainBranch: branch, pat });
     }
 
-    // Hide notification if it was showing
     hideNotification();
-
     overlay.classList.remove('visible');
-    console.log('[settings] saved and closed');
   });
 
   closeBtn.addEventListener('click', () => {
     overlay.classList.remove('visible');
-    console.log('[settings] closed without saving');
   });
-
-  console.log('[settings] setup complete');
 }
 
 // ── Notification ──
@@ -811,7 +720,6 @@ function showNotification(message: string) {
   const el = document.getElementById('notification')!;
   el.innerHTML = message;
   el.classList.add('visible');
-  console.log(`[notification] ${message}`);
 }
 
 function hideNotification() {
@@ -819,7 +727,7 @@ function hideNotification() {
   el.classList.remove('visible');
 }
 
-// ── GitHub tab navigation (reuses active tab) ──
+// ── GitHub tab navigation ──
 
 async function navigateGitHubTab(url: string) {
   console.log(`[navigate] ${url}`);
@@ -828,10 +736,8 @@ async function navigateGitHubTab(url: string) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
       await chrome.tabs.update(tab.id, { url });
-      console.log(`[navigate] tab ${tab.id} updated to ${url}`);
     }
-  } catch (e) {
-    console.log(`[navigate] chrome.tabs not available, falling back to window.open`);
+  } catch {
     window.open(url, '_blank');
   }
 }
@@ -862,7 +768,6 @@ async function loadMainRepoConfig() {
         const [owner, repo] = result.mainRepo.split('/');
         if (owner && repo) {
           mainRepoConfig = { owner, repo, branch: result.mainBranch || 'main' };
-          console.log(`[auth] main repo: ${owner}/${repo} branch=${mainRepoConfig.branch}`);
         }
       }
       resolve();

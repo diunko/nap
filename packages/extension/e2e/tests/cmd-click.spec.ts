@@ -11,6 +11,12 @@ test('Cmd+click on file:line link navigates github tab', async ({ context, exten
 
   await expect(panel.locator('.monaco-editor')).toHaveCount(1, { timeout: 10_000 });
 
+  // Wait for side-panel.ts to finish init (test hooks set at the end of main())
+  await expect(async () => {
+    const ready = await panel.evaluate(() => typeof window.__setMainRepoConfig === 'function');
+    expect(ready).toBe(true);
+  }).toPass({ timeout: 5_000 });
+
   await panel.evaluate(() => {
     window.__setMainRepoConfig({ owner: 'diunko', repo: 'nap-test-main', branch: 'main' });
   });

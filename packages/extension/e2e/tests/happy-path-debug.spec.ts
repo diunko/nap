@@ -29,8 +29,12 @@ test('test-1: Monaco boots in real panel', async ({ context, extensionId }) => {
   await expect(panel.locator('.monaco-editor')).toHaveCount(1, { timeout: 10_000 });
   console.log('[test-1] .monaco-editor in DOM');
 
-  // Switch to editor tab
-  await panel.click('.tab[data-tab="editor"]');
+  // Open a file to create an editor tab (card system: tabs appear when files open)
+  await panel.evaluate(async () => {
+    await window.__lfs.promises.writeFile('/home/user/boot-test.md', '# Boot test\n', 'utf8');
+    await window.__openFile('/home/user/boot-test.md');
+  });
+  await expect(panel.locator('.tab[data-tab="editor"]')).toBeVisible({ timeout: 3_000 });
   await expect(panel.locator('.monaco-editor')).toBeVisible({ timeout: 3_000 });
   console.log('[test-1] PASSED: Monaco visible');
 });
@@ -182,6 +186,20 @@ test('test-7: theme CSS vars in real panel', async ({ context, extensionId }) =>
     getComputedStyle(document.documentElement).getPropertyValue('--nap-bg').trim()
   );
   expect(bg).toBe('#f0f4f8');
+
+  // Terminal dark theme: verify terminal surface background is #1e1e1e (TA gap S1/S4)
+  const termBg = await panel.evaluate(() =>
+    getComputedStyle(document.getElementById('terminal-surface')!).backgroundColor
+  );
+  // rgb(30, 30, 30) = #1e1e1e
+  expect(termBg).toBe('rgb(30, 30, 30)');
+  console.log('[test-7] terminal dark bg verified');
+
+  // Also verify --term-bg CSS variable is set correctly
+  const termBgVar = await panel.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--term-bg').trim()
+  );
+  expect(termBgVar).toBe('#1e1e1e');
   console.log('[test-7] PASSED');
 });
 

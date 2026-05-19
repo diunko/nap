@@ -128,6 +128,12 @@ test('T5.4: file:line link navigates github tab', async ({ context, extensionId 
 
   await expect(panel.locator('.monaco-editor')).toHaveCount(1, { timeout: 10_000 });
 
+  // Wait for side-panel.ts to finish init (test hooks set at end of main())
+  await expect(async () => {
+    const ready = await panel.evaluate(() => typeof window.__setMainRepoConfig === 'function');
+    expect(ready).toBe(true);
+  }).toPass({ timeout: 5_000 });
+
   // Set main repo config
   await panel.evaluate(() => {
     window.__setMainRepoConfig({ owner: 'diunko', repo: 'nap-test-main', branch: 'main' });
@@ -182,7 +188,7 @@ test('L5: panel survives main tab navigation', async ({ context, extensionId }) 
   console.log('[L5] editor loaded before navigation');
 
   const navBefore = await panel.locator('#nav-tree').textContent();
-  expect(navBefore).toContain('napkins');
+  expect(navBefore).toContain('0100-feature');
   console.log('[L5] nav tree populated before navigation');
 
   // Navigate github tab to different pages
@@ -202,10 +208,94 @@ test('L5: panel survives main tab navigation', async ({ context, extensionId }) 
   console.log('[L5] editor content preserved');
 
   const navAfter = await panel.locator('#nav-tree').textContent();
-  expect(navAfter).toContain('napkins');
+  expect(navAfter).toContain('0100-feature');
   console.log('[L5] nav tree preserved');
 
   console.log('[L5] PASSED: panel state survives main tab navigation');
+});
+
+// ── S4: ephemeral/permanent tab behavior ──
+
+test('S4: ephemeral tab reuses slot, edit pins to permanent, new ephemeral appears', async ({ context, extensionId }) => {
+  const ghPage = await openGitHub(context);
+  const panel = await openSidePanel(context, ghPage, extensionId);
+  panel.on('console', msg => console.log(`[br:${msg.type()}] ${msg.text()}`));
+
+  await expect(panel.locator('.wterm')).toContainText('$', { timeout: 10_000 });
+  await expect(panel.locator('.monaco-editor')).toHaveCount(1, { timeout: 10_000 });
+
+  // Create three files in LFS
+  await panel.evaluate(async () => {
+    await window.__lfs.promises.writeFile('/home/user/s4-a.md', '# File A\n', 'utf8');
+    await window.__lfs.promises.writeFile('/home/user/s4-b.md', '# File B\n', 'utf8');
+    await window.__lfs.promises.writeFile('/home/user/s4-c.md', '# File C\n', 'utf8');
+  });
+
+  // Step 1: open file A — should create ephemeral tab (italic)
+  await panel.evaluate(() => window.__openFile('/home/user/s4-a.md'));
+  await panel.waitForTimeout(200);
+
+  let editorTabs = panel.locator('.tab[data-tab="editor"]');
+  await expect(editorTabs).toHaveCount(1, { timeout: 2_000 });
+  const tabA = editorTabs.first();
+  await expect(tabA).toHaveClass(/ephemeral/);
+  await expect(tabA.locator('.tab-label')).toHaveCSS('font-style', 'italic');
+  console.log('[S4] file A opened in ephemeral tab (italic)');
+
+  // Step 2: open file B — ephemeral slot reused (still one editor tab)
+  await panel.evaluate(() => window.__openFile('/home/user/s4-b.md'));
+  await panel.waitForTimeout(200);
+
+  editorTabs = panel.locator('.tab[data-tab="editor"]');
+  await expect(editorTabs).toHaveCount(1, { timeout: 2_000 });
+  const tabB = editorTabs.first();
+  await expect(tabB).toHaveClass(/ephemeral/);
+  await expect(tabB.locator('.tab-label')).toHaveText('s4-b.md');
+  console.log('[S4] file B reused ephemeral slot');
+
+  // Step 3: edit the file — tab becomes permanent (non-italic)
+  await panel.evaluate(() => {
+    const m = window.__editor.getModel()!;
+    const lc = m.getLineCount();
+    m.applyEdits([{
+      range: { startLineNumber: lc, startColumn: m.getLineMaxColumn(lc), endLineNumber: lc, endColumn: m.getLineMaxColumn(lc) },
+      text: '\n// pinned by edit',
+    }]);
+  });
+  await panel.waitForTimeout(200);
+
+  editorTabs = panel.locator('.tab[data-tab="editor"]');
+  await expect(editorTabs).toHaveCount(1, { timeout: 2_000 });
+  const pinnedTab = editorTabs.first();
+  // Should NOT have ephemeral class after edit
+  await expect(pinnedTab).not.toHaveClass(/ephemeral/);
+  await expect(pinnedTab.locator('.tab-label')).toHaveCSS('font-style', 'normal');
+  console.log('[S4] edit pinned tab to permanent (non-italic)');
+
+  // Step 4: open file C — new ephemeral tab appears, permanent B stays
+  await panel.evaluate(() => window.__openFile('/home/user/s4-c.md'));
+  await panel.waitForTimeout(200);
+
+  editorTabs = panel.locator('.tab[data-tab="editor"]');
+  await expect(editorTabs).toHaveCount(2, { timeout: 2_000 });
+
+  // Find permanent tab (file B) and ephemeral tab (file C)
+  const tabLabels = await editorTabs.evaluateAll(tabs =>
+    tabs.map(t => ({
+      label: t.querySelector('.tab-label')?.textContent ?? '',
+      ephemeral: t.classList.contains('ephemeral'),
+    }))
+  );
+  console.log(`[S4] tabs: ${JSON.stringify(tabLabels)}`);
+
+  const permanentB = tabLabels.find(t => t.label === 's4-b.md');
+  const ephemeralC = tabLabels.find(t => t.label === 's4-c.md');
+  expect(permanentB).toBeTruthy();
+  expect(permanentB!.ephemeral).toBe(false);
+  expect(ephemeralC).toBeTruthy();
+  expect(ephemeralC!.ephemeral).toBe(true);
+
+  console.log('[S4] PASSED: ephemeral/permanent tab lifecycle works correctly');
 });
 
 // ── L4: code links reuse tab (no new pages) ──
@@ -216,6 +306,12 @@ test('L4: code links reuse active tab, no new pages created', async ({ context, 
   panel.on('console', msg => console.log(`[br:${msg.type()}] ${msg.text()}`));
 
   await expect(panel.locator('.monaco-editor')).toHaveCount(1, { timeout: 10_000 });
+
+  // Wait for side-panel.ts to finish init (test hooks set at end of main())
+  await expect(async () => {
+    const ready = await panel.evaluate(() => typeof window.__setMainRepoConfig === 'function');
+    expect(ready).toBe(true);
+  }).toPass({ timeout: 5_000 });
 
   // Set main repo config
   await panel.evaluate(() => {

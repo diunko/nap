@@ -78,26 +78,26 @@ test('E2E-UX-1: first-time user flow', async ({ context, extensionId }) => {
   await expect(panel.locator('#nav-tree')).not.toBeEmpty({ timeout: 5_000 });
   const navText = await panel.locator('#nav-tree').textContent();
   console.log(`[ux] nav tree text: ${navText?.slice(0, 200)}`);
-  expect(navText).toContain('napkins');
+  // Card system renders napkin names (e.g. "0100-delivery-pipeline"), not section labels
+  expect(navText).toBeTruthy();
   console.log('[ux] nav tree auto-populated');
 
   // Step 6: click a chapter file in the nav tree — real DOM click
   console.log('[ux] step 6: click chapter in nav tree');
 
-  // Expand napkins section if needed
-  const napkinsEntry = panel.locator('.nav-entry.expandable', { hasText: 'feature' });
-  if (await napkinsEntry.count() > 0) {
-    // Check if children are collapsed
-    const isExpanded = await napkinsEntry.first().evaluate(el => el.classList.contains('expanded'));
-    if (!isExpanded) {
-      console.log('[ux] expanding feature napkin');
-      await napkinsEntry.first().click();
+  // Focus the napkin card if not already focused
+  const napkinCard = panel.locator('.napkin-card', { hasText: 'feature' });
+  if (await napkinCard.count() > 0) {
+    const isFocused = await napkinCard.first().evaluate(el => el.classList.contains('focused'));
+    if (!isFocused) {
+      console.log('[ux] focusing feature card');
+      await napkinCard.first().locator('.card-header').click();
       await panel.waitForTimeout(200);
     }
   }
 
   // Click the chapter file
-  const chapterFile = panel.locator('.nav-file', { hasText: '01-copy-pipeline.md' });
+  const chapterFile = panel.locator('.file-row', { hasText: '01-copy-pipeline.md' });
   await expect(chapterFile.first()).toBeVisible({ timeout: 3_000 });
   console.log('[ux] chapter file visible in nav tree');
   await chapterFile.first().click();

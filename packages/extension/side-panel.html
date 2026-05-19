@@ -1,312 +1,559 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      height: 100%;
-      background: var(--nap-bg, #f0f4f8);
-      color: var(--nap-text, #2e3440);
-      font-family: 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', monospace;
-      font-size: 13px;
-      overflow: hidden;
-    }
+<meta charset="UTF-8" />
+<style>
+/* ── Reset ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-    /* ── Layout ── */
-    #app {
-      display: flex;
-      height: 100%;
-    }
-    #nav {
-      width: 280px;
-      min-width: 180px;
-      border-right: 1px solid var(--nap-border, #c4cad0);
-      overflow-y: auto;
-      padding: 8px 0;
-      background: var(--nap-bg-secondary, #e6eaee);
-    }
-    #main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
+/* ── Scrollbar (from app) ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c4cad0; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a0b0; }
+* { scrollbar-width: thin; scrollbar-color: #c4cad0 transparent; }
 
-    /* ── Resize handle ── */
-    #resize-handle {
-      width: 4px;
-      cursor: col-resize;
-      background: transparent;
-      flex-shrink: 0;
-    }
-    #resize-handle:hover { background: var(--nap-accent, #2563eb); opacity: 0.3; }
+/* ── Theme: lightBlue from themes.ts ── */
+:root {
+  --nap-bg: #f0f4f8;
+  --nap-bg-secondary: #e6eaee;
+  --nap-bg-tertiary: #dce0e4;
+  --nap-bg-hover: #e1e5e9;
+  --nap-border: #c4cad0;
+  --nap-text: #2e3440;
+  --nap-text-secondary: #4c566a;
+  --nap-text-muted: #6d7a8a;
+  --nap-text-dim: #94a0b0;
+  --nap-accent: #2563eb;
+  --nap-link: #1e50c0;
 
-    /* ── Tab bar ── */
-    #tab-bar {
-      display: flex;
-      border-bottom: 1px solid var(--nap-border, #c4cad0);
-      background: var(--nap-bg-secondary, #e6eaee);
-      height: 32px;
-      flex-shrink: 0;
-    }
-    .tab {
-      padding: 6px 16px;
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      color: var(--nap-text-muted, #6d7a8a);
-      font-size: 12px;
-      user-select: none;
-    }
-    .tab:hover { color: var(--nap-text, #2e3440); }
-    .tab.active {
-      color: var(--nap-text, #2e3440);
-      border-bottom-color: var(--nap-accent, #2563eb);
-    }
+  /* tokenizer colors from themes.ts lightBlue */
+  --tok-heading: #1a1a2e;
+  --tok-bullet-marker: #7a8a9a;
+  --tok-bold-marker: #7a8a9a;
+  --tok-inline-code: #a0522d;
+  --tok-inline-code-bg: #e0e8f0;
+  --tok-comment: #16a34a;
+  --tok-source: #2e3440;
 
-    /* ── Content surfaces ── */
-    #content {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-    }
-    #editor-surface, #terminal-surface {
-      position: absolute;
-      inset: 0;
-    }
-    #editor-surface.hidden, #terminal-surface.hidden {
-      visibility: hidden;
-      pointer-events: none;
-    }
+  /* role colors from role-palette.ts (light) */
+  --role-a: #2563eb;
+  --role-du: #16a34a;
+  --role-fs: #16a34a;
+  --role-ta: #d97706;
+  --role-te: #6b7280;
 
-    /* ── Editor ── */
-    #editor-container {
-      width: 100%;
-      height: 100%;
-    }
+  /* dot colors from dot-style.ts */
+  --dot-test-arch: #f59e0b;
+  --dot-fs-eng: #22c55e;
+  --dot-test-eng: #6b7280;
+  --dot-architect: #3b82f6;
+  --dot-guardian: #a855f7;
 
-    /* ── Terminal (wterm CSS from bash-poc) ── */
-    #terminal-container {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
-    .wterm {
-      --term-fg: #2e3440;
-      --term-bg: #f0f4f8;
-      --term-cursor: #4c566a;
-      --term-color-0: #e6eaee;
-      --term-color-1: #dc2626;
-      --term-color-2: #16a34a;
-      --term-color-3: #d97706;
-      --term-color-4: #2563eb;
-      --term-color-5: #9333ea;
-      --term-color-6: #0891b2;
-      --term-color-7: #4c566a;
-      --term-color-8: #6d7a8a;
-      --term-color-9: #dc2626;
-      --term-color-10: #16a34a;
-      --term-color-11: #d97706;
-      --term-color-12: #2563eb;
-      --term-color-13: #9333ea;
-      --term-color-14: #0891b2;
-      --term-color-15: #2e3440;
-      --term-font-family: 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', monospace;
-      --term-font-size: 14px;
-      --term-line-height: 1.2;
-      --term-row-height: 17px;
+  /* phase colors from Sidebar.tsx */
+  --phase-doing: #22c55e;
+  --phase-backlog: #525252;
 
-      position: relative;
-      background: var(--term-bg);
-      color: var(--term-fg);
-      font-family: var(--term-font-family);
-      font-size: var(--term-font-size);
-      line-height: var(--term-line-height);
-      padding: 12px;
-      outline: none;
-      overflow: hidden;
-      height: 100%;
-    }
-    .wterm:focus, .wterm:focus-visible { outline: none; }
-    .term-grid { display: block; white-space: pre; contain: layout paint style; }
-    .term-row { display: block; height: var(--term-row-height); line-height: var(--term-row-height); contain: layout style; }
-    .term-row > span { display: inline-block; height: var(--term-row-height); vertical-align: top; }
-    .term-block { width: 1ch; overflow: hidden; }
-    .term-cursor { outline: 1px solid var(--term-cursor); outline-offset: -1px; }
-    .wterm.focused .term-cursor { background: var(--term-cursor); color: var(--term-bg); outline: none; }
-    .wterm.focused.cursor-blink .term-cursor { animation: cursor-blink 1s step-end infinite; }
-    @keyframes cursor-blink {
-      0%, 100% { background: var(--term-cursor); color: var(--term-bg); }
-      50% { background: transparent; color: inherit; }
-    }
-    .wterm.has-scrollback { overflow-y: auto; }
-    .wterm ::selection { background: rgba(37, 99, 235, 0.2); }
+  /* terminal dark from bash-poc */
+  --term-bg: #1e1e1e;
+  --term-fg: #e5e5e5;
+  --term-prompt: #22c55e;
+  --term-dim: #cccccc;
+}
 
-    /* ── Nav tree ── */
-    .nav-section {
-      padding: 4px 12px;
-    }
-    .nav-section-header {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--nap-text-muted, #6d7a8a);
-      padding: 4px 0;
-    }
-    .nav-entry {
-      padding: 2px 0 2px 8px;
-      cursor: pointer;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      font-size: 12px;
-      border-radius: 3px;
-    }
-    .nav-entry:hover { background: var(--nap-bg-hover, #e1e5e9); }
-    .nav-entry.expandable::before {
-      content: '\25B6';
-      font-size: 8px;
-      margin-right: 4px;
-      display: inline-block;
-      transition: transform 0.1s;
-    }
-    .nav-entry.expandable.expanded::before {
-      transform: rotate(90deg);
-    }
-    .nav-entry .status {
-      font-size: 10px;
-      color: var(--nap-text-dim, #94a0b0);
-      margin-left: 6px;
-    }
-    .nav-children {
-      padding-left: 12px;
-    }
-    .nav-children.collapsed { display: none; }
-    .nav-file {
-      padding: 1px 0 1px 8px;
-      cursor: pointer;
-      font-size: 12px;
-      color: var(--nap-text-secondary, #4c566a);
-      border-radius: 3px;
-    }
-    .nav-file:hover { background: var(--nap-bg-hover, #e1e5e9); }
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--nap-text);
+  background: var(--nap-bg);
+}
 
-    #nav-empty {
-      padding: 16px 12px;
-      color: var(--nap-text-dim, #94a0b0);
-      font-size: 11px;
-    }
+/* ── Shell: editor(left) | resize | nav(right) ── */
+#app {
+  display: flex;
+  height: 100%;
+}
 
-    /* ── Settings gear ── */
-    #settings-btn {
-      margin-left: auto;
-      padding: 6px 10px;
-      cursor: pointer;
-      color: var(--nap-text-muted, #6d7a8a);
-      font-size: 14px;
-      user-select: none;
-      line-height: 20px;
-    }
-    #settings-btn:hover { color: var(--nap-text, #2e3440); }
+/* ── Main content area (left) ── */
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
 
-    /* ── Settings overlay ── */
-    #settings-overlay {
-      position: absolute;
-      inset: 0;
-      background: var(--nap-bg, #f0f4f8);
-      z-index: 100;
-      padding: 16px;
-      overflow-y: auto;
-      display: none;
-    }
-    #settings-overlay.visible { display: block; }
-    #settings-overlay h3 {
-      font-size: 13px;
-      margin-bottom: 12px;
-    }
-    #settings-overlay label {
-      display: block;
-      font-size: 11px;
-      color: var(--nap-text-muted, #6d7a8a);
-      margin-bottom: 2px;
-      margin-top: 8px;
-    }
-    #settings-overlay input {
-      width: 100%;
-      padding: 4px 6px;
-      border: 1px solid var(--nap-border, #c4cad0);
-      border-radius: 3px;
-      font-family: monospace;
-      font-size: 12px;
-      background: var(--nap-bg, #f0f4f8);
-      color: var(--nap-text, #2e3440);
-    }
-    .settings-actions {
-      margin-top: 12px;
-      display: flex;
-      gap: 8px;
-    }
-    .settings-actions button {
-      padding: 4px 12px;
-      border: 1px solid var(--nap-border, #c4cad0);
-      border-radius: 3px;
-      background: var(--nap-bg-secondary, #e6eaee);
-      cursor: pointer;
-      font-size: 12px;
-      color: var(--nap-text, #2e3440);
-    }
-    .settings-actions button:hover { background: var(--nap-bg-tertiary, #dce0e4); }
+/* ── Header bar ── */
+#header {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 32px;
+  background: var(--nap-bg-secondary);
+  border-bottom: 1px solid var(--nap-border);
+  flex-shrink: 0;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--nap-text-muted);
+}
+#header .napkin-name {
+  font-weight: 600;
+  color: var(--nap-text);
+}
+#header .spacer { flex: 1; }
+#header .hdr-btn {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  user-select: none;
+}
+#header .hdr-btn:hover { background: var(--nap-bg-hover); color: var(--nap-text); }
+#header .fetch-btn {
+  border: 1px solid var(--nap-border);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+#header .fetch-btn:hover { background: var(--nap-bg-tertiary); }
 
-    /* ── Notification bar ── */
-    #notification {
-      display: none;
-      padding: 6px 12px;
-      background: #fef3c7;
-      color: #92400e;
-      font-size: 11px;
-      border-bottom: 1px solid #fcd34d;
-    }
-    #notification.visible { display: block; }
-    #notification a { color: #92400e; cursor: pointer; text-decoration: underline; }
-  </style>
+/* ── Tab bar — from TabBar.tsx ── */
+#tab-bar {
+  display: flex;
+  background: var(--nap-bg-secondary);
+  border-bottom: 1px solid var(--nap-border);
+  flex-shrink: 0;
+  overflow: hidden;
+  min-height: 32px;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 32px;
+  cursor: pointer;
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  color: var(--nap-text-muted);
+  background: transparent;
+  border-right: 1px solid var(--nap-border);
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 180px;
+  user-select: none;
+}
+.tab:hover { color: var(--nap-text-secondary); }
+.tab.active {
+  color: var(--nap-text);
+  background: var(--nap-bg);
+}
+.tab.ephemeral .tab-label { font-style: italic; }
+.tab .tab-close {
+  opacity: 0;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 3px;
+  color: var(--nap-text-muted);
+  cursor: pointer;
+}
+.tab:hover .tab-close { opacity: 0.5; }
+.tab .tab-close:hover { opacity: 1; }
+
+/* ── Content surfaces ── */
+#content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#editor-surface, #terminal-surface {
+  position: absolute;
+  inset: 0;
+}
+#editor-surface.hidden, #terminal-surface.hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── Editor ── */
+#editor-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Terminal (wterm CSS — dark theme from bash-poc) ── */
+#terminal-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.wterm {
+  --term-fg: #e5e5e5;
+  --term-bg: #1e1e1e;
+  --term-cursor: #aeafad;
+  --term-color-0: #252526;
+  --term-color-1: #f44747;
+  --term-color-2: #22c55e;
+  --term-color-3: #d7ba7d;
+  --term-color-4: #569cd6;
+  --term-color-5: #c586c0;
+  --term-color-6: #4ec9b0;
+  --term-color-7: #cccccc;
+  --term-color-8: #6b7280;
+  --term-color-9: #f44747;
+  --term-color-10: #22c55e;
+  --term-color-11: #dcdcaa;
+  --term-color-12: #9cdcfe;
+  --term-color-13: #c586c0;
+  --term-color-14: #4ec9b0;
+  --term-color-15: #e5e5e5;
+  --term-font-family: 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', monospace;
+  --term-font-size: 14px;
+  --term-line-height: 1.2;
+  --term-row-height: 17px;
+
+  position: relative;
+  background: var(--term-bg);
+  color: var(--term-fg);
+  font-family: var(--term-font-family);
+  font-size: var(--term-font-size);
+  line-height: var(--term-line-height);
+  padding: 12px;
+  outline: none;
+  overflow: hidden;
+  height: 100%;
+}
+.wterm:focus, .wterm:focus-visible { outline: none; }
+.term-grid { display: block; white-space: pre; contain: layout paint style; }
+.term-row { display: block; height: var(--term-row-height); line-height: var(--term-row-height); contain: layout style; }
+.term-row > span { display: inline-block; height: var(--term-row-height); vertical-align: top; }
+.term-block { width: 1ch; overflow: hidden; }
+.term-cursor { outline: 1px solid var(--term-cursor); outline-offset: -1px; }
+.wterm.focused .term-cursor { background: var(--term-cursor); color: var(--term-bg); outline: none; }
+.wterm.focused.cursor-blink .term-cursor { animation: cursor-blink 1s step-end infinite; }
+@keyframes cursor-blink {
+  0%, 100% { background: var(--term-cursor); color: var(--term-bg); }
+  50% { background: transparent; color: inherit; }
+}
+.wterm.has-scrollback { overflow-y: auto; }
+.wterm ::selection { background: rgba(86, 156, 214, 0.3); }
+
+/* Terminal surface dark background */
+#terminal-surface {
+  background: var(--term-bg);
+}
+
+/* ── Nav sidebar (right) — from Sidebar.tsx ── */
+#nav {
+  width: 240px;
+  min-width: 180px;
+  height: 100%;
+  background: var(--nap-bg-secondary);
+  border-left: 1px solid var(--nap-border);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--nap-text-secondary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+#nav.collapsed { display: none; }
+
+/* Nav drag handle — left edge for right-side nav */
+#nav-drag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+#nav-drag:hover { background: var(--nap-text-muted); }
+
+/* ── Nav tree content ── */
+#nav-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+/* Napkin card — from Sidebar.tsx:264-273 */
+.napkin-card {
+  padding: 0 12px 0 9px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.15s;
+}
+.napkin-card:hover { background: var(--nap-bg-hover); }
+.napkin-card.focused {
+  background: var(--nap-bg-tertiary);
+  border-left-color: var(--nap-accent);
+}
+.napkin-card.focused:hover { background: var(--nap-bg-tertiary); }
+
+/* Card header — from Sidebar.tsx:282-312 */
+.card-header {
+  display: flex;
+  align-items: center;
+  padding: 3px 0;
+  gap: 6px;
+  user-select: none;
+}
+.card-header .bullet { color: var(--nap-text-muted); flex-shrink: 0; }
+.card-header .name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-header .dots { display: flex; gap: 3px; flex-shrink: 0; margin: 0 2px; }
+.card-header .phase { font-size: 12px; flex-shrink: 0; }
+
+/* Card body */
+.card-body { padding: 0 0 4px 0; }
+
+/* File row — from Sidebar.tsx:91-172 */
+.file-row {
+  padding: 1px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.file-row:hover { background: rgba(0,0,0,0.03); }
+.file-row.active { background: rgba(0,0,0,0.06); }
+.file-row .bullet {
+  color: var(--nap-text-muted);
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+  font-size: 12px;
+}
+.file-row .fname {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-row .fname.is-link { color: var(--nap-link); }
+.file-row .fname.is-main { color: var(--nap-text); font-weight: 600; }
+
+/* Dir row */
+.dir-row {
+  padding: 1px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 3px;
+}
+.dir-row .bullet {
+  color: var(--nap-text-muted);
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+  font-size: 12px;
+}
+.dir-row .dname { color: var(--nap-text-secondary); }
+
+/* Agent row — from Sidebar.tsx:330-366 */
+.agent-row {
+  padding: 1px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.agent-row:hover { background: rgba(0,0,0,0.03); }
+.agent-row .dot-wrap {
+  flex-shrink: 0;
+  width: 10px;
+  display: flex;
+  justify-content: center;
+}
+.agent-row .agent-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--nap-text-secondary);
+}
+.agent-row .agent-status { font-size: 12px; flex-shrink: 0; }
+
+/* Dot — from dot-style.ts, Sidebar.tsx:36-75 */
+.dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  box-sizing: content-box;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.dot.filled { border: 2px solid transparent; }
+.dot.hollow { background: transparent; }
+.dot.dashed { background: transparent; border-style: dashed; }
+.dot.dashed svg { display: block; }
+
+/* Separator */
+.nav-separator {
+  height: 1px;
+  background: var(--nap-border);
+  margin: 6px 12px;
+}
+
+/* Show all toggle */
+.show-all-toggle {
+  padding: 4px 12px 4px 21px;
+  color: var(--nap-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.show-all-toggle:hover { color: var(--nap-text-muted); }
+
+/* Terminal entry (italic, muted) */
+.terminal-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.terminal-entry:hover { background: rgba(0,0,0,0.03); }
+.terminal-entry .bullet { color: var(--nap-text-muted); flex-shrink: 0; font-size: 12px; }
+.terminal-entry .label { color: var(--nap-text-muted); font-style: italic; font-size: 12px; }
+
+/* Nav empty message */
+#nav-empty {
+  padding: 16px 12px;
+  color: var(--nap-text-dim);
+  font-size: 11px;
+}
+
+/* ── Notification bar ── */
+#notification {
+  display: none;
+  padding: 6px 12px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  border-bottom: 1px solid #fcd34d;
+}
+#notification.visible { display: block; }
+#notification a { color: #92400e; cursor: pointer; text-decoration: underline; }
+
+/* ── Settings overlay ── */
+#settings-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--nap-bg);
+  z-index: 100;
+  padding: 16px;
+  overflow-y: auto;
+  display: none;
+}
+#settings-overlay.visible { display: block; }
+#settings-overlay h3 {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+#settings-overlay label {
+  display: block;
+  font-size: 11px;
+  color: var(--nap-text-muted);
+  margin-bottom: 2px;
+  margin-top: 8px;
+}
+#settings-overlay input {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--nap-border);
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 12px;
+  background: var(--nap-bg);
+  color: var(--nap-text);
+}
+.settings-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+.settings-actions button {
+  padding: 4px 12px;
+  border: 1px solid var(--nap-border);
+  border-radius: 3px;
+  background: var(--nap-bg-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--nap-text);
+}
+.settings-actions button:hover { background: var(--nap-bg-tertiary); }
+</style>
 </head>
 <body>
-  <div id="app">
-    <div id="nav">
-      <div id="nav-tree"></div>
-      <div id="nav-empty">Clone a .nap repo in the terminal to get started.</div>
+<div id="app">
+
+  <!-- Main content area (left) -->
+  <div id="main">
+    <!-- Header -->
+    <div id="header">
+      <span class="napkin-name" id="header-napkin-name"></span>
+      <span class="spacer"></span>
+      <span class="hdr-btn fetch-btn" id="fetch-btn">fetch latest</span>
+      <span class="hdr-btn" id="settings-btn" title="Settings">&#9881;</span>
+      <span class="hdr-btn" id="nav-toggle" title="Toggle nav">&#9776;</span>
     </div>
-    <div id="resize-handle"></div>
-    <div id="main">
-      <div id="tab-bar">
-        <div class="tab active" data-tab="terminal">Terminal</div>
-        <div class="tab" data-tab="editor">Editor</div>
-        <div id="settings-btn" title="Settings">&#9881;</div>
+
+    <!-- Tab bar -->
+    <div id="tab-bar">
+      <div class="tab" id="tab-terminal" data-tab="terminal">
+        <span class="tab-label">Terminal</span>
       </div>
-      <div id="notification"></div>
-      <div id="content">
-        <div id="settings-overlay">
-          <h3>Settings</h3>
-          <label for="main-repo-input">Main code repo (owner/repo)</label>
-          <input id="main-repo-input" type="text" placeholder="org/project" />
-          <label for="main-branch-input">Branch</label>
-          <input id="main-branch-input" type="text" placeholder="main" />
-          <label for="pat-input">GitHub PAT (optional, for private repos)</label>
-          <input id="pat-input" type="password" placeholder="ghp_..." />
-          <div class="settings-actions">
-            <button id="settings-save">Save</button>
-            <button id="settings-close">Close</button>
-          </div>
+    </div>
+
+    <div id="notification"></div>
+    <div id="content">
+      <div id="settings-overlay">
+        <h3>Settings</h3>
+        <label for="main-repo-input">Main code repo (owner/repo)</label>
+        <input id="main-repo-input" type="text" placeholder="org/project" />
+        <label for="main-branch-input">Branch</label>
+        <input id="main-branch-input" type="text" placeholder="main" />
+        <label for="pat-input">GitHub PAT (optional, for private repos)</label>
+        <input id="pat-input" type="password" placeholder="ghp_..." />
+        <div class="settings-actions">
+          <button id="settings-save">Save</button>
+          <button id="settings-close">Close</button>
         </div>
-        <div id="terminal-surface">
-          <div id="terminal-container"></div>
-        </div>
-        <div id="editor-surface" class="hidden">
-          <div id="editor-container"></div>
-        </div>
+      </div>
+      <!-- Editor surface -->
+      <div id="editor-surface" class="hidden">
+        <div id="editor-container"></div>
+      </div>
+      <!-- Terminal surface -->
+      <div id="terminal-surface">
+        <div id="terminal-container"></div>
       </div>
     </div>
   </div>
-  <script type="module" src="src/side-panel.ts"></script>
+
+  <!-- Nav sidebar (right) -->
+  <div id="nav">
+    <div id="nav-drag"></div>
+    <div id="nav-scroll">
+      <div id="nav-tree"></div>
+      <div id="nav-empty">Clone a .nap repo in the terminal to get started.</div>
+    </div>
+  </div>
+</div>
+<script type="module" src="src/side-panel.ts"></script>
 </body>
 </html>
