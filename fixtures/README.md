@@ -1,34 +1,35 @@
 # fixtures
 
-Test fixture repos for the Chrome extension. Two repos, synced to GitHub.
+Test fixture repos for the Chrome extension. Two repos + one PR, synced to GitHub.
 
 ## Structure
 
 ```
 fixtures/
-  main/     → github.com/diunko/nap-test-main  (the "code repo")
-  .nap/     → github.com/diunko/nap-test-nap   (the ".nap repo")
-    nepics/
-      01-v1/
-        10-docs/
-        15-feedback/
-        20-architects/
-        30-napkins/
+  main/       → github.com/diunko/nap-test-main (main branch)
+  main-pr/    → github.com/diunko/nap-test-main (feature/delivery-v2 branch + PR)
+  .nap/       → github.com/diunko/nap-test-nap
 ```
 
-**main/** is a fictional codebase (space-pizza delivery API). The extension never clones this — it only links to it via GitHub blob URLs.
+**main/** is the code repo at main branch. The extension links to it via GitHub URLs.
 
-**.nap/** is the guide repo with mini-books, napkins, agents. The extension clones this into IDB via the terminal. Content lives under `nepics/01-v1/` matching the production directory layout.
+**main-pr/** contains only the files that differ from main/. The sync script creates a branch `feature/delivery-v2` with these changes and opens a PR. This tests diff-aware link routing — links to changed files navigate to the PR diff view, links to unchanged files navigate to blob view.
+
+**.nap/** is the guide repo. The extension clones this into IDB. Content lives under `nepics/01-v1/`.
 
 ## Syncing to GitHub
-
-Edit content here (source of truth), then push to the GitHub repos:
 
 ```bash
 ./fixtures/sync.sh
 ```
 
-The script hard-resets both GitHub repos to match the fixture content. Destructive — any content on GitHub that's not in fixtures/ is lost.
+The script:
+1. Hard-resets `main` branch of nap-test-main to `fixtures/main/`
+2. Creates/updates `feature/delivery-v2` branch from `fixtures/main-pr/`
+3. Creates the PR if it doesn't exist (requires `gh` CLI with auth)
+4. Hard-resets nap-test-nap to `fixtures/.nap/`
+
+Destructive — any content on GitHub not in fixtures/ is lost.
 
 ## Fixture content
 
@@ -39,10 +40,18 @@ The script hard-resets both GitHub repos to match the fixture content. Destructi
 - `modules/validation/crust-validator.ts` — rejects bad crusts
 - `modules/tracking/delivery-tracker.ts` — tracks orders through warp
 
-**nap repo:**
-- `nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/` — 5-chapter guide to the delivery pipeline
-- 3 agents (test-arch, fs-eng, test-eng) with prompts and responses
-- `nepics/01-v1/20-architects/001-architect/` with scratch notes
-- `nepics/01-v1/30-napkins/0200-crust-validation/` — backlog napkin
+**PR branch changes (delivery-v2):**
+- `modules/delivery/order-router.ts` — adds express priority gates (dedicated lanes for express/warp-rush)
+- `modules/queue/warp-queue.ts` — adds capacity warning threshold (80% alert)
+- Other files unchanged — tests blob URL fallback for context links
 
-The mini-book chapters have `[file.ts:line](/path#Lline)` links pointing at the main repo. These links resolve to `github.com/diunko/nap-test-main/blob/main/...` in the extension.
+**nap repo:**
+- `nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/` — 5-chapter guide
+- Mini-book links to order-router.ts (changed in PR) AND crust-validator.ts (not changed)
+- 3 agents, architect with scratch, 2 napkins with status labels
+
+## Testing link routing
+
+The mini-book chapter 01 links to:
+- `order-router.ts:54` — this line IS in the PR diff → should navigate to `pull/{n}/files#diff-{hash}R54`
+- `crust-validator.ts:40` — this file is NOT in the PR → should navigate to `blob/{branch}/...#L40`

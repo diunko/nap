@@ -115,11 +115,16 @@ Port `parseGitDiff` from `packages/v3/src/main/git-diff-parser.ts` (49 lines). A
 
 ### Persistence
 
-`prDiffRanges` is included in Zustand `partialize` — persisted to IDB per session key. First visit: fetch + persist. Return visit: hydrate from IDB, instant. Fetch latest: re-fetch + update.
+`prDiffRanges` is included in Zustand `partialize` — persisted to IDB per session key.
+  // what a funny name, why partialize? idk, maybe diff ranges? 
+First visit: fetch + persist. Return visit: hydrate from IDB, instant. Fetch latest: re-fetch + update.
 
 ## Fixture PR
 
 Create a PR in `diunko/nap-test-main`:
+* // shoulod we have also a script like sync
+  * // or should we extend the sync
+  * // so that the PR is seeded from local data easily
 - Branch: `feature/delivery-v2` off main
 - Modify `modules/delivery/order-router.ts` — add express priority handling (~10 lines around line 54)
 - Modify `modules/queue/warp-queue.ts` — add capacity warning (~5 lines)
