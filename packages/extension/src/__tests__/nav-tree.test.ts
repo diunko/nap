@@ -82,7 +82,12 @@ describe('parseNavTree', () => {
       { name: '.napkin.nap.json', isDirectory: false },
       { name: '0100-feature.nap.md', isDirectory: false },
       { name: '0100-feature.spec.md', isDirectory: false },
+      { name: 'mini-book', isDirectory: true },
       { name: 'agents', isDirectory: true },
+    ],
+    '/root/30-napkins/0100-feature/mini-book': [
+      { name: '01-chapter.md', isDirectory: false },
+      { name: '02-chapter.md', isDirectory: false },
     ],
     '/root/30-napkins/0100-feature/agents': [
       { name: '001-test-arch-feature', isDirectory: true },
@@ -179,5 +184,19 @@ describe('parseNavTree', () => {
 
     expect(napkins.children![0].status).toBeUndefined();
     console.log('[T4.1] missing status handled');
+  });
+
+  it('includes non-agents subdirectories (mini-book/)', async () => {
+    const tree = await parseNavTree('/root', readDir, readJson);
+    const napkins = tree.find(n => n.displayName === 'napkins')!;
+    const feature = napkins.children![0];
+
+    const miniBook = feature.children?.find(c => c.name === 'mini-book');
+    expect(miniBook).toBeDefined();
+    expect(miniBook!.type).toBe('section');
+    expect(miniBook!.children).toHaveLength(2);
+    expect(miniBook!.children![0].name).toBe('01-chapter.md');
+    expect(miniBook!.children![1].name).toBe('02-chapter.md');
+    console.log('[T4.1] mini-book subdirectory parsed');
   });
 });

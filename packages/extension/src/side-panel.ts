@@ -29,6 +29,8 @@ import { routeLink, type MainRepoConfig } from './link-routing';
 import { parseNavTree, type NavNode, type DirEntry } from './nav-tree';
 import { NavRenderer } from './nav-renderer';
 import { TabManager, type Tab } from './tab-manager';
+import { roleDecoClass, generatePaletteCss } from './role-palette';
+import { detectLinks } from './content-link-provider';
 
 // ── Monaco worker configuration for extension CSP ──
 (self as any).MonacoEnvironment = {
@@ -51,6 +53,7 @@ let mainRepoConfig: MainRepoConfig | undefined;
 let tabManager: TabManager;
 let navRenderer: NavRenderer;
 let isLoadingFile = false;
+let roleDecorationIds: string[] = [];
 
 const AUTO_SAVE_DELAY = 1000;
 
@@ -99,16 +102,22 @@ async function main() {
     wordWrap: 'on',
     minimap: { enabled: false },
     lineNumbers: 'off',
+    quickSuggestions: false,
+    suggestOnTriggerCharacters: false,
+    tabSize: 2,
+    insertSpaces: true,
     scrollBeyondLastLine: false,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
     automaticLayout: true,
     overviewRulerLanes: 0,
+    hideCursorInOverviewRuler: true,
     renderLineHighlight: 'none',
     folding: false,
-    glyphMargin: false,
-    lineDecorationsWidth: 0,
+    glyphMargin: true,
+    lineDecorationsWidth: 8,
     lineNumbersMinChars: 0,
+    padding: { top: 12, bottom: 12 },
   });
   window.__editor = editor;
   console.log('[side-panel] Monaco editor created');
@@ -148,6 +157,9 @@ async function main() {
 
   // 5. Auto-save: editor changes → debounced LFS write + pin ephemeral tab
   editor.onDidChangeModelContent(() => {
+    // Refresh role comment decorations immediately (colors //DU:, //A:, etc.)
+    refreshRoleDecorations();
+
     if (!currentFilePath) return;
     if (isLoadingFile) return;
 
@@ -169,9 +181,12 @@ async function main() {
     }, AUTO_SAVE_DELAY);
   });
 
-  // 6. Apply theme (CSS variables on root)
+  // 6. Apply theme (CSS variables on root) + role palette CSS
   applyTheme();
-  console.log('[side-panel] theme applied');
+  const paletteStyle = document.createElement('style');
+  paletteStyle.textContent = generatePaletteCss(false); // light theme
+  document.head.appendChild(paletteStyle);
+  console.log('[side-panel] theme + role palette applied');
 
   // 7. Load auth config
   await loadMainRepoConfig();
@@ -243,6 +258,9 @@ async function main() {
   // 16. Header buttons
   setupHeader();
 
+  // 16b. Zoom (Ctrl+Shift+/-/0)
+  setupZoom();
+
   // 17. Test hooks
   window.__openFile = openFile;
   window.__refreshNavTree = refreshNavTree;
@@ -295,12 +313,43 @@ async function openFile(path: string) {
     const fileName = path.split('/').pop() ?? path;
     if (tabManager) tabManager.openEphemeral(path, fileName);
 
-    // Switch to editor
+    // Switch to editor + apply decorations
     switchToEditor();
+    refreshRoleDecorations();
     console.log(`[open-file] done: ${path}`);
   } catch (e) {
     console.error(`[open-file] failed: ${path}`, e);
   }
+}
+
+// ── Role comment decorations (port of ContentPane.tsx:277-305) ──
+
+function refreshRoleDecorations() {
+  const model = editor.getModel();
+  if (!model) return;
+
+  const decorations: monaco.editor.IModelDeltaDecoration[] = [];
+  const lineCount = model.getLineCount();
+  const roleRegex = /\/\/(\w+):/g;
+
+  for (let i = 1; i <= lineCount; i++) {
+    const line = model.getLineContent(i);
+    roleRegex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = roleRegex.exec(line)) !== null) {
+      const prefix = match[1];
+      const cls = roleDecoClass(prefix);
+      const startCol = match.index + 1;
+      const endCol = line.length + 1; // color to end of line
+      decorations.push({
+        range: new monaco.Range(i, startCol, i, endCol),
+        options: { inlineClassName: cls },
+      });
+      break; // one role comment per line
+    }
+  }
+
+  roleDecorationIds = editor.deltaDecorations(roleDecorationIds, decorations);
 }
 
 // ── Surface switching ──
@@ -534,6 +583,52 @@ function setupHeader() {
   });
 }
 
+// ── Zoom (Ctrl+Shift+/-/0) ──
+
+function setupZoom() {
+  let scale = 1.0;
+
+  // Restore persisted zoom
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    chrome.storage.sync.get(['zoomScale'], (result) => {
+      if (result.zoomScale) {
+        scale = parseFloat(result.zoomScale);
+        document.documentElement.style.zoom = String(scale);
+        const termSurface = document.getElementById('terminal-surface');
+        if (termSurface) termSurface.style.zoom = String(1 / scale);
+      }
+    });
+  }
+
+  function applyZoom(newScale: number) {
+    scale = Math.min(2.0, Math.max(0.5, newScale));
+    document.documentElement.style.zoom = String(scale);
+    // Counter-scale terminal so zoom doesn't affect it
+    const termSurface = document.getElementById('terminal-surface');
+    if (termSurface) {
+      termSurface.style.zoom = String(1 / scale);
+    }
+    editor.layout();
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+      chrome.storage.sync.set({ zoomScale: String(scale) });
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!e.ctrlKey || !e.shiftKey) return;
+    if (e.key === '=' || e.key === '+') {
+      e.preventDefault();
+      applyZoom(scale + 0.1);
+    } else if (e.key === '-' || e.key === '_') {
+      e.preventDefault();
+      applyZoom(scale - 0.1);
+    } else if (e.key === '0') {
+      e.preventDefault();
+      applyZoom(1.0);
+    }
+  });
+}
+
 // ── Link handling ──
 
 function setupLinkProvider() {
@@ -544,26 +639,11 @@ function setupLinkProvider() {
 
       for (let i = 1; i <= lineCount; i++) {
         const lineContent = model.getLineContent(i);
-
-        const mdLinkRe = /\[([^\]]+)\]\(([^)]+)\)/g;
-        let match;
-        while ((match = mdLinkRe.exec(lineContent)) !== null) {
-          const href = match[2];
-          const startCol = match.index + match[1].length + 3;
-          const endCol = startCol + href.length;
+        const detected = detectLinks(lineContent, i);
+        for (const link of detected) {
           links.push({
-            range: new monaco.Range(i, startCol, i, endCol),
-            url: href,
-          });
-        }
-
-        const urlRe = /https?:\/\/[^\s)]+/g;
-        while ((match = urlRe.exec(lineContent)) !== null) {
-          const beforeUrl = lineContent.slice(0, match.index);
-          if (beforeUrl.endsWith('](')) continue;
-          links.push({
-            range: new monaco.Range(i, match.index + 1, i, match.index + 1 + match[0].length),
-            url: match[0],
+            range: new monaco.Range(link.range.startLineNumber, link.range.startColumn, link.range.endLineNumber, link.range.endColumn),
+            url: link.href,
           });
         }
       }
@@ -612,25 +692,13 @@ function setupLinkProvider() {
 }
 
 function findLinkAtPosition(lineContent: string, column: number): string | null {
-  const mdLinkRe = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let match;
-  while ((match = mdLinkRe.exec(lineContent)) !== null) {
-    const fullStart = match.index + 1;
-    const fullEnd = fullStart + match[0].length;
-    if (column >= fullStart && column <= fullEnd) {
-      return match[2];
+  // Use detectLinks for consistent priority (markdown > URL > bare path)
+  const links = detectLinks(lineContent, 1);
+  for (const link of links) {
+    if (column >= link.range.startColumn && column < link.range.endColumn) {
+      return link.href;
     }
   }
-
-  const urlRe = /https?:\/\/[^\s)]+/g;
-  while ((match = urlRe.exec(lineContent)) !== null) {
-    const start = match.index + 1;
-    const end = start + match[0].length;
-    if (column >= start && column <= end) {
-      return match[0];
-    }
-  }
-
   return null;
 }
 

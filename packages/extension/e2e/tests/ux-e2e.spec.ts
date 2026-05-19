@@ -86,18 +86,18 @@ test('E2E-UX-1: first-time user flow', async ({ context, extensionId }) => {
   console.log('[ux] step 6: click chapter in nav tree');
 
   // Focus the napkin card if not already focused
-  const napkinCard = panel.locator('.napkin-card', { hasText: 'feature' });
+  const napkinCard = panel.locator('.napkin-card', { hasText: 'delivery-pipeline' });
   if (await napkinCard.count() > 0) {
     const isFocused = await napkinCard.first().evaluate(el => el.classList.contains('focused'));
     if (!isFocused) {
-      console.log('[ux] focusing feature card');
+      console.log('[ux] focusing delivery-pipeline card');
       await napkinCard.first().locator('.card-header').click();
       await panel.waitForTimeout(200);
     }
   }
 
   // Click the chapter file
-  const chapterFile = panel.locator('.file-row', { hasText: '01-copy-pipeline.md' });
+  const chapterFile = panel.locator('.file-row', { hasText: '01-order-routing.md' });
   await expect(chapterFile.first()).toBeVisible({ timeout: 3_000 });
   console.log('[ux] chapter file visible in nav tree');
   await chapterFile.first().click();
@@ -110,22 +110,22 @@ test('E2E-UX-1: first-time user flow', async ({ context, extensionId }) => {
 
   const content = await panel.evaluate(() => window.__editor?.getModel()?.getValue() ?? '');
   console.log(`[ux] editor content (first 200): ${content.slice(0, 200)}`);
-  expect(content).toContain('Copy Pipeline');
-  expect(content).toContain('copy_document.ts');
+  expect(content).toContain('Order');
+  expect(content).toContain('order-router.ts');
   console.log('[ux] editor shows chapter');
 
   // Step 8: Real Cmd+click on the file:line link
   console.log('[ux] step 8: Cmd+click file:line link');
-  await cmdClickLink(panel, '/modules/server/copy_document.ts#L51');
+  await cmdClickLink(panel, '/modules/delivery/order-router.ts#L54');
   console.log('[ux] Cmd+click dispatched');
 
   // Step 9: verify GitHub tab navigated
   console.log('[ux] step 9: verify github tab URL');
-  await ghPage.waitForURL(/copy_document\.ts/, { timeout: 10_000 });
+  await ghPage.waitForURL(/order-router\.ts/, { timeout: 10_000 });
   const finalUrl = ghPage.url();
   console.log(`[ux] github URL: ${finalUrl}`);
   expect(finalUrl).toContain('diunko/nap-test-main');
-  expect(finalUrl).toContain('copy_document.ts');
-  expect(finalUrl).toContain('#L51');
+  expect(finalUrl).toContain('order-router.ts');
+  expect(finalUrl).toContain('#L54');
   console.log('[ux] E2E-UX-1 PASSED');
 });

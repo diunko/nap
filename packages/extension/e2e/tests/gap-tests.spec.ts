@@ -179,16 +179,16 @@ test('L5: panel survives main tab navigation', async ({ context, extensionId }) 
     const repos = await window.__lfs.promises.readdir('/home/user');
     const napRepo = repos.find((r: string) => r.includes('nap-test-nap'));
     if (!napRepo) throw new Error('nap-test-nap not found');
-    await window.__openFile(`/home/user/${napRepo}/30-napkins/0100-feature/01-copy-pipeline.md`);
+    await window.__openFile(`/home/user/${napRepo}/nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/01-order-routing.md`);
   });
   await panel.waitForTimeout(300);
 
   const editorBefore = await panel.evaluate(() => window.__editor?.getModel()?.getValue() ?? '');
-  expect(editorBefore).toContain('Copy Pipeline');
+  expect(editorBefore).toContain('Order');
   console.log('[L5] editor loaded before navigation');
 
   const navBefore = await panel.locator('#nav-tree').textContent();
-  expect(navBefore).toContain('0100-feature');
+  expect(navBefore).toContain('0100-delivery-pipeline');
   console.log('[L5] nav tree populated before navigation');
 
   // Navigate github tab to different pages
@@ -204,11 +204,11 @@ test('L5: panel survives main tab navigation', async ({ context, extensionId }) 
 
   // Check panel state survived
   const editorAfter = await panel.evaluate(() => window.__editor?.getModel()?.getValue() ?? '');
-  expect(editorAfter).toContain('Copy Pipeline');
+  expect(editorAfter).toContain('Order');
   console.log('[L5] editor content preserved');
 
   const navAfter = await panel.locator('#nav-tree').textContent();
-  expect(navAfter).toContain('0100-feature');
+  expect(navAfter).toContain('0100-delivery-pipeline');
   console.log('[L5] nav tree preserved');
 
   console.log('[L5] PASSED: panel state survives main tab navigation');

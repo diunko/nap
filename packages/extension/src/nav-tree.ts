@@ -197,10 +197,26 @@ async function parseNapkins(path: string, readDir: ReadDir, readJson: ReadJson):
       });
     }
 
+    // Subdirectories (mini-book/, scratch/, etc.) — exclude agents/
+    const otherDirs = napkinEntries.filter(e => e.isDirectory && e.name !== 'agents' && !e.name.startsWith('.'));
+    const sortedOtherDirs = sortByPrefix(otherDirs.map(d => d.name));
+    for (const dirName of sortedOtherDirs) {
+      const dirPath = `${napkinPath}/${dirName}`;
+      const dirChildren = await parseFileDir(dirPath, readDir);
+      children.push({
+        type: 'section',
+        name: dirName,
+        displayName: dirName,
+        path: dirPath,
+        children: dirChildren,
+        expanded: false,
+      });
+    }
+
     // Agents subdirectory
     const agentsDir = napkinEntries.find(e => e.isDirectory && e.name === 'agents');
     if (agentsDir) {
-      const agentChildren = await parseAgents(`${napkinPath}/agents`, readDir);
+      const agentChildren = await parseAgents(`${napkinPath}/agents`, readDir, readJson);
       children.push({
         type: 'section',
         name: 'agents',
@@ -224,7 +240,7 @@ async function parseNapkins(path: string, readDir: ReadDir, readJson: ReadJson):
   return nodes;
 }
 
-async function parseAgents(path: string, readDir: ReadDir): Promise<NavNode[]> {
+async function parseAgents(path: string, readDir: ReadDir, readJson: ReadJson): Promise<NavNode[]> {
   const entries = await readDir(path);
   const dirs = entries.filter(e => e.isDirectory);
   const sorted = sortByPrefix(dirs.map(d => d.name));
@@ -232,6 +248,8 @@ async function parseAgents(path: string, readDir: ReadDir): Promise<NavNode[]> {
   const nodes: NavNode[] = [];
   for (const name of sorted) {
     const agentPath = `${path}/${name}`;
+    // Read agent metadata so the cache has role/status for dot rendering
+    await readJson(`${agentPath}/.agent.nap.json`);
     const children = await parseFileDir(agentPath, readDir);
     nodes.push({
       type: 'agent',

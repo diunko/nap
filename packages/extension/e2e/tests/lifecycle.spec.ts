@@ -82,7 +82,7 @@ test('L1: clone nap repo, read chapter, verify file:line link', async ({ context
   // Check nav tree has napkin cards
   const navText = await panel.locator('#nav-tree').textContent();
   console.log(`[L1] nav tree: ${navText?.slice(0, 200)}`);
-  expect(navText).toContain('0100-feature');
+  expect(navText).toContain('0100-delivery-pipeline');
   console.log('[L1] nav tree populated');
 
   // Open the chapter file directly via LFS path
@@ -93,7 +93,7 @@ test('L1: clone nap repo, read chapter, verify file:line link', async ({ context
     const napRepo = repos.find((r: string) => r.includes('nap-test-nap'));
     if (!napRepo) throw new Error('nap-test-nap not found in /home/user');
 
-    const chapterPath = `/home/user/${napRepo}/30-napkins/0100-feature/01-copy-pipeline.md`;
+    const chapterPath = `/home/user/${napRepo}/nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/01-order-routing.md`;
     console.log('[L1:eval] opening', chapterPath);
     await window.__openFile(chapterPath);
   });
@@ -102,8 +102,8 @@ test('L1: clone nap repo, read chapter, verify file:line link', async ({ context
   // Verify editor content
   const content = await panel.evaluate(() => window.__editor?.getModel()?.getValue() ?? '');
   console.log(`[L1] editor content (first 200): ${content.slice(0, 200)}`);
-  expect(content).toContain('copy_document.ts:51');
-  expect(content).toContain('Copy Pipeline');
+  expect(content).toContain('order-router.ts:54');
+  expect(content).toContain('Order');
   console.log('[L1] PASSED: chapter loaded with file:line links');
 });
 
@@ -125,7 +125,7 @@ test('L2: edit chapter, commit, verify in git log', async ({ context, extensionI
     const repos = await window.__lfs.promises.readdir('/home/user');
     const napRepo = repos.find((r: string) => r.includes('nap-test-nap'));
     if (!napRepo) throw new Error('nap-test-nap not found');
-    await window.__openFile(`/home/user/${napRepo}/30-napkins/0100-feature/01-copy-pipeline.md`);
+    await window.__openFile(`/home/user/${napRepo}/nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/01-order-routing.md`);
   });
   await panel.waitForTimeout(300);
 
@@ -175,12 +175,12 @@ test('L3: navigate .md links + verify file:line link targets', async ({ context,
     const repos = await window.__lfs.promises.readdir('/home/user');
     const napRepo = repos.find((r: string) => r.includes('nap-test-nap'));
     if (!napRepo) throw new Error('nap-test-nap not found');
-    await window.__openFile(`/home/user/${napRepo}/30-napkins/0100-feature/01-copy-pipeline.md`);
+    await window.__openFile(`/home/user/${napRepo}/nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/01-order-routing.md`);
   });
   await panel.waitForTimeout(300);
 
   const ch01 = await panel.evaluate(() => window.__editor?.getModel()?.getValue() ?? '');
-  expect(ch01).toContain('Copy Pipeline');
+  expect(ch01).toContain('Order');
   console.log('[L3] chapter 01 loaded');
 
   // Open chapter 02 via direct openFile (simulating .md link navigation)
@@ -188,13 +188,13 @@ test('L3: navigate .md links + verify file:line link targets', async ({ context,
     const repos = await window.__lfs.promises.readdir('/home/user');
     const napRepo = repos.find((r: string) => r.includes('nap-test-nap'));
     if (!napRepo) throw new Error('nap-test-nap not found');
-    await window.__openFile(`/home/user/${napRepo}/30-napkins/0100-feature/02-id-universe.md`);
+    await window.__openFile(`/home/user/${napRepo}/nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/02-warp-queue.md`);
   });
   await panel.waitForTimeout(300);
 
   const ch02 = await panel.evaluate(() => window.__editor?.getModel()?.getValue() ?? '');
-  expect(ch02).toContain('ID Universe');
-  expect(ch02).toContain('id_universe.ts:12');
+  expect(ch02).toContain('Warp Queue');
+  expect(ch02).toContain('warp-queue.ts:23');
   console.log('[L3] chapter 02 loaded');
 
   // Go back to chapter 01
@@ -202,12 +202,12 @@ test('L3: navigate .md links + verify file:line link targets', async ({ context,
     const repos = await window.__lfs.promises.readdir('/home/user');
     const napRepo = repos.find((r: string) => r.includes('nap-test-nap'));
     if (!napRepo) throw new Error('nap-test-nap not found');
-    await window.__openFile(`/home/user/${napRepo}/30-napkins/0100-feature/01-copy-pipeline.md`);
+    await window.__openFile(`/home/user/${napRepo}/nepics/01-v1/30-napkins/0100-delivery-pipeline/mini-book/01-order-routing.md`);
   });
   await panel.waitForTimeout(300);
 
   const ch01Again = await panel.evaluate(() => window.__editor?.getModel()?.getValue() ?? '');
-  expect(ch01Again).toContain('Copy Pipeline');
+  expect(ch01Again).toContain('Order');
   console.log('[L3] PASSED: navigation between chapters works, no state corruption');
 });
 
@@ -262,6 +262,6 @@ test('L6: close panel, reopen, IDB persists', async ({ context, extensionId }) =
 
   const navText = await panel2.locator('#nav-tree').textContent();
   console.log(`[L6] nav tree: ${navText?.slice(0, 200)}`);
-  expect(navText).toContain('0100-feature');
+  expect(navText).toContain('0100-delivery-pipeline');
   console.log('[L6] PASSED: IDB persists across panel close/reopen');
 });
