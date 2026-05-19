@@ -15,6 +15,7 @@ export interface NavNode {
   displayName: string;
   path: string;
   status?: string;       // napkin status from .napkin.nap.json
+  metadata?: Record<string, unknown>; // agent metadata from .agent.nap.json
   children?: NavNode[];
   expanded?: boolean;
 }
@@ -248,14 +249,14 @@ async function parseAgents(path: string, readDir: ReadDir, readJson: ReadJson): 
   const nodes: NavNode[] = [];
   for (const name of sorted) {
     const agentPath = `${path}/${name}`;
-    // Read agent metadata so the cache has role/status for dot rendering
-    await readJson(`${agentPath}/.agent.nap.json`);
+    const agentJson = await readJson(`${agentPath}/.agent.nap.json`);
     const children = await parseFileDir(agentPath, readDir);
     nodes.push({
       type: 'agent',
       name,
       displayName: displayName(name),
       path: agentPath,
+      metadata: agentJson,
       children,
       expanded: false,
     });

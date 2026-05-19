@@ -44,8 +44,11 @@ export function TerminalPane({ lfs, adapter, onCommandComplete, getAuth }: Termi
     term.init().then(async () => {
       console.log('[terminal] wterm initialized');
       await shell.attach((data: string) => term.write(data));
+      console.log('[terminal] shell attached — prompt written');
       term.onData = (data: string) => shell.handleInput(data);
       term.element.focus();
+    }).catch((e) => {
+      console.error('[terminal] init failed:', e);
     });
 
     return () => {

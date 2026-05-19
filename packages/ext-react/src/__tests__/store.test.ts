@@ -1,21 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useNapStore, _resetTabIdCounter } from '../store';
+import { createNapStore, _resetTabIdCounter, type NapStoreApi } from '../store';
+
+let useNapStore: NapStoreApi;
 
 function resetStore() {
   _resetTabIdCounter();
-  useNapStore.setState({
-    navSections: [],
-    activeFilePath: null,
-    focusedCardSlug: null,
-    cardViewMode: 'collapsed',
-    sidebarVisible: true,
-    activeSurface: 'terminal',
-    tabs: [],
-    activeTabId: null,
-    mainRepoConfig: null,
-    zoom: 1.0,
-    settingsVisible: false,
-  });
+  useNapStore = createNapStore();
 }
 
 // ── IS-01: Store — tab lifecycle ──

@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { useNapStore } from './store';
+import { useNapStore } from './session';
 import type { CardViewMode } from './store';
 import type { NavNode } from './nav-tree';
 import { getDotStyle, getPhaseColor } from './dot-style';
@@ -9,7 +9,7 @@ import { getDotStyle, getPhaseColor } from './dot-style';
 function AgentDot({ node, size = 8 }: { node: NavNode; size?: number }) {
   // Read agent metadata from the node's children or the cached JSON
   // For now, derive from convention: role is in the agent name (e.g., 001-test-arch-routing)
-  const role = extractRole(node.name);
+  const role = extractRole(node);
   const status = extractAgentStatus(node);
 
   const style = getDotStyle({
@@ -54,9 +54,10 @@ function AgentDot({ node, size = 8 }: { node: NavNode; size?: number }) {
   );
 }
 
-// Extract role from agent directory name convention: 001-test-arch-feature → "test-arch"
-function extractRole(name: string): string {
-  const stripped = name.replace(/^\d+-/, '');
+// Extract role — from metadata if available, fallback to directory name convention
+function extractRole(node: NavNode): string {
+  if (node.metadata?.role) return node.metadata.role as string;
+  const stripped = node.name.replace(/^\d+-/, '');
   if (stripped.startsWith('test-arch')) return 'test-arch';
   if (stripped.startsWith('fs-eng')) return 'fs-eng';
   if (stripped.startsWith('test-eng')) return 'test-eng';
@@ -65,14 +66,15 @@ function extractRole(name: string): string {
   return 'fs-eng'; // default
 }
 
-// Extract agent status from nav node children (look for .agent.nap.json data)
+// Extract agent status from .agent.nap.json metadata on the NavNode
 function extractAgentStatus(node: NavNode): string {
-  // The agent status is determined by the .agent.nap.json content
-  // Since we're reading from parsed nav tree, the status info may be
-  // stored in metadata. For now, return a reasonable default.
-  // The nav-tree parser reads .agent.nap.json via readJson — we can
-  // expose status on the NavNode in a future refinement.
-  return 'done'; // placeholder — will be refined
+  const m = node.metadata;
+  if (!m) return 'done';
+  if (m.exited) return 'exited';
+  if (m.started && !m.exited) return 'run';
+  // started=false, exited=false → created but not started → done or waiting
+  // For display purposes, treat as 'done' (the default completed state)
+  return 'done';
 }
 
 // ── File row ──
@@ -161,7 +163,7 @@ function NodeTree({ nodes, indent, maxDepth, depth = 0 }: { nodes: NavNode[]; in
 // ── Agent row ──
 
 function AgentRow({ node, indent }: { node: NavNode; indent: number }) {
-  const role = extractRole(node.name);
+  const role = extractRole(node);
   const status = extractAgentStatus(node);
   const statusColor = role === 'test-arch' ? '#f59e0b' : role === 'fs-eng' ? '#22c55e' : role === 'test-eng' ? '#6b7280' : '#3b82f6';
 

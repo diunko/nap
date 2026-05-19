@@ -41,6 +41,8 @@ test('IM-06: Cmd+click .md link → editor loads new file', async ({ context, ex
   const contentBefore = await getEditorContent(panel);
   expect(contentBefore.length).toBeGreaterThan(0);
 
+  const ghUrlBefore = ghPage.url();
+
   // Find an .md link in the editor
   const mdHref = await panel.evaluate(() => {
     const m = (window as any).__monaco__;
@@ -90,8 +92,8 @@ test('IM-06: Cmd+click .md link → editor loads new file', async ({ context, ex
   expect(tabState.tabCount).toBe(1);
   expect(tabState.activeEphemeral).toBe(true);
 
-  // Verify: GitHub tab did NOT navigate
-  expect(ghPage.url()).not.toContain('nap-test-main');
+  // Verify: GitHub tab did NOT navigate away (URL unchanged)
+  expect(ghPage.url()).toBe(ghUrlBefore);
 
   console.log('[IM-06] .md link → editor loads new file, tab reused, GitHub unchanged');
 });

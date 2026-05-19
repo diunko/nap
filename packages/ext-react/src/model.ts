@@ -12,12 +12,13 @@
 import type { LightningFsAdapter, FsChangeEvent } from './fs-adapter';
 import { parseNavTree } from './nav-tree';
 import type { DirEntry } from './nav-tree';
-import { useNapStore } from './store';
+import type { NapStoreApi } from './store';
 
 const DEBOUNCE_MS = 200;
 
 export interface ModelOptions {
   adapter: LightningFsAdapter;
+  store: NapStoreApi;
 }
 
 export interface NapModel {
@@ -29,12 +30,14 @@ export interface NapModel {
   onCommandComplete: (command: string) => void;
   /** Get the discovered nepic root (null if not found yet). */
   getNepicRoot: () => string | null;
-  /** Scan for existing repos in LFS on startup (panel reopen with IDB data). */
+  /** Bootstrap filesystem + scan for existing repos. Call once after creation. */
+  init: () => Promise<void>;
+  /** Scan for existing repos in LFS (callable independently, e.g. after manual refresh). */
   scanExistingRepos: () => Promise<void>;
 }
 
 export function createModel(options: ModelOptions): NapModel {
-  const { adapter } = options;
+  const { adapter, store } = options;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let echoSuppressed = false;
   let nepicRoot: string | null = null;
@@ -56,7 +59,7 @@ export function createModel(options: ModelOptions): NapModel {
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
-      const activeFilePath = useNapStore.getState().activeFilePath;
+      const activeFilePath = store.getState().activeFilePath;
       if (activeFilePath && event.path === activeFilePath) {
         console.log(`[model] debounce 200ms → reloadFile`);
         reloadActiveFile();
@@ -135,13 +138,13 @@ export function createModel(options: ModelOptions): NapModel {
 
     const sections = await parseNavTree(root, readDir, readJson);
     console.log(`[model] parseNavTree returned ${sections.length} sections`);
-    useNapStore.getState().refreshNav(sections);
+    store.getState().refreshNav(sections);
   }
 
   // ── File reload ──
 
   async function reloadActiveFile(): Promise<void> {
-    const activeFilePath = useNapStore.getState().activeFilePath;
+    const activeFilePath = store.getState().activeFilePath;
     if (!activeFilePath) return;
     console.log(`[model] reloadFile ${activeFilePath}`);
     if (typeof window !== 'undefined') {
@@ -161,6 +164,14 @@ export function createModel(options: ModelOptions): NapModel {
     }
   }
 
+  async function init(): Promise<void> {
+    // Ensure shell home directory exists — LightningFS starts empty
+    try { await adapter.mkdir('/home', { recursive: true }); } catch { /* exists */ }
+    try { await adapter.mkdir('/home/user', { recursive: true }); } catch { /* exists */ }
+    console.log('[model] ensured /home/user exists');
+    await scanExistingRepos();
+  }
+
   return {
     destroy: () => {
       console.log('[model] destroy');
@@ -174,6 +185,7 @@ export function createModel(options: ModelOptions): NapModel {
     },
     onCommandComplete,
     getNepicRoot: () => nepicRoot,
+    init,
     scanExistingRepos,
   };
 }

@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import type { StateStorage } from 'zustand/middleware';
 import type { NavNode } from './nav-tree';
 
 export type CardViewMode = 'collapsed' | 'focused' | 'extended';
@@ -56,6 +58,12 @@ export interface NapStore {
   toggleSettings: () => void;
 }
 
+/** Fields persisted to IndexedDB. */
+export type PersistedState = Pick<NapStore,
+  'tabs' | 'activeTabId' | 'activeFilePath' | 'activeSurface' |
+  'focusedCardSlug' | 'cardViewMode' | 'mainRepoConfig' | 'zoom'
+>;
+
 let tabIdCounter = 0;
 function nextTabId(): string {
   return `tab-${++tabIdCounter}`;
@@ -72,11 +80,9 @@ export function upsertTab(
   path: string,
   ephemeral: boolean,
 ): [Tab[], string] {
-  // Existing tab with same path?
   const existing = tabs.find((t) => t.path === path);
   if (existing) return [tabs, existing.id];
 
-  // Reuse ephemeral slot?
   if (ephemeral) {
     const ephIdx = tabs.findIndex((t) => t.ephemeral);
     if (ephIdx !== -1) {
@@ -86,7 +92,6 @@ export function upsertTab(
     }
   }
 
-  // Create new tab
   const tab: Tab = { id: nextTabId(), path, type: 'file', ephemeral };
   return [[...tabs, tab], tab.id];
 }
@@ -102,134 +107,155 @@ export function removeTab(
   const newTabs = tabs.filter((t) => t.id !== tabId);
   if (newTabs.length === 0) return [newTabs, null];
   if (activeId !== tabId) return [newTabs, activeId];
-  // Pick neighbor: prefer left, then right
   const nextIdx = Math.min(idx, newTabs.length - 1);
   return [newTabs, newTabs[nextIdx].id];
 }
 
-export const useNapStore = create<NapStore>((set, get) => ({
-  navSections: [],
-  activeFilePath: null,
-  focusedCardSlug: null,
-  cardViewMode: 'collapsed' as CardViewMode,
-  sidebarVisible: true,
-  activeSurface: 'terminal' as const,
-  tabs: [],
-  activeTabId: null,
-  mainRepoConfig: null,
-  zoom: 1.0,
-  settingsVisible: false,
+// ── Store actions (shared between factory variants) ──
 
-  openDoc: (path: string) => {
-    console.log(`[store] openDoc ${path}`);
-    const prev = get();
-    const [tabs, tabId] = upsertTab(prev.tabs, path, true);
-    console.log(`[store] openDoc → upsertTab → activeFilePath=${path}`);
-    set({
-      activeFilePath: path,
-      tabs,
-      activeTabId: tabId,
-      activeSurface: 'editor',
-    });
-  },
+function storeActions(set: any, get: any): NapStore {
+  return {
+    navSections: [],
+    activeFilePath: null,
+    focusedCardSlug: null,
+    cardViewMode: 'collapsed' as CardViewMode,
+    sidebarVisible: true,
+    activeSurface: 'terminal' as const,
+    tabs: [],
+    activeTabId: null,
+    mainRepoConfig: null,
+    zoom: 1.0,
+    settingsVisible: false,
 
-  closeTab: (tabId: string) => {
-    console.log(`[store] closeTab ${tabId}`);
-    const prev = get();
-    const [tabs, nextActive] = removeTab(prev.tabs, tabId, prev.activeTabId);
-    const activeTab = tabs.find((t) => t.id === nextActive);
-    set({
-      tabs,
-      activeTabId: nextActive,
-      activeFilePath: activeTab?.path ?? null,
-    });
-  },
+    openDoc: (path: string) => {
+      console.log(`[store] openDoc ${path}`);
+      const prev = get();
+      const [tabs, tabId] = upsertTab(prev.tabs, path, true);
+      console.log(`[store] openDoc → upsertTab → activeFilePath=${path}`);
+      set({ activeFilePath: path, tabs, activeTabId: tabId, activeSurface: 'editor' });
+    },
 
-  closeActiveTab: () => {
-    const state = get();
-    if (state.activeTabId) state.closeTab(state.activeTabId);
-  },
+    closeTab: (tabId: string) => {
+      console.log(`[store] closeTab ${tabId}`);
+      const prev = get();
+      const [tabs, nextActive] = removeTab(prev.tabs, tabId, prev.activeTabId);
+      const activeTab = tabs.find((t) => t.id === nextActive);
+      set({ tabs, activeTabId: nextActive, activeFilePath: activeTab?.path ?? null });
+    },
 
-  pinTab: (tabId: string) => {
-    console.log(`[store] pinTab ${tabId}`);
-    const tabs = get().tabs.map((t) => (t.id === tabId ? { ...t, ephemeral: false } : t));
-    set({ tabs });
-  },
+    closeActiveTab: () => {
+      const state = get();
+      if (state.activeTabId) state.closeTab(state.activeTabId);
+    },
 
-  pinActiveEphemeral: () => {
-    const state = get();
-    const tab = state.tabs.find((t) => t.id === state.activeTabId);
-    if (tab?.ephemeral) {
-      console.log(`[store] pinActiveEphemeral → tab pinned`);
-      state.pinTab(tab.id);
-    }
-  },
+    pinTab: (tabId: string) => {
+      console.log(`[store] pinTab ${tabId}`);
+      const tabs = get().tabs.map((t: Tab) => (t.id === tabId ? { ...t, ephemeral: false } : t));
+      set({ tabs });
+    },
 
-  saveTabScroll: (tabId: string, scrollPos: number, cursorPos?: Tab['cursorPos']) => {
-    const tabs = get().tabs.map((t) =>
-      t.id === tabId ? { ...t, scrollPos, ...(cursorPos ? { cursorPos } : {}) } : t,
-    );
-    set({ tabs });
-  },
+    pinActiveEphemeral: () => {
+      const state = get();
+      const tab = state.tabs.find((t: Tab) => t.id === state.activeTabId);
+      if (tab?.ephemeral) {
+        console.log(`[store] pinActiveEphemeral → tab pinned`);
+        state.pinTab(tab.id);
+      }
+    },
 
-  expandCard: (slug: string) => {
-    console.log(`[store] expandCard ${slug}`);
-    const { focusedCardSlug } = get();
-    if (focusedCardSlug === slug) {
+    saveTabScroll: (tabId: string, scrollPos: number, cursorPos?: Tab['cursorPos']) => {
+      const tabs = get().tabs.map((t: Tab) =>
+        t.id === tabId ? { ...t, scrollPos, ...(cursorPos ? { cursorPos } : {}) } : t,
+      );
+      set({ tabs });
+    },
+
+    expandCard: (slug: string) => {
+      console.log(`[store] expandCard ${slug}`);
+      const { focusedCardSlug } = get();
+      if (focusedCardSlug === slug) {
+        set({ focusedCardSlug: null, cardViewMode: 'collapsed' });
+      } else {
+        set({ focusedCardSlug: slug, cardViewMode: 'focused' });
+      }
+    },
+
+    extendCard: () => {
+      const { focusedCardSlug, cardViewMode } = get();
+      if (!focusedCardSlug) return;
+      if (cardViewMode === 'focused') {
+        set({ cardViewMode: 'extended' });
+      } else if (cardViewMode === 'extended') {
+        set({ cardViewMode: 'focused' });
+      }
+    },
+
+    collapseCard: () => {
       set({ focusedCardSlug: null, cardViewMode: 'collapsed' });
-    } else {
-      set({ focusedCardSlug: slug, cardViewMode: 'focused' });
-    }
-  },
+    },
 
-  extendCard: () => {
-    const { focusedCardSlug, cardViewMode } = get();
-    if (!focusedCardSlug) return;
-    if (cardViewMode === 'focused') {
-      set({ cardViewMode: 'extended' });
-    } else if (cardViewMode === 'extended') {
-      set({ cardViewMode: 'focused' });
-    }
-  },
+    toggleSidebar: () => {
+      set({ sidebarVisible: !get().sidebarVisible });
+    },
 
-  collapseCard: () => {
-    set({ focusedCardSlug: null, cardViewMode: 'collapsed' });
-  },
+    setActiveSurface: (surface: 'editor' | 'terminal') => {
+      console.log(`[store] setActiveSurface ${surface}`);
+      set({ activeSurface: surface });
+    },
 
-  toggleSidebar: () => {
-    set({ sidebarVisible: !get().sidebarVisible });
-  },
+    refreshNav: (sections: NavNode[]) => {
+      console.log(`[store] refreshNav → navSections updated (${sections.length} sections)`);
+      set({ navSections: sections });
+    },
 
-  setActiveSurface: (surface: 'editor' | 'terminal') => {
-    console.log(`[store] setActiveSurface ${surface}`);
-    set({ activeSurface: surface });
-  },
+    setMainRepo: (config: MainRepoConfig | null) => {
+      console.log(`[store] setMainRepo`, config);
+      set({ mainRepoConfig: config });
+    },
 
-  refreshNav: (sections: NavNode[]) => {
-    console.log(`[store] refreshNav → navSections updated (${sections.length} sections)`);
-    set({ navSections: sections });
-  },
+    setZoom: (zoom: number) => {
+      const clamped = Math.max(0.5, Math.min(2.0, zoom));
+      console.log(`[chrome] zoom ${get().zoom} → ${clamped}`);
+      set({ zoom: clamped });
+      if (typeof document !== 'undefined') {
+        document.documentElement.style.zoom = String(clamped);
+      }
+    },
 
-  setMainRepo: (config: MainRepoConfig | null) => {
-    console.log(`[store] setMainRepo`, config);
-    set({ mainRepoConfig: config });
-  },
-
-  setZoom: (zoom: number) => {
-    const clamped = Math.max(0.5, Math.min(2.0, zoom));
-    console.log(`[chrome] zoom ${get().zoom} → ${clamped}`);
-    set({ zoom: clamped });
-    if (typeof document !== 'undefined') {
-      document.documentElement.style.zoom = String(clamped);
-    }
-  },
-
-  toggleSettings: () => {
-    set({ settingsVisible: !get().settingsVisible });
-  },
-}));
-
-// Expose store for Playwright tests (same pattern as app)
-if (typeof window !== 'undefined') {
-  (window as any).__napStore__ = useNapStore;
+    toggleSettings: () => {
+      set({ settingsVisible: !get().settingsVisible });
+    },
+  };
 }
+
+const PARTIALIZE = (state: NapStore): PersistedState => ({
+  tabs: state.tabs,
+  activeTabId: state.activeTabId,
+  activeFilePath: state.activeFilePath,
+  activeSurface: state.activeSurface,
+  focusedCardSlug: state.focusedCardSlug,
+  cardViewMode: state.cardViewMode,
+  mainRepoConfig: state.mainRepoConfig,
+  zoom: state.zoom,
+});
+
+/**
+ * Create an independent store instance.
+ *
+ * - No key/storage: plain store, no persistence (vitest)
+ * - With key + storage: persisted to IndexedDB via Zustand persist middleware
+ */
+export function createNapStore(key?: string, storage?: StateStorage) {
+  if (key && storage) {
+    return create<NapStore>()(
+      persist(storeActions, {
+        name: `nap-ui-${key}`,
+        storage: createJSONStorage(() => storage),
+        partialize: PARTIALIZE,
+      }),
+    );
+  }
+  return create<NapStore>()(storeActions);
+}
+
+export type NapStoreApi = ReturnType<typeof createNapStore>;

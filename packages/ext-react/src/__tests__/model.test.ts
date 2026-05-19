@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useNapStore, _resetTabIdCounter } from '../store';
+import { createNapStore, _resetTabIdCounter, type NapStoreApi } from '../store';
 import type { FsChangeEvent } from '../fs-adapter';
 
 // ── IS-05: Model — debounce + echo suppression ──
 // Test the model layer without real LFS
+
+let store: NapStoreApi;
 
 // Mock adapter with change event emitter
 function createMockAdapter() {
@@ -18,24 +20,13 @@ function createMockAdapter() {
     readdir: vi.fn(async () => []),
     stat: vi.fn(async () => ({ isDirectory: false, isFile: true })),
     exists: vi.fn(async () => false),
+    mkdir: vi.fn(async () => {}),
   };
 }
 
 function resetStore() {
   _resetTabIdCounter();
-  useNapStore.setState({
-    navSections: [],
-    activeFilePath: null,
-    focusedCardSlug: null,
-    cardViewMode: 'collapsed',
-    sidebarVisible: true,
-    activeSurface: 'terminal',
-    tabs: [],
-    activeTabId: null,
-    mainRepoConfig: null,
-    zoom: 1.0,
-    settingsVisible: false,
-  });
+  store = createNapStore();
 }
 
 describe('IS-05: Model — debounce + echo suppression', () => {
@@ -51,6 +42,7 @@ describe('IS-05: Model — debounce + echo suppression', () => {
     const { createModel } = await import('../model');
     model = createModel({
       adapter: mockAdapter as any,
+      store,
     });
   });
 
@@ -61,7 +53,7 @@ describe('IS-05: Model — debounce + echo suppression', () => {
 
   // IS-05b: rapid write events debounced to single re-read
   it('IS-05b: 10 rapid write events → single debounced action', () => {
-    const refreshSpy = vi.spyOn(useNapStore.getState(), 'refreshNav');
+    const refreshSpy = vi.spyOn(store.getState(), 'refreshNav');
 
     for (let i = 0; i < 10; i++) {
       mockAdapter.emit({ type: 'write', path: `/file-${i}.md` });
@@ -80,7 +72,7 @@ describe('IS-05: Model — debounce + echo suppression', () => {
   // IS-05c: echo suppression prevents re-read
   it('IS-05c: echo suppression prevents re-read on own writes', () => {
     // Set up active file path
-    useNapStore.getState().openDoc('/test.md');
+    store.getState().openDoc('/test.md');
 
     // Suppress echo
     model.suppressEcho(true);

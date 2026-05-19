@@ -1,15 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Buffer } from 'buffer';
-import LightningFS from '@isomorphic-git/lightning-fs';
-import { useNapStore } from './store';
 import { TabBar } from './TabBar';
 import { ContentPane } from './ContentPane';
 import { TerminalPane } from './TerminalPane';
 import { Sidebar } from './Sidebar';
-import { LightningFsAdapter } from './fs-adapter';
-import { createModel } from './model';
-import type { NapModel } from './model';
+import { createSession, getStateKey, SessionContext, useNapStore } from './session';
+import type { Session } from './session';
 
 // Buffer polyfill — required before isomorphic-git
 (window as any).Buffer = Buffer;
@@ -120,6 +117,7 @@ function HeaderBar() {
 // ── Surface-switching tab bar ──
 
 function SurfaceTabBar() {
+  const { store } = React.useContext(SessionContext)!;
   const tabs = useNapStore((s) => s.tabs);
   const activeTabId = useNapStore((s) => s.activeTabId);
   const activeSurface = useNapStore((s) => s.activeSurface);
@@ -136,7 +134,18 @@ function SurfaceTabBar() {
         minHeight: 32,
       }}
     >
-      {/* Terminal tab — always present */}
+      {/* File tabs first */}
+      <TabBar
+        tabs={tabs}
+        activeTabId={activeSurface === 'editor' ? activeTabId : null}
+        onActivate={(tabId) => {
+          const tab = tabs.find((t) => t.id === tabId);
+          if (tab) store.getState().openDoc(tab.path);
+        }}
+        onClose={(tabId) => store.getState().closeTab(tabId)}
+        onPin={(tabId) => store.getState().pinTab(tabId)}
+      />
+      {/* Terminal tab — always present, rightmost */}
       <div
         data-testid="tab-terminal"
         onClick={() => setActiveSurface('terminal')}
@@ -150,22 +159,12 @@ function SurfaceTabBar() {
           fontSize: 12,
           color: activeSurface === 'terminal' ? 'var(--nap-text)' : 'var(--nap-text-muted)',
           background: activeSurface === 'terminal' ? 'var(--nap-bg)' : 'transparent',
-          borderRight: '1px solid var(--nap-border)',
+          borderLeft: '1px solid var(--nap-border)',
+          marginLeft: 'auto',
         }}
       >
         Terminal
       </div>
-      {/* File tabs */}
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeSurface === 'editor' ? activeTabId : null}
-        onActivate={(tabId) => {
-          const tab = tabs.find((t) => t.id === tabId);
-          if (tab) useNapStore.getState().openDoc(tab.path);
-        }}
-        onClose={(tabId) => useNapStore.getState().closeTab(tabId)}
-        onPin={(tabId) => useNapStore.getState().pinTab(tabId)}
-      />
     </div>
   );
 }
@@ -187,10 +186,6 @@ function SettingsOverlay() {
     const parts = repoInput.split('/');
     if (parts.length === 2 && parts[0] && parts[1]) {
       setMainRepo({ owner: parts[0], repo: parts[1], branch: branchInput || 'main' });
-      // Save PAT to chrome.storage if available
-      if (patInput && typeof chrome !== 'undefined' && chrome.storage) {
-        chrome.storage.sync.set({ pat: patInput });
-      }
     }
     toggleSettings();
   }
@@ -256,72 +251,53 @@ function SettingsOverlay() {
   );
 }
 
-// ── App ──
+// ── Panel (inner content, receives session from context) ──
 
-function App() {
+function Panel() {
+  const { store, lfs, adapter, model } = React.useContext(SessionContext)!;
   const activeSurface = useNapStore((s) => s.activeSurface);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
+  const storeRef = useRef(store);
+  storeRef.current = store;
 
-  const [lfs] = useState(() => new LightningFS('nap-ext'));
-  const [adapter] = useState(() => new LightningFsAdapter(lfs));
-  const modelRef = useRef<NapModel | null>(null);
-  const [model, setModel] = useState<NapModel | null>(null);
-
-  // Create model layer + ensure /home/user exists before scanning.
-  // Single effect avoids the race where scanExistingRepos reads /home/user
-  // before the mkdir completes.
+  // Init model (filesystem bootstrap + repo scan)
   useEffect(() => {
-    const m = createModel({ adapter });
-    modelRef.current = m;
-    setModel(m);
+    model.init();
+    return () => model.destroy();
+  }, [model]);
 
-    (async () => {
-      try { await lfs.promises.mkdir('/home'); } catch { /* exists */ }
-      try { await lfs.promises.mkdir('/home/user'); } catch { /* exists */ }
-      console.log('[adapter] ensured /home/user exists');
-      // Now safe to scan — /home/user guaranteed to exist
-      m.scanExistingRepos();
-    })();
-
-    return () => m.destroy();
-  }, [adapter, lfs]);
-
-  // Stable callback that always reaches the latest model
+  // Stable callback that reaches the current model
   const handleCommandComplete = useCallback((cmd: string) => {
-    modelRef.current?.onCommandComplete(cmd);
-  }, []);
+    model.onCommandComplete(cmd);
+  }, [model]);
 
   // Zoom keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      const s = storeRef.current.getState();
       if (e.ctrlKey && e.shiftKey) {
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
-          const z = useNapStore.getState().zoom;
-          useNapStore.getState().setZoom(z + 0.1);
+          s.setZoom(s.zoom + 0.1);
         } else if (e.key === '-' || e.key === '_') {
           e.preventDefault();
-          const z = useNapStore.getState().zoom;
-          useNapStore.getState().setZoom(z - 0.1);
+          s.setZoom(s.zoom - 0.1);
         } else if (e.key === '0' || e.key === ')') {
           e.preventDefault();
-          useNapStore.getState().setZoom(1.0);
+          s.setZoom(1.0);
         }
       }
-      // Cmd+W → close active tab
       if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
         e.preventDefault();
-        useNapStore.getState().closeActiveTab();
+        s.closeActiveTab();
       }
-      // Cmd+E → toggle focused ↔ extended
       if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
         e.preventDefault();
-        useNapStore.getState().extendCard();
+        s.extendCard();
       }
-      // Cmd+B → toggle sidebar
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault();
-        useNapStore.getState().toggleSidebar();
+        s.toggleSidebar();
       }
     }
     window.addEventListener('keydown', handleKeyDown);
@@ -380,68 +356,32 @@ function App() {
   );
 }
 
+// ── App (creates session, provides context) ──
+
+function App() {
+  const [session, setSession] = useState<Session>(() => createSession(getStateKey()));
+
+  // Listen for session key changes (content script signals PR change)
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.onMessage) return;
+    const listener = (msg: any) => {
+      if (msg.type === 'session-key-changed' && msg.key) {
+        console.log(`[session] switching to key: ${msg.key}`);
+        session.model.destroy();
+        setSession(createSession(msg.key));
+      }
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, [session]);
+
+  return (
+    <SessionContext.Provider value={session}>
+      <Panel />
+    </SessionContext.Provider>
+  );
+}
+
 const root = createRoot(document.getElementById('root')!);
 root.render(<App />);
 console.log('[store] initialized');
-
-// ── Chrome storage persistence ──
-
-if (typeof chrome !== 'undefined' && chrome.storage?.sync) {
-  // Restore state on startup
-  chrome.storage.sync.get('napState', (result: { napState?: any }) => {
-    const data = result?.napState;
-    if (data) {
-      console.log('[chrome] restoring state from chrome.storage.sync');
-      useNapStore.setState({
-        tabs: data.tabs || [],
-        activeTabId: data.activeTabId || null,
-        activeFilePath: data.activeFilePath || null,
-        focusedCardSlug: data.focusedCardSlug || null,
-        cardViewMode: data.cardViewMode || 'collapsed',
-        mainRepoConfig: data.mainRepoConfig || null,
-        zoom: data.zoom || 1.0,
-      });
-      if (data.zoom && data.zoom !== 1.0) {
-        document.documentElement.style.zoom = String(data.zoom);
-      }
-    }
-  });
-
-  // Debounced persist on state changes
-  let persistTimer: ReturnType<typeof setTimeout> | null = null;
-  useNapStore.subscribe((state) => {
-    if (persistTimer) clearTimeout(persistTimer);
-    persistTimer = setTimeout(() => {
-      const payload = {
-        tabs: state.tabs,
-        activeTabId: state.activeTabId,
-        activeFilePath: state.activeFilePath,
-        focusedCardSlug: state.focusedCardSlug,
-        cardViewMode: state.cardViewMode,
-        mainRepoConfig: state.mainRepoConfig,
-        zoom: state.zoom,
-      };
-      chrome.storage.sync.set({ napState: payload });
-      console.log('[chrome] persisted state to chrome.storage.sync');
-    }, 500);
-  });
-
-  // Flush on beforeunload
-  window.addEventListener('beforeunload', () => {
-    if (persistTimer) {
-      clearTimeout(persistTimer);
-      const state = useNapStore.getState();
-      chrome.storage.sync.set({
-        napState: {
-          tabs: state.tabs,
-          activeTabId: state.activeTabId,
-          activeFilePath: state.activeFilePath,
-          focusedCardSlug: state.focusedCardSlug,
-          cardViewMode: state.cardViewMode,
-          mainRepoConfig: state.mainRepoConfig,
-          zoom: state.zoom,
-        },
-      });
-    }
-  });
-}

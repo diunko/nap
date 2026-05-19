@@ -85,7 +85,7 @@ export async function openSidePanel(
  */
 export async function openGitHub(
   context: BrowserContext,
-  url = 'https://github.com/nicedoc/microlink',
+  url = 'https://github.com/diunko/nap-test-main',
 ): Promise<Page> {
   const page = context.pages()[0] || await context.newPage();
   console.log(`[openGitHub] navigating to ${url}`);

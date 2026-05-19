@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as monaco from 'monaco-editor';
-import { useNapStore } from './store';
+import { useNapStore, useSession } from './session';
 import { TabBar } from './TabBar';
 import { registerNapkinMarkdown, registerShiftEnter } from './napkin-markdown';
 import { registerTheme, applyTheme } from './theme';
@@ -43,6 +43,7 @@ interface ContentPaneProps {
 }
 
 export function ContentPane({ adapter, model }: ContentPaneProps) {
+  const { store } = useSession();
   const activeFilePath = useNapStore((s) => s.activeFilePath);
   const tabs = useNapStore((s) => s.tabs);
   const activeTabId = useNapStore((s) => s.activeTabId);
@@ -57,6 +58,8 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
   adapterRef.current = adapter;
   const modelPropRef = useRef(model);
   modelPropRef.current = model;
+  const storeRef = useRef(store);
+  storeRef.current = store;
 
   // Create editor once
   useEffect(() => {
@@ -92,12 +95,12 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     editor.onDidChangeModelContent(() => {
       refreshRoleDecorations();
       clearTimeout(saveTimerRef.current);
-      const filePath = useNapStore.getState().activeFilePath;
+      const filePath = storeRef.current.getState().activeFilePath;
       if (!filePath || !adapter) return;
 
       // Pin ephemeral tab on first edit
       console.log(`[contentpane] contentChanged → pinActiveEphemeral`);
-      useNapStore.getState().pinActiveEphemeral();
+      storeRef.current.getState().pinActiveEphemeral();
 
       saveTimerRef.current = setTimeout(async () => {
         console.log(`[contentpane] autoSave debounce 1000ms`);
@@ -129,7 +132,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
         const editorModel = editor.getModel();
         if (!editorModel) return;
         const lineContent = editorModel.getLineContent(position.lineNumber);
-        const sourceFilePath = useNapStore.getState().activeFilePath;
+        const sourceFilePath = storeRef.current.getState().activeFilePath;
         if (!sourceFilePath) return;
         const col = position.column;
 
@@ -141,7 +144,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
           const end = match.index + match[0].length + 1;
           if (col >= start && col < end) {
             e.event.preventDefault();
-            handleLinkResult(routeLink({ href: match[2], sourceFilePath }, useNapStore.getState().mainRepoConfig ?? undefined));
+            handleLinkResult(routeLink({ href: match[2], sourceFilePath }, storeRef.current.getState().mainRepoConfig ?? undefined));
             return;
           }
         }
@@ -153,7 +156,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
           const end = match.index + match[0].length + 1;
           if (col >= start && col < end) {
             e.event.preventDefault();
-            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, useNapStore.getState().mainRepoConfig ?? undefined));
+            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, storeRef.current.getState().mainRepoConfig ?? undefined));
             return;
           }
         }
@@ -169,7 +172,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
             const token = lineContent.slice(i + 1);
             if (/^https?:\/\//.test(token)) continue;
             e.event.preventDefault();
-            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, useNapStore.getState().mainRepoConfig ?? undefined));
+            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, storeRef.current.getState().mainRepoConfig ?? undefined));
             return;
           }
         }
@@ -222,7 +225,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
   function handleLinkResult(result: LinkResult) {
     console.log(`[links] routeLink →`, result);
     if (result.action === 'openDoc') {
-      useNapStore.getState().openDoc(result.path);
+      storeRef.current.getState().openDoc(result.path);
     } else if (result.action === 'openCode') {
       console.log(`[chrome] tabs.update → ${result.githubUrl}`);
       // Navigate the GitHub tab
@@ -273,11 +276,15 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
       monacoModelRef.current = newModel;
       editor.setModel(newModel);
       console.log(`[monaco] setModel napkin-markdown`);
+      // Layout after setModel — Monaco needs to measure with real content.
+      // Deferred one frame so the browser has applied any pending
+      // visibility changes (editor surface hidden → visible).
+      requestAnimationFrame(() => editor.layout());
       refreshRoleDecorations();
       console.log(`[contentpane] refreshRoleDecorations`);
 
       // Restore scroll/cursor from tab state
-      const state = useNapStore.getState();
+      const state = storeRef.current.getState();
       const tab = state.tabs.find((t) => t.id === state.activeTabId);
       if (tab?.scrollPos != null) {
         editor.setScrollTop(tab.scrollPos);
@@ -313,7 +320,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     if (!adapter) return;
     function handleExternalChange(e: Event) {
       const detail = (e as CustomEvent).detail;
-      if (detail.path !== useNapStore.getState().activeFilePath) return;
+      if (detail.path !== storeRef.current.getState().activeFilePath) return;
       const editor = editorRef.current;
       const currentModel = monacoModelRef.current;
       if (!editor || !currentModel) return;
@@ -338,7 +345,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     return () => {
       const editor = editorRef.current;
       if (!editor) return;
-      const state = useNapStore.getState();
+      const state = storeRef.current.getState();
       if (state.activeTabId) {
         state.saveTabScroll(state.activeTabId, editor.getScrollTop(), editor.getPosition() ?? undefined);
       }
@@ -349,7 +356,8 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     <div
       data-testid="content-pane"
       style={{
-        flex: 1,
+        width: '100%',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         background: 'var(--nap-bg)',
