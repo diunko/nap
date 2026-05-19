@@ -102,12 +102,11 @@ export function createModel(options: ModelOptions): NapModel {
     const trimmed = command.trim().split('\n')[0];
     console.log(`[terminal] commandComplete ${trimmed}`);
 
-    const isClone = trimmed.startsWith('git clone');
-    const isFetch = trimmed.startsWith('git fetch');
-    const isGitCommand = isClone ||
-      trimmed.startsWith('git pull') ||
-      trimmed.startsWith('git checkout') ||
-      isFetch;
+    // Use regex to detect git commands even inside compound expressions (cd X && git fetch)
+    const isClone = /\bgit clone\b/.test(trimmed);
+    const isFetch = /\bgit fetch\b/.test(trimmed);
+    const isGitCommand = isClone || isFetch ||
+      /\bgit (pull|checkout)\b/.test(trimmed);
 
     if (!isGitCommand) return;
 
@@ -322,9 +321,17 @@ export function createModel(options: ModelOptions): NapModel {
       console.log('[fetch-latest] no shell — cannot execute');
       return;
     }
-    const branch = store.getState().mainRepoConfig?.branch || 'main';
-    console.log(`[fetch-latest] starting: git fetch origin && git checkout origin/${branch}`);
-    shellExec(`git fetch origin && git checkout origin/${branch}\r`);
+    // Use napBranch (the .nap repo's branch), not mainRepoConfig.branch (the code repo's PR branch)
+    const branch = config?.napBranch || 'main';
+    // Derive repo dir from clone URL — git commands need to run inside the repo
+    const repoName = config?.cloneUrl?.split('/').pop()?.replace(/\.git$/, '') || '';
+    if (!repoName) {
+      console.log('[fetch-latest] cannot determine repo name from config');
+      return;
+    }
+    const repoDir = `/home/user/${repoName}`;
+    console.log(`[fetch-latest] starting in ${repoDir}: git fetch origin && git checkout origin/${branch}`);
+    shellExec(`cd ${repoDir} && git fetch origin && git checkout origin/${branch}\r`);
   }
 
   return {

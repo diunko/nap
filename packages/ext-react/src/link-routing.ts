@@ -165,7 +165,7 @@ export async function resolveDiffUrl(placeholder: string): Promise<string> {
   // If no line, use just the diff anchor without line reference
   const finalAnchor = lineFragment ? anchor : `#diff-${anchor.split('#diff-')[1]?.split('R')[0] || ''}`;
 
-  return `https://github.com/${prPath}${anchor}`;
+  return `https://github.com/${prPath}${finalAnchor}`;
 }
 
 function getExtension(p: string): string {
