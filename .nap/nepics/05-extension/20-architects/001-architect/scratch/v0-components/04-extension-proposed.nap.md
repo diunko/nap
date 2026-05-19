@@ -13,6 +13,23 @@
   * no fs.watch — LightningFS has no watch API
     * but all writes go through our code (editor auto-save, git commands)
     * emit change events at point of write instead of watching
+    * // can we include fs watching too?
+      * // e.g. someone does cat > agent.json or smth
+      * // or mkdir etc
+      * // how hard would it be?
+        * //A: easy — instrument the adapter we already own
+          * LightningFsAdapter (fs-adapter.ts) handles all bash file ops
+          * add an event emitter: writeFile/mkdir/rm → emit { type, path }
+          * isomorphic-git writes directly to raw LFS (not adapter) — already handled via onCommandComplete
+          * no polling, no IDB watching — just emit at point of write
+
+* new package: packages/ext-react/
+  * clean break — packages/extension/ gets deprecated and removed
+  * no imports between them — copy I/O modules (fs-adapter, git-command, shell, etc.) into ext-react
+  * same pattern as original extension copied from bash-poc
+  * React + Zustand from the start
+  * port app tests alongside app components
+  * port relevant extension Playwright tests (ux-e2e, lifecycle) with updated selectors
 
 * what the extension has that the app doesn't
   * content.ts on github.com — trigger button, nav messages
