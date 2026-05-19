@@ -65,7 +65,7 @@ function ResizeHandle() {
 
 // ── Header bar ──
 
-function HeaderBar() {
+function HeaderBar({ onFetchLatest }: { onFetchLatest?: () => void }) {
   const toggleSettings = useNapStore((s) => s.toggleSettings);
   const toggleSidebar = useNapStore((s) => s.toggleSidebar);
 
@@ -88,6 +88,8 @@ function HeaderBar() {
       <span style={{ fontWeight: 600, color: 'var(--nap-text)' }} id="header-napkin-name" />
       <span style={{ flex: 1 }} />
       <span
+        data-testid="fetch-latest-btn"
+        onClick={onFetchLatest}
         style={{
           cursor: 'pointer',
           padding: '2px 8px',
@@ -175,18 +177,13 @@ function SettingsOverlay() {
   const settingsVisible = useNapStore((s) => s.settingsVisible);
   const mainRepoConfig = useNapStore((s) => s.mainRepoConfig);
   const toggleSettings = useNapStore((s) => s.toggleSettings);
-  const setMainRepo = useNapStore((s) => s.setMainRepo);
-  const [repoInput, setRepoInput] = useState(mainRepoConfig ? `${mainRepoConfig.owner}/${mainRepoConfig.repo}` : '');
-  const [branchInput, setBranchInput] = useState(mainRepoConfig?.branch ?? 'main');
   const [patInput, setPatInput] = useState('');
 
   if (!settingsVisible) return null;
 
   function handleSave() {
-    const parts = repoInput.split('/');
-    if (parts.length === 2 && parts[0] && parts[1]) {
-      setMainRepo({ owner: parts[0], repo: parts[1], branch: branchInput || 'main' });
-    }
+    // PAT storage would go here (e.g., chrome.storage.local)
+    // For now, just close
     toggleSettings();
   }
 
@@ -203,26 +200,17 @@ function SettingsOverlay() {
       }}
     >
       <h3 style={{ fontSize: 13, marginBottom: 12 }}>Settings</h3>
-      <label style={{ display: 'block', fontSize: 11, color: 'var(--nap-text-muted)', marginBottom: 2, marginTop: 8 }}>
-        Main code repo (owner/repo)
-      </label>
-      <input
-        type="text"
-        value={repoInput}
-        onChange={(e) => setRepoInput(e.target.value)}
-        placeholder="org/project"
-        style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--nap-border)', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, background: 'var(--nap-bg)', color: 'var(--nap-text)' }}
-      />
-      <label style={{ display: 'block', fontSize: 11, color: 'var(--nap-text-muted)', marginBottom: 2, marginTop: 8 }}>
-        Branch
-      </label>
-      <input
-        type="text"
-        value={branchInput}
-        onChange={(e) => setBranchInput(e.target.value)}
-        placeholder="main"
-        style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--nap-border)', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, background: 'var(--nap-bg)', color: 'var(--nap-text)' }}
-      />
+
+      {mainRepoConfig && (
+        <div style={{ fontSize: 11, color: 'var(--nap-text-muted)', marginBottom: 12, padding: '6px 8px', background: 'var(--nap-bg-secondary)', borderRadius: 3 }}>
+          Code repo: <span style={{ color: 'var(--nap-text)' }}>{mainRepoConfig.owner}/{mainRepoConfig.repo}</span>
+          <br />
+          Branch: <span style={{ color: 'var(--nap-text)' }}>{mainRepoConfig.branch}</span>
+          <br />
+          <span style={{ fontSize: 10, color: 'var(--nap-text-dim)' }}>auto-detected from URL</span>
+        </div>
+      )}
+
       <label style={{ display: 'block', fontSize: 11, color: 'var(--nap-text-muted)', marginBottom: 2, marginTop: 8 }}>
         GitHub PAT (optional, for private repos)
       </label>
@@ -258,15 +246,13 @@ function Panel() {
   const activeSurface = useNapStore((s) => s.activeSurface);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
 
-  // Init model (filesystem bootstrap + repo scan)
+  // Init model + cleanup
   useEffect(() => {
     model.init();
-    return () => model.destroy();
-  }, [model]);
-
-  // Stable callback that reaches the current model
-  const handleCommandComplete = useCallback((cmd: string) => {
-    model.onCommandComplete(cmd);
+    return () => {
+      model.registerShell(null);
+      model.destroy();
+    };
   }, [model]);
 
   // Zoom keyboard shortcuts
@@ -308,7 +294,7 @@ function Panel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
-      <HeaderBar />
+      <HeaderBar onFetchLatest={() => model.fetchLatest()} />
       <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <SurfaceTabBar />
@@ -342,7 +328,8 @@ function Panel() {
               <TerminalPane
                 lfs={lfs}
                 adapter={adapter}
-                onCommandComplete={handleCommandComplete}
+                onCommandComplete={(cmd) => model.onCommandComplete(cmd)}
+                onShellReady={(exec) => model.registerShell(exec)}
               />
             </div>
           </div>
@@ -358,24 +345,63 @@ function Panel() {
 
 function App() {
   const [session, setSession] = useState<Session>(() => createSession(getStateKey()));
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
-  // Expose switchSession for console and content script use
+  // Session management: chrome messages + initial config request
   useEffect(() => {
-    const switchSession = (key: string) => {
+    let aborted = false;
+
+    function handleConfig(key: string, config: any): void {
+      if (aborted) return;
+      if (key !== sessionRef.current.key) {
+        sessionRef.current.model.destroy();
+        const newSession = createSession(key);
+        newSession.model.applyConfig(config);
+        setSession(newSession);
+      } else {
+        sessionRef.current.model.applyConfig(config);
+      }
+    }
+
+    // Console API
+    (window as any).__switchSession__ = (key: string) => {
       console.log(`[session] switching to key: ${key}`);
-      session.model.destroy();
+      sessionRef.current.model.destroy();
       setSession(createSession(key));
     };
-    (window as any).__switchSession__ = switchSession;
 
-    // Also listen for content script messages
+    // Listen for content script messages
+    let listener: ((msg: any) => void) | undefined;
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-      const listener = (msg: any) => {
-        if (msg.type === 'session-key-changed' && msg.key) switchSession(msg.key);
+      listener = (msg: any) => {
+        if (msg.type === 'nap-config' && msg.key) {
+          handleConfig(msg.key, msg.config);
+        } else if (msg.type === 'session-key-changed' && msg.key) {
+          (window as any).__switchSession__(msg.key);
+        }
       };
       chrome.runtime.onMessage.addListener(listener);
-      return () => chrome.runtime.onMessage.removeListener(listener);
     }
+
+    // Request config from content script (handles panel-opens-after-content-script)
+    if (typeof chrome !== 'undefined' && chrome.tabs?.sendMessage) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tabId = tabs[0]?.id;
+        if (tabId == null) return;
+        chrome.tabs.sendMessage(tabId, { type: 'get-nap-config' }, (response) => {
+          if (chrome.runtime.lastError) return;
+          if (response?.key) handleConfig(response.key, response.config);
+        });
+      });
+    }
+
+    return () => {
+      aborted = true;
+      if (listener && typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+        chrome.runtime.onMessage.removeListener(listener);
+      }
+    };
   }, [session]);
 
   return (

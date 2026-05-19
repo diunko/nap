@@ -260,6 +260,7 @@ export function Sidebar() {
   const focusedCardSlug = useNapStore((s) => s.focusedCardSlug);
   const cardViewMode = useNapStore((s) => s.cardViewMode);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
+  const cloningStatus = useNapStore((s) => s.cloningStatus);
   const [showAll, setShowAll] = useState(false);
 
   // Resizable width
@@ -339,7 +340,13 @@ export function Sidebar() {
 
       {/* Card list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0', scrollBehavior: 'smooth' }}>
-        {napkins.length === 0 && (
+        {napkins.length === 0 && cloningStatus === 'cloning' && (
+          <div data-testid="clone-loading" style={{ padding: '16px 12px', color: 'var(--nap-text-dim)', fontSize: 11 }}>
+            cloning...
+          </div>
+        )}
+
+        {napkins.length === 0 && cloningStatus !== 'cloning' && (
           <div style={{ padding: '16px 12px', color: 'var(--nap-text-dim)', fontSize: 11 }}>
             Clone a .nap repo in the terminal to get started.
           </div>

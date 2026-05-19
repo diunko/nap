@@ -10,9 +10,11 @@ interface TerminalPaneProps {
   adapter: LightningFsAdapter | null;
   onCommandComplete?: (command: string) => void;
   getAuth?: () => Promise<{ username: string; password: string } | undefined>;
+  /** Called when the shell is ready to accept input. */
+  onShellReady?: (input: (data: string) => Promise<void>) => void;
 }
 
-export function TerminalPane({ lfs, adapter, onCommandComplete, getAuth }: TerminalPaneProps) {
+export function TerminalPane({ lfs, adapter, onCommandComplete, getAuth, onShellReady }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<WTerm | null>(null);
   const shellRef = useRef<BashShell | null>(null);
@@ -47,6 +49,7 @@ export function TerminalPane({ lfs, adapter, onCommandComplete, getAuth }: Termi
       console.log('[terminal] shell attached — prompt written');
       term.onData = (data: string) => shell.handleInput(data);
       term.element.focus();
+      onShellReady?.((data: string) => shell.handleInput(data));
     }).catch((e) => {
       console.error('[terminal] init failed:', e);
     });

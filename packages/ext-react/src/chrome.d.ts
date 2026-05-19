@@ -17,8 +17,16 @@ declare namespace chrome {
   namespace runtime {
     function getURL(path: string): string;
     function sendMessage(message: any, callback?: (response: any) => void): void;
+    const lastError: { message?: string } | undefined;
     const onMessage: {
       addListener(
+        callback: (
+          message: any,
+          sender: { tab?: { id?: number; url?: string } },
+          sendResponse: (response?: any) => void,
+        ) => boolean | void,
+      ): void;
+      removeListener(
         callback: (
           message: any,
           sender: { tab?: { id?: number; url?: string } },
@@ -33,6 +41,8 @@ declare namespace chrome {
     function update(tabId: number, options: { url: string }): Promise<void>;
     function query(
       queryInfo: { active?: boolean; currentWindow?: boolean },
-    ): Promise<Array<{ id?: number; url?: string }>>;
+      callback: (tabs: Array<{ id?: number; url?: string }>) => void,
+    ): void;
+    function sendMessage(tabId: number, message: any, callback?: (response: any) => void): void;
   }
 }

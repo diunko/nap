@@ -5,8 +5,8 @@ import { TabBar } from './TabBar';
 import { registerNapkinMarkdown, registerShiftEnter } from './napkin-markdown';
 import { registerTheme, applyTheme } from './theme';
 import { roleDecoClass, generatePaletteCss } from './role-palette';
-import { routeLink } from './link-routing';
-import type { LinkResult, MainRepoConfig } from './link-routing';
+import { routeLink, resolveDiffUrl } from './link-routing';
+import type { LinkResult, MainRepoConfig, DiffRoutingContext } from './link-routing';
 import { detectLinks } from './content-link-provider';
 
 // Register language + theme once
@@ -111,6 +111,15 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
       }, 1000);
     });
 
+    // Build diff routing context from current store state
+    function getDiffCtx(): DiffRoutingContext | undefined {
+      const s = store.getState();
+      if (s.prNum > 0 && s.prDiffRanges) {
+        return { prNum: s.prNum, prDiffRanges: s.prDiffRanges };
+      }
+      return undefined;
+    }
+
     // Link click handling via onMouseDown
     editor.onMouseDown((e) => {
       console.log(`[links] onMouseDown target=${e.target.type} meta=${e.event.metaKey} ctrl=${e.event.ctrlKey}`);
@@ -139,7 +148,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
           const end = match.index + match[0].length + 1;
           if (col >= start && col < end) {
             e.event.preventDefault();
-            handleLinkResult(routeLink({ href: match[2], sourceFilePath }, store.getState().mainRepoConfig ?? undefined));
+            handleLinkResult(routeLink({ href: match[2], sourceFilePath }, store.getState().mainRepoConfig ?? undefined, getDiffCtx()));
             return;
           }
         }
@@ -151,7 +160,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
           const end = match.index + match[0].length + 1;
           if (col >= start && col < end) {
             e.event.preventDefault();
-            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, store.getState().mainRepoConfig ?? undefined));
+            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, store.getState().mainRepoConfig ?? undefined, getDiffCtx()));
             return;
           }
         }
@@ -167,7 +176,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
             const token = lineContent.slice(i + 1);
             if (/^https?:\/\//.test(token)) continue;
             e.event.preventDefault();
-            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, store.getState().mainRepoConfig ?? undefined));
+            handleLinkResult(routeLink({ href: match[0], sourceFilePath }, store.getState().mainRepoConfig ?? undefined, getDiffCtx()));
             return;
           }
         }
@@ -217,20 +226,34 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     roleDecorationsRef.current = editor.deltaDecorations(roleDecorationsRef.current, decorations);
   }
 
+  function navigateGitHubTab(url: string) {
+    console.log(`[chrome] tabs.update → ${url}`);
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id != null) {
+        chrome.tabs.update(tabs[0].id, { url });
+      }
+    });
+  }
+
   function handleLinkResult(result: LinkResult) {
     console.log(`[links] routeLink →`, result);
     if (result.action === 'openDoc') {
       store.getState().openDoc(result.path);
     } else if (result.action === 'openCode') {
-      console.log(`[chrome] tabs.update → ${result.githubUrl}`);
-      // Navigate the GitHub tab
-      chrome.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
-        // The active tab is likely us (side panel), find the GitHub tab
-        // Use the first tab that isn't the side panel
-        if (tabs[0]?.id != null) {
-          chrome.tabs.update(tabs[0].id, { url: result.githubUrl });
-        }
-      }).catch((e) => console.warn('[chrome] tabs.update failed:', e));
+      // Check if it's a diff URL placeholder that needs async resolution
+      if (result.githubUrl.startsWith('__DIFF_URL__:')) {
+        resolveDiffUrl(result.githubUrl).then(navigateGitHubTab).catch((e) => {
+          console.warn('[links] diff URL resolution failed, falling back to blob:', e);
+          // Fallback: build blob URL
+          const config = store.getState().mainRepoConfig;
+          if (config) {
+            const fallback = `https://github.com/${config.owner}/${config.repo}/blob/${config.branch}/${result.githubUrl.split(':')[2]}`;
+            navigateGitHubTab(fallback);
+          }
+        });
+      } else {
+        navigateGitHubTab(result.githubUrl);
+      }
     } else if (result.action === 'openExternal') {
       window.open(result.url, '_blank');
     }

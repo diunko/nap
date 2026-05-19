@@ -149,6 +149,29 @@ export function createGitCommand(
         return { stdout: 'push complete\n', stderr: '', exitCode: 0 };
       }
 
+      if (sub === 'fetch') {
+        const remote = args[1] || 'origin';
+        const auth = await onAuth();
+        await git.fetch({
+          fs, http, dir: cwd,
+          remote,
+          ...(auth ? { onAuth: () => auth } : {}),
+        });
+        return { stdout: `From ${remote}\n`, stderr: '', exitCode: 0 };
+      }
+
+      if (sub === 'checkout') {
+        const ref = args[1];
+        if (!ref) return { stdout: '', stderr: 'usage: git checkout <ref>\n', exitCode: 1 };
+
+        await git.checkout({
+          fs, dir: cwd,
+          ref,
+          force: true,
+        });
+        return { stdout: `Switched to '${ref}'\n`, stderr: '', exitCode: 0 };
+      }
+
       if (sub === 'diff') {
         const matrix = await git.statusMatrix({ fs, dir: cwd });
         const lines: string[] = [];

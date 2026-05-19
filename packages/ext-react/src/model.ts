@@ -1,11 +1,16 @@
 /**
- * Model layer — owns the data pipeline between filesystem and store.
+ * Model layer — owns the data pipeline between filesystem and store,
+ * AND the workflow orchestration (auto-clone, diff ranges, fetch latest).
  *
  * Responsibilities:
  * - Subscribe to adapter change events → debounce → refresh nav or reload file
  * - Handle git command completion → scan for nepic root → refresh nav
  * - Echo suppression for auto-save writes
  * - Reload active file on external changes
+ * - Apply config from content script → set store state
+ * - Auto-clone on empty LFS when shell + config are both available
+ * - Fetch PR diff ranges from GitHub API
+ * - Fetch latest (git fetch + checkout)
  *
  * Components call model methods. Model calls store actions. One direction.
  */
@@ -13,6 +18,8 @@ import type { LightningFsAdapter, FsChangeEvent } from './fs-adapter';
 import { parseNavTree } from './nav-tree';
 import type { DirEntry } from './nav-tree';
 import type { NapStoreApi } from './store';
+import { fetchPrDiffRanges } from './pr-diff';
+import type { NapConfig } from './url-config';
 
 const DEBOUNCE_MS = 200;
 
@@ -32,15 +39,35 @@ export interface NapModel {
   getNepicRoot: () => string | null;
   /** Bootstrap filesystem + scan for existing repos. Call once after creation. */
   init: () => Promise<void>;
-  /** Scan for existing repos in LFS (callable independently, e.g. after manual refresh). */
+  /** Scan for existing repos in LFS (callable independently). */
   scanExistingRepos: () => Promise<void>;
+
+  // ── Workflow orchestration ──
+
+  /** Register the shell command executor. Called by TerminalPane when shell is ready. Pass null on cleanup. */
+  registerShell: (exec: ((cmd: string) => Promise<void>) | null) => void;
+  /** Apply config from content script. Sets store state, triggers auto-clone and diff range fetch. */
+  applyConfig: (config: NapConfig) => void;
+  /** Execute git fetch + checkout to update the repo. */
+  fetchLatest: () => void;
 }
 
 export function createModel(options: ModelOptions): NapModel {
   const { adapter, store } = options;
+
+  // ── Existing state ──
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let echoSuppressed = false;
   let nepicRoot: string | null = null;
+
+  // ── Orchestration state ──
+  let shellExec: ((cmd: string) => Promise<void>) | null = null;
+  let config: NapConfig | null = null;
+  let cloneTriggered = false;
+  let pendingNapkinFocus: string | null = null;
+  let diffFetchInFlight = false;
+  let destroyed = false;
+  let initComplete = false;
 
   console.log('[model] created');
 
@@ -55,7 +82,6 @@ export function createModel(options: ModelOptions): NapModel {
       return;
     }
 
-    // Debounce: batch rapid writes
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
@@ -76,22 +102,42 @@ export function createModel(options: ModelOptions): NapModel {
     const trimmed = command.trim().split('\n')[0];
     console.log(`[terminal] commandComplete ${trimmed}`);
 
-    const isGitCommand = trimmed.startsWith('git clone') ||
+    const isClone = trimmed.startsWith('git clone');
+    const isFetch = trimmed.startsWith('git fetch');
+    const isGitCommand = isClone ||
       trimmed.startsWith('git pull') ||
       trimmed.startsWith('git checkout') ||
-      trimmed.startsWith('git fetch');
+      isFetch;
 
     if (!isGitCommand) return;
 
     console.log('[model] git command detected → scanning for nepic root');
-    findNepicRoot(adapter).then((root) => {
+    findNepicRoot(adapter).then(async (root) => {
+      if (destroyed) return;
+
       if (root) {
         console.log(`[model] found nepic root: ${root}`);
         nepicRoot = root;
         console.log(`[model] repo-changed → refreshNav`);
-        refreshNavFromRoot(root);
+        await refreshNavFromRoot(root);
+
+        // Post-clone: update status and focus napkin
+        if (isClone && cloneTriggered) {
+          store.getState().setCloningStatus('done');
+          if (pendingNapkinFocus) {
+            console.log(`[model] post-clone → expandCard ${pendingNapkinFocus}`);
+            store.getState().expandCard(pendingNapkinFocus);
+            pendingNapkinFocus = null;
+          }
+        }
       } else {
         console.log(`[model] nepic root not found after command`);
+      }
+
+      // After fetch: invalidate diff ranges and re-fetch
+      if (isFetch && store.getState().prNum > 0) {
+        store.getState().setPrDiffRanges(null);
+        checkDiffRanges();
       }
     });
   }
@@ -165,16 +211,128 @@ export function createModel(options: ModelOptions): NapModel {
   }
 
   async function init(): Promise<void> {
-    // Ensure shell home directory exists — LightningFS starts empty
     try { await adapter.mkdir('/home', { recursive: true }); } catch { /* exists */ }
     try { await adapter.mkdir('/home/user', { recursive: true }); } catch { /* exists */ }
     console.log('[model] ensured /home/user exists');
     await scanExistingRepos();
+    initComplete = true;
+    checkAutoClone();
+
+    // Wait for Zustand persist hydration before checking diff ranges.
+    // On return visit, hydration restores cached prDiffRanges → avoids redundant fetch.
+    const persist = (store as any).persist;
+    if (persist?.hasHydrated?.()) {
+      checkDiffRanges();
+    } else if (persist?.onFinishHydration) {
+      persist.onFinishHydration(() => {
+        if (!destroyed) checkDiffRanges();
+      });
+    } else {
+      // Non-persisted store (vitest) — check immediately
+      checkDiffRanges();
+    }
+  }
+
+  // ── Workflow orchestration ──
+
+  function registerShell(exec: ((cmd: string) => Promise<void>) | null): void {
+    shellExec = exec;
+    if (exec) {
+      console.log('[model] shell registered');
+      checkAutoClone();
+    } else {
+      console.log('[model] shell unregistered');
+    }
+  }
+
+  function applyConfig(cfg: NapConfig): void {
+    config = cfg;
+    console.log(`[model] applyConfig: clone=${cfg.cloneUrl} napkin=${cfg.napkinFocus} pr=${cfg.prNum}`);
+
+    const s = store.getState();
+    s.setMainRepo({ owner: cfg.mainOwner, repo: cfg.mainRepo, branch: cfg.mainBranch });
+    s.setPrNum(cfg.prNum);
+
+    if (cfg.napkinFocus) {
+      // Return visit: nav already populated → focus immediately
+      if (s.navSections.length > 0) {
+        console.log(`[model] return visit → expandCard ${cfg.napkinFocus}`);
+        s.expandCard(cfg.napkinFocus);
+      } else {
+        // First visit: defer focus until after clone + nav populate
+        pendingNapkinFocus = cfg.napkinFocus;
+      }
+    }
+
+    checkAutoClone();
+    checkDiffRanges();
+  }
+
+  /**
+   * Auto-clone check. Called from three places:
+   * - registerShell() — shell just became available
+   * - init() after scanExistingRepos() — scan finished
+   * - applyConfig() — config just arrived
+   *
+   * Whichever fires last completes the preconditions and triggers the clone.
+   * The cloneTriggered boolean prevents double-fire.
+   */
+  function checkAutoClone(): void {
+    if (destroyed) return;
+    if (!initComplete) return;  // wait for init to create dirs + scan
+    if (!shellExec) return;     // shell not ready yet
+    if (!config) return;        // no config yet
+    if (cloneTriggered) return; // already started
+    if (nepicRoot) return;      // repos already exist (from scan)
+
+    // Also check store — on return visit, navSections may be populated from hydration
+    if (store.getState().navSections.length > 0) return;
+
+    cloneTriggered = true;
+    store.getState().setCloningStatus('cloning');
+    console.log(`[auto-clone] starting: git clone ${config.cloneUrl}`);
+    shellExec(`git clone ${config.cloneUrl}\r`);
+  }
+
+  function checkDiffRanges(): void {
+    if (destroyed) return;
+    if (diffFetchInFlight) return;
+
+    const s = store.getState();
+    if (s.prNum <= 0) return;
+    if (!s.mainRepoConfig) return;
+    if (s.prDiffRanges !== null) return; // already cached
+
+    diffFetchInFlight = true;
+    const { owner, repo } = s.mainRepoConfig;
+    console.log(`[model] fetching PR diff ranges for ${owner}/${repo}#${s.prNum}`);
+    fetchPrDiffRanges(owner, repo, s.prNum).then((ranges) => {
+      diffFetchInFlight = false;
+      if (destroyed) return;
+      if (ranges) {
+        store.getState().setPrDiffRanges(ranges);
+      }
+    }).catch(() => {
+      diffFetchInFlight = false;
+    });
+  }
+
+  function fetchLatest(): void {
+    if (!shellExec) {
+      console.log('[fetch-latest] no shell — cannot execute');
+      return;
+    }
+    const branch = store.getState().mainRepoConfig?.branch || 'main';
+    console.log(`[fetch-latest] starting: git fetch origin && git checkout origin/${branch}`);
+    shellExec(`git fetch origin && git checkout origin/${branch}\r`);
   }
 
   return {
     destroy: () => {
       console.log('[model] destroy');
+      destroyed = true;
+      shellExec = null;
+      config = null;
       unsubAdapter();
       if (debounceTimer) clearTimeout(debounceTimer);
     },
@@ -187,6 +345,9 @@ export function createModel(options: ModelOptions): NapModel {
     getNepicRoot: () => nepicRoot,
     init,
     scanExistingRepos,
+    registerShell,
+    applyConfig,
+    fetchLatest,
   };
 }
 
@@ -202,7 +363,6 @@ async function findNepicRoot(adapter: LightningFsAdapter): Promise<string | null
         const stat = await adapter.stat(`/home/user/${dir}`);
         if (!stat.isDirectory) continue;
 
-        // Check for nepics/ at root (this is a .nap repo cloned directly)
         const napExists = await adapter.exists(`/home/user/${dir}/nepics`);
         console.log(`[model] findNepicRoot: /home/user/${dir}/nepics exists=${napExists}`);
         if (napExists) {
@@ -218,7 +378,6 @@ async function findNepicRoot(adapter: LightningFsAdapter): Promise<string | null
           }
         }
 
-        // Check for .nap/nepics/ (code repo with .nap subdir)
         const dotNapExists = await adapter.exists(`/home/user/${dir}/.nap/nepics`);
         if (dotNapExists) {
           const nepicDirs = await adapter.readdir(`/home/user/${dir}/.nap/nepics`);

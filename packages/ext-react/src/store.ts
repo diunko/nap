@@ -40,6 +40,12 @@ export interface NapStore {
   zoom: number;
   settingsVisible: boolean;
 
+  // ── Workflow wiring ──
+  prNum: number;
+  prDiffRanges: Record<string, Array<{ start: number; end: number }>> | null;
+  /** Transient — not persisted. Model sets this for Sidebar loading state. */
+  cloningStatus: 'idle' | 'cloning' | 'done';
+
   // ── Actions ──
   openDoc: (path: string) => void;
   closeTab: (tabId: string) => void;
@@ -56,12 +62,16 @@ export interface NapStore {
   setMainRepo: (config: MainRepoConfig | null) => void;
   setZoom: (zoom: number) => void;
   toggleSettings: () => void;
+  setPrNum: (n: number) => void;
+  setPrDiffRanges: (ranges: Record<string, Array<{ start: number; end: number }>> | null) => void;
+  setCloningStatus: (status: 'idle' | 'cloning' | 'done') => void;
 }
 
 /** Fields persisted to IndexedDB. */
 export type PersistedState = Pick<NapStore,
   'tabs' | 'activeTabId' | 'activeFilePath' | 'activeSurface' |
-  'focusedCardSlug' | 'cardViewMode' | 'mainRepoConfig' | 'zoom'
+  'focusedCardSlug' | 'cardViewMode' | 'mainRepoConfig' | 'zoom' |
+  'prNum' | 'prDiffRanges'
 >;
 
 let tabIdCounter = 0;
@@ -126,6 +136,9 @@ function storeActions(set: any, get: any): NapStore {
     mainRepoConfig: null,
     zoom: 1.0,
     settingsVisible: false,
+    prNum: 0,
+    prDiffRanges: null,
+    cloningStatus: 'idle' as const,
 
     openDoc: (path: string) => {
       console.log(`[store] openDoc ${path}`);
@@ -225,6 +238,21 @@ function storeActions(set: any, get: any): NapStore {
     toggleSettings: () => {
       set({ settingsVisible: !get().settingsVisible });
     },
+
+    setPrNum: (n: number) => {
+      console.log(`[store] setPrNum ${n}`);
+      set({ prNum: n });
+    },
+
+    setPrDiffRanges: (ranges: Record<string, Array<{ start: number; end: number }>> | null) => {
+      console.log(`[store] setPrDiffRanges ${ranges ? Object.keys(ranges).length + ' files' : 'null'}`);
+      set({ prDiffRanges: ranges });
+    },
+
+    setCloningStatus: (status: 'idle' | 'cloning' | 'done') => {
+      console.log(`[store] setCloningStatus ${status}`);
+      set({ cloningStatus: status });
+    },
   };
 }
 
@@ -237,6 +265,8 @@ const PARTIALIZE = (state: NapStore): PersistedState => ({
   cardViewMode: state.cardViewMode,
   mainRepoConfig: state.mainRepoConfig,
   zoom: state.zoom,
+  prNum: state.prNum,
+  prDiffRanges: state.prDiffRanges,
 });
 
 /**
