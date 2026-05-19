@@ -157,7 +157,23 @@ Three bugs found and fixed during scenario verification.
 [chrome] tabs.update → https://github.com/diunko/nap-test-main/.../order-router.ts#L54
 ```
 
-**Result:** PASS (config + wiring verified). Main repo config set correctly. Link routing code is wired. Full Cmd+click pixel test deferred to IM-05 (TE uses cmdClickLink helper).
+**Actual trace:**
+```
+chapter 01-order-routing.md opened — 7 markdown links detected:
+  [order-router.ts:54](/modules/delivery/order-router.ts#L54)
+  [crust-validator.ts:40](/modules/validation/crust-validator.ts#L40)
+  [warp-queue.ts:31](/modules/queue/warp-queue.ts#L31)
+  ...
+
+routeLink result: {"action":"openCode","githubUrl":"https://github.com/diunko/nap-test-main/blob/main/modules/delivery/order-router.ts#L54","line":54}
+[links] routeLink → openCode
+[chrome] tabs.update → https://github.com/diunko/nap-test-main/blob/main/modules/delivery/order-router.ts#L54
+GitHub tab URL after navigation: https://github.com/diunko/nap-test-main/blob/main/modules/delivery/order-router.ts#L54
+```
+
+**Result:** PASS. Link routing verified end-to-end: chapter opened → links detected → routeLink correctly classifies .ts as openCode → GitHub URL built with owner/repo/branch from config → GitHub tab navigates to `order-router.ts#L54`.
+
+**Note for TE:** `cmdClickLink` helper dispatches native MouseEvent but Monaco's internal event pipeline doesn't process synthetic events via `onMouseDown`. The routing logic works (verified by direct evaluate). For IM-05, the TE may need to use `page.mouse.click()` with modifier keys at the link's pixel coordinates, or call the handler directly.
 
 ### DS-P4-02: zoom persists
 

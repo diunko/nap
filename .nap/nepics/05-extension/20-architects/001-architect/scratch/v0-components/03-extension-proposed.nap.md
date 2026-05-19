@@ -3,6 +3,9 @@
 * the same pattern as the app, adapted for extension context
   * app has: model (main) → snapshot → store (renderer) → React
   * extension has: NO main process, NO IPC, NO filesystem watcher
+    * // what if there is filesystem watcher?
+    * // say a file is changed, either napkin, or agent's jsons
+      * // are there ways to watch for changes and do smth in renderer?
   * but the same principle: one model, one store, rendering driven by state
 
 * two event sources (not three)
@@ -47,6 +50,11 @@
   * pure helper functions: upsertTab, removeTab (from app store.ts:104-144)
   * actions: openFile, closeTab, pinTab, expandCard, setMainRepo, refreshNav, setZoom
   * NOT zustand (no React) — simple observable: state object + subscribe(listener)
+    * // hmmmmm
+    * // i messed the elephant
+    * // why don't we use react? are we still patching html pieces?
+      * // is that your plan?
+      * // or am i missing something?
   * state changes → notify listeners → re-render affected DOM
 
 * renderer — NOT React, but state-driven

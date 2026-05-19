@@ -115,6 +115,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
 
     // Link click handling via onMouseDown
     editor.onMouseDown((e) => {
+      console.log(`[links] onMouseDown target=${e.target.type} meta=${e.event.metaKey} ctrl=${e.event.ctrlKey}`);
       if (e.target.type === monaco.editor.MouseTargetType.CONTENT_TEXT && (e.event.ctrlKey || e.event.metaKey)) {
         const position = e.target.position;
         if (!position) return;
