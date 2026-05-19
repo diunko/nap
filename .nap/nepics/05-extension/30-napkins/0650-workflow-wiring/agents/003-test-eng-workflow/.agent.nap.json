@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "ee0995a2-ebf3-43a7-8bc8-76eb3bb05ce7",
+  "role": "test-eng",
+  "name": "003-test-eng-workflow",
+  "napkin": "0650-workflow-wiring",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779201150810,
+  "started": false,
+  "exited": false
+}
