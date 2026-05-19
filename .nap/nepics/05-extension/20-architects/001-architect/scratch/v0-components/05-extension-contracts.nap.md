@@ -48,11 +48,17 @@ Interfaces that exist in the extension but not in the app. The app's internal in
   * components never touch `lfs.promises` directly — go through this interface
   * makes testing possible: mock ExtensionFS for vitest, real LFS for Playwright
 
-* the key difference from the app
-  * app: main process PUSHES snapshots to renderer (model.onChange → IPC)
-  * extension: renderer PULLS data from LFS (no push, no watcher)
-  * trigger points: after git commands (onCommandComplete), after auto-save, on panel open
-  * at each trigger: read LFS → parse → update store → React re-renders
+* data flow: PUSH, same as the app
+  * app: filesystem change → fs.watch → model reload → snapshot → store → React
+  * extension: LFS change → adapter emitter → model reload → store update → React
+  * same direction, same pattern
+  * two change sources, both push:
+    * adapter emitter: bash commands (writeFile, mkdir, rm) → emit { type, path }
+    * onCommandComplete: git commands (clone, pull, checkout) → emit 'repo-changed'
+  * model layer subscribes to both → re-reads affected area from LFS → updates store
+  * debounce 200ms (same as app) — batches rapid writes during git clone
+  * components never pull — they subscribe to the store and get told
+  * auto-save echo suppression: flag during writeFile, skip re-read for own writes (same as app's pendingContentWrites pattern)
 
 ## 3. store ↔ chrome.storage (persistence)
 
@@ -79,10 +85,11 @@ Interfaces that exist in the extension but not in the app. The app's internal in
   restore(key: string): Promise<PersistedState | null>
   ```
 
-## 4. adapter filesystem events (replaces fs.watch)
+## 4. adapter filesystem events (the extension's fs.watch)
 
-* the app watches the filesystem: fs.watch → model reload → snapshot → renderer
-* the extension controls all writes — emit events at write time instead of watching
+* the app has fs.watch (OS-level, recursive, 200ms debounce)
+* the extension has: adapter instrumentation + onCommandComplete
+* same role — push notification that something changed on disk
 
 * event emitter on LightningFsAdapter:
   ```
@@ -92,15 +99,25 @@ Interfaces that exist in the extension but not in the app. The app's internal in
   * mkdir → emit { type: 'mkdir', path }
   * rm → emit { type: 'rm', path }
   * appendFile → emit { type: 'write', path }
+  * covers: echo, cat >, mkdir, rm — all bash file ops go through the adapter
 
 * git commands write directly to raw LFS (not through adapter)
-  * handled separately: onCommandComplete after git clone/pull/checkout → emit 'repo-changed'
-  * store subscribes: on 'repo-changed' → refreshNav (re-parse entire tree from LFS)
+  * onCommandComplete after git clone/pull/checkout → emit 'repo-changed'
+  * this is the equivalent of the app's model-level fs.watch
 
-* who subscribes:
-  * store.refreshNav() on repo-changed
-  * store can optionally re-read open file on write event (if path matches activeFilePath)
-  * nav tree doesn't need per-file updates — bulk refresh after git commands is enough for v0
+* model layer subscribes to both sources:
+  * on adapter 'change' → debounce 200ms → re-read affected area → update store
+    * if path is inside navTree scope → refreshNav
+    * if path matches activeFilePath → reload editor content (with echo suppression)
+    * if path matches .agent.nap.json → update agent dot state
+  * on 'repo-changed' → debounce 200ms → full refreshNav (re-parse entire tree)
+  * same debounce pattern as app — batches rapid writes during git clone
+
+* what this enables:
+  * `cat > .agent.nap.json` in terminal → agent dot updates automatically
+  * `echo "// comment" >> chapter.md` → editor refreshes automatically
+  * `git clone` → nav tree populates automatically
+  * no manual refresh, no explicit triggers, no pull — pure push
 
 ## 5. Monaco ↔ store
 
