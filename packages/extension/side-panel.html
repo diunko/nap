@@ -143,6 +143,7 @@ html, body {
   white-space: nowrap;
   flex-shrink: 0;
   max-width: 180px;
+  min-width: 0;
   user-select: none;
 }
 .tab:hover { color: var(--nap-text-secondary); }
@@ -150,8 +151,14 @@ html, body {
   color: var(--nap-text);
   background: var(--nap-bg);
 }
+.tab .tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 .tab.ephemeral .tab-label { font-style: italic; }
 .tab .tab-close {
+  flex-shrink: 0;
   opacity: 0;
   font-size: 14px;
   line-height: 1;
