@@ -265,33 +265,29 @@ function App() {
   const [lfs] = useState(() => new LightningFS('nap-ext'));
   const [adapter] = useState(() => new LightningFsAdapter(lfs));
   const modelRef = useRef<NapModel | null>(null);
-  const [nepicRoot, setNepicRoot] = useState<string | null>(null);
+  const [model, setModel] = useState<NapModel | null>(null);
 
-  // Create model layer
+  // Ensure /home/user exists in LFS (shell cwd starts there)
   useEffect(() => {
-    const model = createModel({
-      adapter,
-      getNepicRoot: () => nepicRoot,
-    });
-    modelRef.current = model;
-    return () => model.destroy();
-  }, [adapter, nepicRoot]);
+    (async () => {
+      try { await lfs.promises.mkdir('/home'); } catch { /* exists */ }
+      try { await lfs.promises.mkdir('/home/user'); } catch { /* exists */ }
+      console.log('[adapter] ensured /home/user exists');
+    })();
+  }, [lfs]);
 
-  // Auto-detect nepic root after git clone
-  function handleCommandComplete(cmd: string) {
-    const trimmed = cmd.trim();
-    if (trimmed.startsWith('git clone') || trimmed.startsWith('git pull') || trimmed.startsWith('git checkout') || trimmed.startsWith('git fetch')) {
-      console.log(`[terminal] commandComplete ${trimmed.split('\n')[0]}`);
-      // Try to find the nepic root
-      findNepicRoot(adapter).then((root) => {
-        if (root) {
-          console.log(`[model] found nepic root: ${root}`);
-          setNepicRoot(root);
-          modelRef.current?.onRepoChanged();
-        }
-      });
-    }
-  }
+  // Create model layer — ref for stable callbacks, state to trigger child re-renders
+  useEffect(() => {
+    const m = createModel({ adapter });
+    modelRef.current = m;
+    setModel(m);
+    return () => m.destroy();
+  }, [adapter]);
+
+  // Stable callback that always reaches the latest model
+  const handleCommandComplete = useCallback((cmd: string) => {
+    modelRef.current?.onCommandComplete(cmd);
+  }, []);
 
   // Zoom keyboard shortcuts
   useEffect(() => {
@@ -353,7 +349,7 @@ function App() {
                 zIndex: activeSurface === 'editor' ? 1 : 0,
               }}
             >
-              <ContentPane adapter={adapter} model={modelRef.current} />
+              <ContentPane adapter={adapter} model={model} />
             </div>
             {/* Terminal surface */}
             <div
@@ -380,45 +376,6 @@ function App() {
       </div>
     </div>
   );
-}
-
-// ── Helper: find nepic root by scanning LFS ──
-
-async function findNepicRoot(adapter: LightningFsAdapter): Promise<string | null> {
-  // Look for .nap/nepics/ pattern in /home/user/*/
-  try {
-    const homeEntries = await adapter.readdir('/home/user');
-    for (const dir of homeEntries) {
-      try {
-        const stat = await adapter.stat(`/home/user/${dir}`);
-        if (!stat.isDirectory) continue;
-        // Check for .nap/nepics/
-        const napExists = await adapter.exists(`/home/user/${dir}/nepics`);
-        if (napExists) {
-          // Find the first nepic dir
-          const nepicDirs = await adapter.readdir(`/home/user/${dir}/nepics`);
-          for (const nepic of nepicDirs) {
-            const nStat = await adapter.stat(`/home/user/${dir}/nepics/${nepic}`);
-            if (nStat.isDirectory) {
-              return `/home/user/${dir}/nepics/${nepic}`;
-            }
-          }
-        }
-        // Also check for direct nepics/ pattern (root-level .nap)
-        const dotNapExists = await adapter.exists(`/home/user/${dir}/.nap/nepics`);
-        if (dotNapExists) {
-          const nepicDirs = await adapter.readdir(`/home/user/${dir}/.nap/nepics`);
-          for (const nepic of nepicDirs) {
-            const nStat = await adapter.stat(`/home/user/${dir}/.nap/nepics/${nepic}`);
-            if (nStat.isDirectory) {
-              return `/home/user/${dir}/.nap/nepics/${nepic}`;
-            }
-          }
-        }
-      } catch { continue; }
-    }
-  } catch { /* /home/user may not exist yet */ }
-  return null;
 }
 
 const root = createRoot(document.getElementById('root')!);

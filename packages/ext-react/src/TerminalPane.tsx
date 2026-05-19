@@ -35,7 +35,6 @@ export function TerminalPane({ lfs, adapter, onCommandComplete, getAuth }: Termi
       cwd: '/home/user',
       customCommands: [gitCommand],
       onCommandComplete: (cmd) => {
-        console.log(`[terminal] commandComplete ${cmd.trim().split('\n')[0]}`);
         onCommandComplete?.(cmd);
       },
     });

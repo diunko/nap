@@ -48,10 +48,15 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
   const activeTabId = useNapStore((s) => s.activeTabId);
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-  const modelRef = useRef<monaco.editor.ITextModel | null>(null);
+  const monacoModelRef = useRef<monaco.editor.ITextModel | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const roleDecorationsRef = useRef<string[]>([]);
   const shiftEnterDisposableRef = useRef<monaco.IDisposable | null>(null);
+  // Refs for stable access inside closures (auto-save, event handlers)
+  const adapterRef = useRef(adapter);
+  adapterRef.current = adapter;
+  const modelPropRef = useRef(model);
+  modelPropRef.current = model;
 
   // Create editor once
   useEffect(() => {
@@ -97,11 +102,14 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
       saveTimerRef.current = setTimeout(async () => {
         console.log(`[contentpane] autoSave debounce 1000ms`);
         const content = editor.getValue();
-        model?.suppressEcho(true);
+        const currentModel = modelPropRef.current;
+        const currentAdapter = adapterRef.current;
+        if (!currentAdapter) return;
+        currentModel?.suppressEcho(true);
         console.log(`[adapter] writeFile ${filePath}`);
-        await adapter.writeFile(filePath, content);
+        await currentAdapter.writeFile(filePath, content);
         // Keep suppress active briefly for echo
-        setTimeout(() => { model?.suppressEcho(false); }, 500);
+        setTimeout(() => { currentModel?.suppressEcho(false); }, 500);
       }, 1000);
     });
 
@@ -229,9 +237,9 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     let aborted = false;
 
     if (!activeFilePath) {
-      if (modelRef.current) {
-        modelRef.current.dispose();
-        modelRef.current = null;
+      if (monacoModelRef.current) {
+        monacoModelRef.current.dispose();
+        monacoModelRef.current = null;
       }
       editor.setModel(null);
       return;
@@ -249,12 +257,12 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
       }
       if (aborted) return;
 
-      if (modelRef.current) {
-        modelRef.current.dispose();
+      if (monacoModelRef.current) {
+        monacoModelRef.current.dispose();
       }
 
       const newModel = monaco.editor.createModel(content, 'napkin-markdown');
-      modelRef.current = newModel;
+      monacoModelRef.current = newModel;
       editor.setModel(newModel);
       console.log(`[monaco] setModel napkin-markdown`);
       refreshRoleDecorations();
@@ -284,7 +292,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
       const detail = (e as CustomEvent).detail;
       if (detail.path !== useNapStore.getState().activeFilePath) return;
       const editor = editorRef.current;
-      const currentModel = modelRef.current;
+      const currentModel = monacoModelRef.current;
       if (!editor || !currentModel) return;
 
       console.log(`[contentpane] externalChange → model.setValue (preserve cursor)`);

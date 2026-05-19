@@ -51,7 +51,6 @@ describe('IS-05: Model — debounce + echo suppression', () => {
     const { createModel } = await import('../model');
     model = createModel({
       adapter: mockAdapter as any,
-      getNepicRoot: () => null,
     });
   });
 
@@ -103,11 +102,11 @@ describe('IS-05: Model — debounce + echo suppression', () => {
     vi.advanceTimersByTime(250);
   });
 
-  // IS-05e: onRepoChanged triggers refresh
-  it('IS-05e: onRepoChanged triggers debounced refresh', () => {
-    model.onRepoChanged();
-    // Should debounce and then attempt to refresh nav
+  // IS-05e: onCommandComplete triggers refresh for git commands
+  it('IS-05e: onCommandComplete triggers debounced refresh for git commands', () => {
+    model.onCommandComplete('git clone https://github.com/test/repo');
+    // Should detect git command and attempt to scan for nepic root
     vi.advanceTimersByTime(250);
-    // No error — model handled the repo-changed event
+    // No error — model handled the command
   });
 });
