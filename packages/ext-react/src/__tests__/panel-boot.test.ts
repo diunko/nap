@@ -36,7 +36,7 @@ function createMockAdapter(): LightningFsAdapter {
 function makeConfig(overrides?: Partial<NapConfig>): NapConfig {
   return {
     provider: 'github',
-    cloneUrl: 'https://github.com/diunko/nap-test-nap',
+    cloneUrl: 'https://github.com/diunko/nap-test-nap.git',
     napBranch: 'main',
     napkinFocus: '0100-delivery-pipeline',
     mainOwner: 'diunko',
@@ -56,7 +56,7 @@ describe('PB-S01: boot-gate decision logic', () => {
 
     expect(result.state).toBe('session');
     if (result.state !== 'session') return;
-    expect(result.config.cloneUrl).toBe('https://github.com/diunko/nap-test-nap');
+    expect(result.config.cloneUrl).toBe('https://github.com/diunko/nap-test-nap.git');
     expect(result.config.mainOwner).toBe('diunko');
     expect(result.config.mainRepo).toBe('nap-test-main');
     expect(result.config.prNum).toBe(1);

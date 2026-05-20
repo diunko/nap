@@ -44,7 +44,7 @@ function createMockAdapter(): LightningFsAdapter {
 function makeConfig(overrides?: Partial<NapConfig>): NapConfig {
   return {
     provider: 'github',
-    cloneUrl: 'https://github.com/diunko/nap-test-nap',
+    cloneUrl: 'https://github.com/diunko/nap-test-nap.git',
     napBranch: 'main',
     napkinFocus: '0100-delivery-pipeline',
     mainOwner: 'diunko',
@@ -68,7 +68,7 @@ describe('WW-M01: config sets store state', () => {
     const config = buildNapConfig(page, hashConfig, 'feature/delivery-v2');
 
     expect(key).toBe('diunko/nap-test-main/1/github/diunko/nap-test-nap/main');
-    expect(config.cloneUrl).toBe('https://github.com/diunko/nap-test-nap');
+    expect(config.cloneUrl).toBe('https://github.com/diunko/nap-test-nap.git');
     expect(config.mainOwner).toBe('diunko');
     expect(config.mainRepo).toBe('nap-test-main');
     expect(config.mainBranch).toBe('feature/delivery-v2');

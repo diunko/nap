@@ -32,12 +32,12 @@ describe('GL-S01: Provider registry mapping', () => {
 describe('GL-S02: Clone URL with registry', () => {
   it('builds GitHub clone URL', () => {
     expect(buildCloneUrl('github', 'diunko', 'nap-test-nap'))
-      .toBe('https://github.com/diunko/nap-test-nap');
+      .toBe('https://github.com/diunko/nap-test-nap.git');
   });
 
   it('builds GitLab clone URL with grammarly hostname', () => {
     expect(buildCloneUrl('gitlab', 'dmitry.unkovsky', 'nap-test-nap'))
-      .toBe('https://gitlab.grammarly.io/dmitry.unkovsky/nap-test-nap');
+      .toBe('https://gitlab.grammarly.io/dmitry.unkovsky/nap-test-nap.git');
   });
 
   it('unknown provider throws', () => {
@@ -108,7 +108,7 @@ describe('GL-S05: buildNapConfig with GitLab provider', () => {
     const hash = parseNapHash('#nap-repo=gitlab/dmitry.unkovsky/nap-test-nap&napkin=01-v1/0100-delivery-pipeline')!;
     const config = buildNapConfig(page, hash);
     expect(config.provider).toBe('gitlab');
-    expect(config.cloneUrl).toBe('https://gitlab.grammarly.io/dmitry.unkovsky/nap-test-nap');
+    expect(config.cloneUrl).toBe('https://gitlab.grammarly.io/dmitry.unkovsky/nap-test-nap.git');
     expect(config.napkinFocus).toBe('0100-delivery-pipeline');
     expect(config.mainOwner).toBe('diunko');
   });
@@ -118,7 +118,7 @@ describe('GL-S05: buildNapConfig with GitLab provider', () => {
     const hash = parseNapHash('#nap-repo=github/diunko/nap-test-nap')!;
     const config = buildNapConfig(page, hash);
     expect(config.provider).toBe('github');
-    expect(config.cloneUrl).toBe('https://github.com/diunko/nap-test-nap');
+    expect(config.cloneUrl).toBe('https://github.com/diunko/nap-test-nap.git');
   });
 });
 

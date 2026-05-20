@@ -45,7 +45,7 @@ describe('IS-05: Model — debounce + echo suppression', () => {
       store,
       config: {
         provider: 'github',
-        cloneUrl: 'https://github.com/test/repo',
+        cloneUrl: 'https://github.com/test/repo.git',
         napBranch: 'main',
         napkinFocus: null,
         mainOwner: 'test',

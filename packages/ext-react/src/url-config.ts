@@ -101,7 +101,7 @@ export function deriveStateKey(page: PageInfo, hash: NapHashConfig): string {
 export function buildCloneUrl(provider: string, owner: string, repo: string): string {
   const entry = PROVIDERS[provider];
   if (!entry) throw new Error(`Unknown provider: "${provider}". Known providers: ${Object.keys(PROVIDERS).join(', ')}`);
-  return `https://${entry.hostname}/${owner}/${repo}`;
+  return `https://${entry.hostname}/${owner}/${repo}.git`;
 }
 
 /**

@@ -117,12 +117,12 @@ describe('WW-S02: deriveStateKey', () => {
 describe('WW-S03: buildCloneUrl', () => {
   it('builds GitHub clone URL', () => {
     expect(buildCloneUrl('github', 'diunko', 'nap-test-nap'))
-      .toBe('https://github.com/diunko/nap-test-nap');
+      .toBe('https://github.com/diunko/nap-test-nap.git');
   });
 
   it('builds GitLab clone URL with grammarly hostname', () => {
     expect(buildCloneUrl('gitlab', 'org', 'project'))
-      .toBe('https://gitlab.grammarly.io/org/project');
+      .toBe('https://gitlab.grammarly.io/org/project.git');
   });
 
   it('unknown provider throws', () => {
@@ -151,7 +151,7 @@ describe('buildNapConfig', () => {
     const config = buildNapConfig(page, hash, 'feature/delivery-v2');
     expect(config).toEqual({
       provider: 'github',
-      cloneUrl: 'https://github.com/diunko/nap-test-nap',
+      cloneUrl: 'https://github.com/diunko/nap-test-nap.git',
       napBranch: 'main',
       napkinFocus: '0100-delivery-pipeline',
       mainOwner: 'diunko',
