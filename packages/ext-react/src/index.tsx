@@ -371,6 +371,38 @@ function App() {
       setSession(createSession(key));
     };
 
+    (window as any).__wipeCurrentSession__ = async () => {
+      const key = sessionRef.current.key;
+      console.log(`[session] wiping: key=${key}`);
+      sessionRef.current.model.destroy();
+
+      // Wipe filesystem IDB databases
+      const fsName = `nap-fs-${key}`;
+      indexedDB.deleteDatabase(fsName);
+      indexedDB.deleteDatabase(`${fsName}_lock`);
+
+      // Wipe UI state from nap-state kv store
+      const uiKey = `nap-ui-${key}`;
+      try {
+        const req = indexedDB.open('nap-state');
+        await new Promise<void>((resolve, reject) => {
+          req.onsuccess = () => {
+            try {
+              const db = req.result;
+              const tx = db.transaction('kv', 'readwrite');
+              tx.objectStore('kv').delete(uiKey);
+              tx.oncomplete = () => { db.close(); resolve(); };
+              tx.onerror = () => { db.close(); reject(tx.error); };
+            } catch { resolve(); }
+          };
+          req.onerror = () => resolve();
+        });
+      } catch { /* best effort */ }
+
+      console.log(`[session] wiped fs=${fsName}, ui=${uiKey} — recreating fresh`);
+      setSession(createSession(key));
+    };
+
     // Listen for content script messages
     let listener: ((msg: any) => void) | undefined;
     if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {

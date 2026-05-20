@@ -8,6 +8,7 @@ if (chrome.sidePanel) {
   console.log('[background] chrome.sidePanel not available');
 }
 
+
 // Listen for open_side_panel message from content script.
 // This is the tested path: content script click → message → sidePanel.open().
 // Chrome traces the user gesture through the message chain, so this satisfies
