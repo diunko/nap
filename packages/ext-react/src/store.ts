@@ -28,6 +28,7 @@ export interface NapStore {
   activeFilePath: string | null;
   focusedCardSlug: string | null;
   cardViewMode: CardViewMode;
+  focusMode: boolean;
   sidebarVisible: boolean;
   activeSurface: 'editor' | 'terminal';
 
@@ -56,6 +57,7 @@ export interface NapStore {
   expandCard: (slug: string) => void;
   extendCard: () => void;
   collapseCard: () => void;
+  toggleFocusMode: () => void;
   toggleSidebar: () => void;
   setActiveSurface: (surface: 'editor' | 'terminal') => void;
   refreshNav: (sections: NavNode[]) => void;
@@ -70,7 +72,7 @@ export interface NapStore {
 /** Fields persisted to IndexedDB. */
 export type PersistedState = Pick<NapStore,
   'tabs' | 'activeTabId' | 'activeFilePath' | 'activeSurface' |
-  'focusedCardSlug' | 'cardViewMode' | 'mainRepoConfig' | 'zoom' |
+  'focusedCardSlug' | 'cardViewMode' | 'focusMode' | 'mainRepoConfig' | 'zoom' |
   'prNum' | 'prDiffRanges'
 >;
 
@@ -129,6 +131,7 @@ function storeActions(set: any, get: any): NapStore {
     activeFilePath: null,
     focusedCardSlug: null,
     cardViewMode: 'collapsed' as CardViewMode,
+    focusMode: true,
     sidebarVisible: true,
     activeSurface: 'editor' as const,
     tabs: [],
@@ -207,6 +210,11 @@ function storeActions(set: any, get: any): NapStore {
       set({ focusedCardSlug: null, cardViewMode: 'collapsed' });
     },
 
+    toggleFocusMode: () => {
+      console.log(`[store] toggleFocusMode ${get().focusMode} → ${!get().focusMode}`);
+      set({ focusMode: !get().focusMode });
+    },
+
     toggleSidebar: () => {
       set({ sidebarVisible: !get().sidebarVisible });
     },
@@ -263,6 +271,7 @@ const PARTIALIZE = (state: NapStore): PersistedState => ({
   activeSurface: state.activeSurface,
   focusedCardSlug: state.focusedCardSlug,
   cardViewMode: state.cardViewMode,
+  focusMode: state.focusMode,
   mainRepoConfig: state.mainRepoConfig,
   zoom: state.zoom,
   prNum: state.prNum,

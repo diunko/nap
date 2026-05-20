@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "a813f87e-1c87-4810-84c5-06240935c170",
+  "role": "test-eng",
+  "name": "003-test-eng-focus",
+  "napkin": "0656-focus-mode",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779274606639,
+  "started": false,
+  "exited": false
+}

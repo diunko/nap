@@ -69,6 +69,8 @@ function ResizeHandle() {
 function HeaderBar({ onFetchLatest, onRefreshPr }: { onFetchLatest?: () => void; onRefreshPr?: () => void }) {
   const toggleSettings = useNapStore((s) => s.toggleSettings);
   const toggleSidebar = useNapStore((s) => s.toggleSidebar);
+  const toggleFocusMode = useNapStore((s) => s.toggleFocusMode);
+  const focusMode = useNapStore((s) => s.focusMode);
 
   return (
     <div
@@ -113,6 +115,14 @@ function HeaderBar({ onFetchLatest, onRefreshPr }: { onFetchLatest?: () => void;
         }}
       >
         fetch latest
+      </span>
+      <span
+        data-testid="focus-toggle-btn"
+        onClick={toggleFocusMode}
+        title={focusMode ? 'Show all cards (Ctrl+Shift+F)' : 'Focus on current card (Ctrl+Shift+F)'}
+        style={{ cursor: 'pointer', padding: '2px 6px', borderRadius: 3, fontSize: 14 }}
+      >
+        {focusMode ? '\u2922' : '\u2921'}
       </span>
       <span
         onClick={toggleSettings}
@@ -296,6 +306,10 @@ function Panel() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault();
         s.toggleSidebar();
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+        e.preventDefault();
+        s.toggleFocusMode();
       }
     }
     window.addEventListener('keydown', handleKeyDown);

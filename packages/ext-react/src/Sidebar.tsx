@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { useNapStore } from './session';
 import type { CardViewMode } from './store';
 import type { NavNode } from './nav-tree';
@@ -253,18 +253,69 @@ function NapkinCard({ napkin, isFocused, viewMode }: { napkin: NavNode; isFocuse
   );
 }
 
+// ── Architect card ──
+
+function ArchitectCard({ architect, isFocused, viewMode }: { architect: NavNode; isFocused: boolean; viewMode: CardViewMode }) {
+  const expandCard = useNapStore((s) => s.expandCard);
+  const showExtended = isFocused && viewMode === 'extended';
+
+  const role = extractRole(architect);
+  const status = extractAgentStatus(architect);
+  const statusLabel = status === 'run' ? 'lead' : status === 'archived' ? 'archived' : status === 'exited' ? 'exited' : 'done';
+
+  return (
+    <div
+      data-testid="architect-card"
+      style={{
+        padding: '0 12px 0 9px',
+        cursor: 'pointer',
+        background: isFocused ? 'var(--nap-bg-tertiary)' : 'transparent',
+        borderLeft: isFocused ? '3px solid var(--nap-accent)' : '3px solid transparent',
+        transition: 'background 0.15s',
+      }}
+      onMouseEnter={(e) => { if (!isFocused) e.currentTarget.style.background = 'var(--nap-bg-hover)'; }}
+      onMouseLeave={(e) => { if (!isFocused) e.currentTarget.style.background = 'transparent'; }}
+    >
+      {/* Header */}
+      <div
+        onClick={() => expandCard(architect.name)}
+        style={{ display: 'flex', alignItems: 'center', padding: '3px 0', gap: 6, userSelect: 'none' }}
+      >
+        <span style={{ color: 'var(--nap-text-muted)', flexShrink: 0 }}>*</span>
+        <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isFocused ? 'var(--nap-text)' : 'var(--nap-text-secondary)' }}>
+          {architect.displayName}
+        </span>
+        <span style={{ display: 'flex', gap: 3, flexShrink: 0, margin: '0 2px' }}>
+          <AgentDot node={architect} />
+        </span>
+        <span style={{ color: statusLabel === 'lead' ? '#22c55e' : statusLabel === 'done' ? '#3b82f6' : '#6b7280', fontSize: 12, flexShrink: 0 }}>
+          {statusLabel}
+        </span>
+      </div>
+
+      {/* Body */}
+      {isFocused && architect.children && architect.children.length > 0 && (
+        <div style={{ padding: '0 0 4px 0' }}>
+          <NodeTree nodes={architect.children} indent={16} maxDepth={showExtended ? undefined : 1} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Sidebar ──
 
 export function Sidebar() {
   const navSections = useNapStore((s) => s.navSections);
   const focusedCardSlug = useNapStore((s) => s.focusedCardSlug);
   const cardViewMode = useNapStore((s) => s.cardViewMode);
+  const focusMode = useNapStore((s) => s.focusMode);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
   const cloningStatus = useNapStore((s) => s.cloningStatus);
-  const [showAll, setShowAll] = useState(false);
 
   // Resizable width
-  const [width, setWidth] = useState(240);
+  const widthRef = useRef(240);
+  const [width, setWidth] = React.useState(240);
   const dragging = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(240);
@@ -272,15 +323,16 @@ export function Sidebar() {
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     dragging.current = true;
     startX.current = e.clientX;
-    startWidth.current = width;
+    startWidth.current = widthRef.current;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
 
     const onMouseMove = (ev: MouseEvent) => {
       if (!dragging.current) return;
-      // Nav is on right, drag handle on left edge — dragging left increases width
       const delta = startX.current - ev.clientX;
-      setWidth(Math.max(180, Math.min(600, startWidth.current + delta)));
+      const newWidth = Math.max(180, Math.min(600, startWidth.current + delta));
+      widthRef.current = newWidth;
+      setWidth(newWidth);
     };
     const onMouseUp = () => {
       dragging.current = false;
@@ -291,17 +343,21 @@ export function Sidebar() {
     };
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
-  }, [width]);
+  }, []);
 
   if (!sidebarVisible) return null;
 
-  // Extract napkins from the nav tree
+  // Extract architects and napkins from the nav tree
+  const architectsSection = navSections.find((s) => s.name.startsWith('20-architects'));
+  const architects = architectsSection?.children ?? [];
   const napkinsSection = navSections.find((s) => s.name.startsWith('30-napkins'));
   const napkins = napkinsSection?.children ?? [];
 
-  const visibleNapkins = showAll ? napkins : napkins.slice(0, napkins.length > 0 ? napkins.length : 0);
+  console.log(`[sidebar] render — focusMode=${focusMode} focusedCardSlug=${focusedCardSlug} architects=${architects.length} napkins=${napkins.map((n) => `${n.displayName} (${n.status ?? 'backlog'})`).join(', ') || 'empty'}`);
 
-  console.log(`[sidebar] render — ${napkins.map((n) => `${n.displayName} (${n.status ?? 'backlog'})`).join(', ') || 'empty'}`);
+  // In focus mode, find the single focused card
+  const focusedArchitect = focusMode ? architects.find((a) => a.name === focusedCardSlug) : null;
+  const focusedNapkin = focusMode ? napkins.find((n) => n.name === focusedCardSlug) : null;
 
   return (
     <div
@@ -340,34 +396,61 @@ export function Sidebar() {
 
       {/* Card list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0', scrollBehavior: 'smooth' }}>
-        {napkins.length === 0 && cloningStatus === 'cloning' && (
+        {napkins.length === 0 && architects.length === 0 && cloningStatus === 'cloning' && (
           <div data-testid="clone-loading" style={{ padding: '16px 12px', color: 'var(--nap-text-dim)', fontSize: 11 }}>
             cloning...
           </div>
         )}
 
-        {napkins.length === 0 && cloningStatus !== 'cloning' && (
+        {napkins.length === 0 && architects.length === 0 && cloningStatus !== 'cloning' && (
           <div style={{ padding: '16px 12px', color: 'var(--nap-text-dim)', fontSize: 11 }}>
             Clone a .nap repo in the terminal to get started.
           </div>
         )}
 
-        {visibleNapkins.map((napkin) => (
-          <NapkinCard
-            key={napkin.name}
-            napkin={napkin}
-            isFocused={focusedCardSlug === napkin.name}
-            viewMode={cardViewMode}
-          />
-        ))}
+        {focusMode ? (
+          /* Focus mode: show only the focused card */
+          <>
+            {focusedArchitect && (
+              <ArchitectCard
+                architect={focusedArchitect}
+                isFocused={true}
+                viewMode={cardViewMode}
+              />
+            )}
+            {focusedNapkin && (
+              <NapkinCard
+                napkin={focusedNapkin}
+                isFocused={true}
+                viewMode={cardViewMode}
+              />
+            )}
+          </>
+        ) : (
+          /* Show-all mode: architects + separator + napkins */
+          <>
+            {architects.map((architect) => (
+              <ArchitectCard
+                key={architect.name}
+                architect={architect}
+                isFocused={focusedCardSlug === architect.name}
+                viewMode={cardViewMode}
+              />
+            ))}
 
-        {napkins.length > 1 && !showAll && (
-          <div
-            onClick={() => setShowAll(true)}
-            style={{ padding: '4px 12px 4px 21px', color: 'var(--nap-text-dim)', fontSize: 12, cursor: 'pointer', userSelect: 'none' }}
-          >
-            show others
-          </div>
+            {architects.length > 0 && napkins.length > 0 && (
+              <div data-testid="section-separator" style={{ height: 1, background: 'var(--nap-border)', margin: '6px 12px' }} />
+            )}
+
+            {napkins.map((napkin) => (
+              <NapkinCard
+                key={napkin.name}
+                napkin={napkin}
+                isFocused={focusedCardSlug === napkin.name}
+                viewMode={cardViewMode}
+              />
+            ))}
+          </>
         )}
       </div>
     </div>
