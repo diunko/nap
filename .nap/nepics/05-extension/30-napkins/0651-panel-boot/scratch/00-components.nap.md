@@ -11,13 +11,9 @@ refresh-pr-button      ~20 lines    re-read URL, invalidate + re-fetch diff rang
 
 net ~-15 lines. simplification, not a feature.
 
-## surface defaults
-
-* **no file open** — empty pane with bg color, maybe repo/branch status line
-  * not a blank void — a resting state that tells you where you are
-* **terminal** — hidden until user clicks Terminal tab
-  * no auto-visible black rectangle on boot
-  * still always mounted (shell ready for when needed)
+```
+idle-pane               ~10 lines   repo/branch status, calm bg, terminal hidden until clicked
+```
 
 ## cut
 

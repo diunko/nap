@@ -87,3 +87,11 @@
 * Cmd+click on a file that was in old diff but not new → now routes to blob
 * Cmd+click on a file newly in diff → now routes to diff view
 * routing reflects current PR state, not stale cache
+
+## B11: panel open, no file selected
+
+* panel boots on a nap link — session created, nav populates
+* main area shows idle pane: repo name, branch, calm background
+* no terminal visible — just nav + idle pane
+* reviewer scans napkin cards, picks a chapter → editor replaces idle pane
+* terminal appears only when reviewer clicks Terminal tab
