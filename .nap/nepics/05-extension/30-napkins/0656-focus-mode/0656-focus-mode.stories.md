@@ -3,9 +3,10 @@
 ## FM1: first open — focus mode, URL napkin
 
 * reviewer opens panel from link with `napkin=01-v1/0100-delivery-pipeline`
-* nav shows only 0100-delivery-pipeline card, expanded
+* nav shows only 0100-delivery-pipeline card, focused (top-level files + agents visible)
 * no architects visible, no other napkins
 * focus icon in header indicates "focused" state
+* Cmd+E extends the card to show full tree (scratch/ contents, agent files)
 * reviewer reads chapters, clicks files — all within this napkin
 
 ## FM2: switch to show-all
@@ -31,11 +32,12 @@
 
 ## FM5: explore an architect
 
-* from show-all mode, reviewer clicks 001-architect card
-* architect expands: prompt.md, scratch/ with files
+* from show-all mode, reviewer clicks 001-architect card header
+* architect goes to focused state: prompt.md, scratch/ visible (depth 0)
 * 0200 collapses
+* Cmd+E → extended: scratch/ contents visible (full tree)
 * click focus toggle → only 001-architect visible
-* architect works exactly like a napkin in focus mode
+* architect works exactly like a napkin — same three states, same shortcuts
 
 ## FM6: focus toggle round-trip
 
@@ -71,6 +73,8 @@
 
 * in show-all mode, architects section shows:
   * 001-architect card: `* 001-architect [dot] lead`
-  * expand: prompt.md, scratch/ (expandable), response.md if exists
+  * collapsed: header only
+  * click → focused: prompt.md, scratch/ visible (depth 0)
+  * Cmd+E → extended: scratch/ contents, all nested files
   * architect dot: blue (role color), filled/dashed-check/hollow (status)
-* same `*` bullet pattern, same indentation, same expand/collapse as napkin cards
+* same `*` bullet, same indentation, same three states as napkin cards
