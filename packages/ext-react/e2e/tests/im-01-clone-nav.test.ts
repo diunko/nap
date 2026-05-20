@@ -1,13 +1,14 @@
 /**
- * IM-01: Push data flow — git clone → nav auto-populates
+ * IM-01: Push data flow — auto-clone → nav auto-populates
  *
  * The single most important test. Proves the entire pipeline works:
- * terminal → shell → onCommandComplete → model → store → React.
+ * boot gate → session → model.init → registerShell → auto-clone →
+ * onCommandComplete → findNepicRoot → refreshNav → store → React.
  */
 import { test, expect, openGitHub, openSidePanel } from './fixtures';
 
-test('IM-01: clone → nav auto-populates', async ({ context, extensionId }) => {
-  // 1. Navigate to github.com and open side panel
+test('IM-01: auto-clone → nav auto-populates', async ({ context, extensionId }) => {
+  // 1. Navigate to github.com with nap hash and open side panel
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
 
@@ -17,32 +18,19 @@ test('IM-01: clone → nav auto-populates', async ({ context, extensionId }) => 
     { timeout: 10_000 },
   );
 
-  // 3. Verify initial state: nav is empty, terminal surface active
+  // 3. Verify initial state: editor surface active (idle pane), config applied
   const initialState = await panel.evaluate(() => {
     const s = (window as any).__napStore__.getState();
     return {
-      navSections: s.navSections.length,
       activeSurface: s.activeSurface,
+      mainRepoConfig: s.mainRepoConfig,
     };
   });
-  expect(initialState.navSections).toBe(0);
-  expect(initialState.activeSurface).toBe('terminal');
+  expect(initialState.activeSurface).toBe('editor');
+  expect(initialState.mainRepoConfig).not.toBeNull();
 
-  // 4. Type git clone in terminal
-  // Wait for terminal to be ready
-  await panel.waitForSelector('.wterm', { timeout: 10_000 });
-  await panel.waitForTimeout(2000); // Let wterm + shell fully init
-
-  // Focus the terminal
-  await panel.locator('.wterm').click();
-  await panel.waitForTimeout(500);
-
-  // Type the clone command
-  await panel.keyboard.type('git clone https://github.com/diunko/nap-test-nap', { delay: 30 });
-  await panel.keyboard.press('Enter');
-
-  // 5. Wait for clone to complete and nav to populate
-  // Clone can take 10-30s depending on network
+  // 4. Wait for auto-clone to complete and nav to populate
+  // Auto-clone fires when config + init + shell are all ready.
   await panel.waitForFunction(
     () => {
       const s = (window as any).__napStore__.getState();
@@ -51,25 +39,24 @@ test('IM-01: clone → nav auto-populates', async ({ context, extensionId }) => 
     { timeout: 45_000 },
   );
 
-  // 6. Verify nav tree
+  // 5. Verify nav tree
   const navState = await panel.evaluate(() => {
     const s = (window as any).__napStore__.getState();
     return {
       sectionCount: s.navSections.length,
       sectionNames: s.navSections.map((n: any) => n.name),
+      cloningStatus: s.cloningStatus,
     };
   });
 
-  // Should have at least the napkins section
   expect(navState.sectionCount).toBeGreaterThan(0);
+  expect(navState.cloningStatus).toBe('done');
 
-  // 7. Verify DOM — napkin cards should be visible
+  // 6. Verify DOM — napkin cards should be visible
   const napkinCards = panel.locator('[data-testid="napkin-card"]');
-  // The fixture repo has napkins — at least one should show
-  // Note: the sidebar shows napkins from 30-napkins section
-  // If the nav tree is populated, the sidebar should render cards
+  const cardCount = await napkinCards.count();
+  expect(cardCount).toBeGreaterThan(0);
 
-  // 8. Verify no manual refresh was needed (pure push)
-  // The test itself proves this — we didn't call any refresh function
-  console.log('[IM-01] nav auto-populated after git clone — pipeline works');
+  // 7. No manual refresh was needed — pure push from auto-clone
+  console.log('[IM-01] nav auto-populated after auto-clone — pipeline works');
 });

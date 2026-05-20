@@ -130,7 +130,7 @@ function storeActions(set: any, get: any): NapStore {
     focusedCardSlug: null,
     cardViewMode: 'collapsed' as CardViewMode,
     sidebarVisible: true,
-    activeSurface: 'terminal' as const,
+    activeSurface: 'editor' as const,
     tabs: [],
     activeTabId: null,
     mainRepoConfig: null,

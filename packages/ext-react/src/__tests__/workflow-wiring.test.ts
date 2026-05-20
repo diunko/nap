@@ -54,12 +54,12 @@ function makeConfig(overrides?: Partial<NapConfig>): NapConfig {
   };
 }
 
-// ── WW-M01: content script → panel message flow (mocked) ──
+// ── WW-M01: config → store state (via model construction) ──
 
-describe('WW-M01: nap-config message shape', () => {
+describe('WW-M01: config sets store state', () => {
   beforeEach(_resetTabIdCounter);
 
-  it('builds correct message shape from URL hash + page', () => {
+  it('builds correct config from URL hash + page', () => {
     const hash = '#nap-repo=github/diunko/nap-test-nap&napkin=01-v1/0100-delivery-pipeline';
     const hashConfig = parseNapHash(hash)!;
     const page = parsePageUrl('/diunko/nap-test-main/pull/1');
@@ -75,13 +75,11 @@ describe('WW-M01: nap-config message shape', () => {
     expect(config.napkinFocus).toBe('0100-delivery-pipeline');
   });
 
-  it('model.applyConfig sets store state correctly', () => {
+  it('model construction with config sets store state immediately', () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
     const config = makeConfig();
-
-    model.applyConfig(config);
+    const model = createModel({ adapter, store, config });
 
     const s = store.getState();
     expect(s.mainRepoConfig).toEqual({
@@ -100,18 +98,17 @@ describe('WW-M01: nap-config message shape', () => {
   });
 });
 
-// ── WW-M02: auto-clone via model orchestration ──
+// ── WW-M02: auto-clone via model orchestration (config at construction) ──
 
 describe('WW-M02: model auto-clone', () => {
   beforeEach(_resetTabIdCounter);
 
-  it('triggers clone when shell + config + empty LFS all ready', async () => {
+  it('triggers clone when shell + init both ready (config always present)', async () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
+    const model = createModel({ adapter, store, config: makeConfig() });
     const mockExec = vi.fn();
 
-    model.applyConfig(makeConfig());
     model.registerShell(mockExec);
     await model.init();
 
@@ -122,15 +119,14 @@ describe('WW-M02: model auto-clone', () => {
     model.destroy();
   });
 
-  it('works regardless of call order: init → config → shell', async () => {
+  it('works regardless of call order: init → shell', async () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
+    const model = createModel({ adapter, store, config: makeConfig() });
     const mockExec = vi.fn();
 
-    await model.init();                    // first: no config, no shell
-    model.applyConfig(makeConfig());       // second: has config, no shell
-    model.registerShell(mockExec);         // third: all ready → clone fires
+    await model.init();                    // first: no shell
+    model.registerShell(mockExec);         // second: shell ready → clone fires
 
     expect(mockExec).toHaveBeenCalledTimes(1);
     expect(store.getState().cloningStatus).toBe('cloning');
@@ -138,15 +134,14 @@ describe('WW-M02: model auto-clone', () => {
     model.destroy();
   });
 
-  it('works regardless of call order: shell → init → config', async () => {
+  it('works regardless of call order: shell → init', async () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
+    const model = createModel({ adapter, store, config: makeConfig() });
     const mockExec = vi.fn();
 
-    model.registerShell(mockExec);         // first: no config, no init
-    await model.init();                    // second: init complete, no config
-    model.applyConfig(makeConfig());       // third: all ready → clone fires
+    model.registerShell(mockExec);         // first: no init
+    await model.init();                    // second: init complete → clone fires
 
     expect(mockExec).toHaveBeenCalledTimes(1);
 
@@ -156,11 +151,10 @@ describe('WW-M02: model auto-clone', () => {
   it('does NOT clone before init completes', () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
+    const model = createModel({ adapter, store, config: makeConfig() });
     const mockExec = vi.fn();
 
-    // Config and shell ready, but init not called yet
-    model.applyConfig(makeConfig());
+    // Shell ready, but init not called yet
     model.registerShell(mockExec);
 
     // Clone should NOT fire — init hasn't run
@@ -172,15 +166,15 @@ describe('WW-M02: model auto-clone', () => {
   it('does NOT clone when repos already exist', async () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
-    const mockExec = vi.fn();
 
     // Simulate existing repos: nav already populated
     store.getState().refreshNav([
       { type: 'section', name: '30-napkins', displayName: '30-napkins', path: '/test' },
     ]);
 
-    model.applyConfig(makeConfig());
+    const model = createModel({ adapter, store, config: makeConfig() });
+    const mockExec = vi.fn();
+
     model.registerShell(mockExec);
     await model.init();
 
@@ -193,14 +187,11 @@ describe('WW-M02: model auto-clone', () => {
   it('does NOT clone twice', async () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
+    const model = createModel({ adapter, store, config: makeConfig() });
     const mockExec = vi.fn();
 
-    model.applyConfig(makeConfig());
     model.registerShell(mockExec);
     await model.init();
-    // Simulate another config arrival
-    model.applyConfig(makeConfig());
 
     expect(mockExec).toHaveBeenCalledTimes(1);
 
@@ -210,16 +201,31 @@ describe('WW-M02: model auto-clone', () => {
   it('napkin focus applied immediately on return visit (nav populated)', () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
 
     // Simulate return visit: nav already populated
     store.getState().refreshNav([
       { type: 'section', name: '30-napkins', displayName: '30-napkins', path: '/test' },
     ]);
 
-    model.applyConfig(makeConfig({ napkinFocus: '0100-delivery-pipeline' }));
+    const model = createModel({ adapter, store, config: makeConfig({ napkinFocus: '0100-delivery-pipeline' }) });
 
     expect(store.getState().focusedCardSlug).toBe('0100-delivery-pipeline');
+
+    model.destroy();
+  });
+
+  it('store has mainRepoConfig and prNum set at construction time', () => {
+    const store = createNapStore();
+    const adapter = createMockAdapter();
+    const model = createModel({ adapter, store, config: makeConfig() });
+
+    // Config applied at construction — no deferred applyConfig needed
+    expect(store.getState().mainRepoConfig).toEqual({
+      owner: 'diunko',
+      repo: 'nap-test-main',
+      branch: 'feature/delivery-v2',
+    });
+    expect(store.getState().prNum).toBe(1);
 
     model.destroy();
   });
@@ -233,12 +239,9 @@ describe('WW-M03: model.fetchLatest', () => {
   it('sends correct git commands via shell', () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
+    const model = createModel({ adapter, store, config: makeConfig({ napBranch: 'main' }) });
     const mockExec = vi.fn();
 
-    store.getState().setMainRepo({ owner: 'diunko', repo: 'nap-test-main', branch: 'feature/delivery-v2' });
-    // applyConfig sets the model's internal config (including napBranch and cloneUrl)
-    model.applyConfig(makeConfig({ napBranch: 'main' }));
     model.registerShell(mockExec);
 
     model.fetchLatest();
@@ -257,8 +260,7 @@ describe('WW-M03: model.fetchLatest', () => {
   it('does nothing when no shell registered', () => {
     const store = createNapStore();
     const adapter = createMockAdapter();
-    const model = createModel({ adapter, store });
-    model.applyConfig(makeConfig());
+    const model = createModel({ adapter, store, config: makeConfig() });
 
     // No shell registered — should not throw
     model.fetchLatest();

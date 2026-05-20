@@ -1,0 +1,13 @@
+{
+  "cc_session_uuid": "3d84a9a2-568c-4a83-9874-c35178858cf3",
+  "role": "fs-eng",
+  "name": "002-fs-eng-panel-boot",
+  "napkin": "0651-panel-boot",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779260079481,
+  "started": true,
+  "exited": false,
+  "done": true
+}

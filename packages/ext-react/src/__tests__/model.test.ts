@@ -43,6 +43,15 @@ describe('IS-05: Model — debounce + echo suppression', () => {
     model = createModel({
       adapter: mockAdapter as any,
       store,
+      config: {
+        cloneUrl: 'https://github.com/test/repo',
+        napBranch: 'main',
+        napkinFocus: null,
+        mainOwner: 'test',
+        mainRepo: 'repo',
+        mainBranch: 'main',
+        prNum: 0,
+      },
     });
   });
 

@@ -7,10 +7,10 @@
  * - Handle git command completion → scan for nepic root → refresh nav
  * - Echo suppression for auto-save writes
  * - Reload active file on external changes
- * - Apply config from content script → set store state
- * - Auto-clone on empty LFS when shell + config are both available
+ * - Auto-clone on empty LFS when shell is available (config always present)
  * - Fetch PR diff ranges from GitHub API
  * - Fetch latest (git fetch + checkout)
+ * - Refresh PR (re-read tab URL, update config, re-fetch diff ranges)
  *
  * Components call model methods. Model calls store actions. One direction.
  */
@@ -20,12 +20,14 @@ import type { DirEntry } from './nav-tree';
 import type { NapStoreApi } from './store';
 import { fetchPrDiffRanges } from './pr-diff';
 import type { NapConfig } from './url-config';
+import { resolveBootState } from './boot-gate';
 
 const DEBOUNCE_MS = 200;
 
 export interface ModelOptions {
   adapter: LightningFsAdapter;
   store: NapStoreApi;
+  config: NapConfig;
 }
 
 export interface NapModel {
@@ -46,10 +48,10 @@ export interface NapModel {
 
   /** Register the shell command executor. Called by TerminalPane when shell is ready. Pass null on cleanup. */
   registerShell: (exec: ((cmd: string) => Promise<void>) | null) => void;
-  /** Apply config from content script. Sets store state, triggers auto-clone and diff range fetch. */
-  applyConfig: (config: NapConfig) => void;
   /** Execute git fetch + checkout to update the repo. */
   fetchLatest: () => void;
+  /** Re-read tab URL, update config + store, invalidate + re-fetch diff ranges. No remount. */
+  refreshPr: () => void;
 }
 
 export function createModel(options: ModelOptions): NapModel {
@@ -62,14 +64,17 @@ export function createModel(options: ModelOptions): NapModel {
 
   // ── Orchestration state ──
   let shellExec: ((cmd: string) => Promise<void>) | null = null;
-  let config: NapConfig | null = null;
+  let config: NapConfig = options.config;
   let cloneTriggered = false;
   let pendingNapkinFocus: string | null = null;
   let diffFetchInFlight = false;
   let destroyed = false;
   let initComplete = false;
 
-  console.log('[model] created');
+  // Apply config to store immediately at construction
+  applyConfigToStore(config);
+
+  console.log('[model] created with config');
 
   // Subscribe to adapter change events
   const unsubAdapter = adapter.onChange((event: FsChangeEvent) => {
@@ -244,8 +249,8 @@ export function createModel(options: ModelOptions): NapModel {
     }
   }
 
-  function applyConfig(cfg: NapConfig): void {
-    config = cfg;
+  /** Apply config to store state + set up napkin focus. Internal helper. */
+  function applyConfigToStore(cfg: NapConfig): void {
     console.log(`[model] applyConfig: clone=${cfg.cloneUrl} napkin=${cfg.napkinFocus} pr=${cfg.prNum}`);
 
     const s = store.getState();
@@ -262,16 +267,12 @@ export function createModel(options: ModelOptions): NapModel {
         pendingNapkinFocus = cfg.napkinFocus;
       }
     }
-
-    checkAutoClone();
-    checkDiffRanges();
   }
 
   /**
-   * Auto-clone check. Called from three places:
+   * Auto-clone check. Called from two places (config always present):
    * - registerShell() — shell just became available
    * - init() after scanExistingRepos() — scan finished
-   * - applyConfig() — config just arrived
    *
    * Whichever fires last completes the preconditions and triggers the clone.
    * The cloneTriggered boolean prevents double-fire.
@@ -280,7 +281,6 @@ export function createModel(options: ModelOptions): NapModel {
     if (destroyed) return;
     if (!initComplete) return;  // wait for init to create dirs + scan
     if (!shellExec) return;     // shell not ready yet
-    if (!config) return;        // no config yet
     if (cloneTriggered) return; // already started
     if (nepicRoot) return;      // repos already exist (from scan)
 
@@ -321,10 +321,8 @@ export function createModel(options: ModelOptions): NapModel {
       console.log('[fetch-latest] no shell — cannot execute');
       return;
     }
-    // Use napBranch (the .nap repo's branch), not mainRepoConfig.branch (the code repo's PR branch)
-    const branch = config?.napBranch || 'main';
-    // Derive repo dir from clone URL — git commands need to run inside the repo
-    const repoName = config?.cloneUrl?.split('/').pop()?.replace(/\.git$/, '') || '';
+    const branch = config.napBranch || 'main';
+    const repoName = config.cloneUrl?.split('/').pop()?.replace(/\.git$/, '') || '';
     if (!repoName) {
       console.log('[fetch-latest] cannot determine repo name from config');
       return;
@@ -334,12 +332,50 @@ export function createModel(options: ModelOptions): NapModel {
     shellExec(`cd ${repoDir} && git fetch origin && git checkout origin/${branch}\r`);
   }
 
+  /**
+   * Refresh PR: re-read tab URL, update config + store, invalidate + re-fetch diff ranges.
+   * Does NOT remount, switch session, or touch .nap filesystem.
+   */
+  function refreshPr(): void {
+    if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
+      console.log('[refresh-pr] no chrome.tabs API');
+      return;
+    }
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (destroyed) return;
+      const url = tabs[0]?.url;
+      if (!url) {
+        console.log('[refresh-pr] no tab URL');
+        return;
+      }
+
+      const boot = resolveBootState(url);
+      if (boot.state !== 'session') {
+        console.log('[refresh-pr] tab URL no longer has nap hash — keeping current config');
+        return;
+      }
+
+      // Update config in-place
+      config = boot.config;
+      const s = store.getState();
+      s.setMainRepo({ owner: boot.config.mainOwner, repo: boot.config.mainRepo, branch: boot.config.mainBranch });
+      s.setPrNum(boot.config.prNum);
+
+      // Invalidate diff ranges and re-fetch
+      s.setPrDiffRanges(null);
+      diffFetchInFlight = false; // allow re-fetch
+      checkDiffRanges();
+
+      console.log(`[refresh-pr] updated config: pr=${boot.config.prNum}`);
+    });
+  }
+
   return {
     destroy: () => {
       console.log('[model] destroy');
       destroyed = true;
       shellExec = null;
-      config = null;
       unsubAdapter();
       if (debounceTimer) clearTimeout(debounceTimer);
     },
@@ -353,8 +389,8 @@ export function createModel(options: ModelOptions): NapModel {
     init,
     scanExistingRepos,
     registerShell,
-    applyConfig,
     fetchLatest,
+    refreshPr,
   };
 }
 

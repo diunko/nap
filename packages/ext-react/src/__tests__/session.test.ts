@@ -11,7 +11,7 @@ describe('SS-01: Store factory — independent instances', () => {
     const store = createNapStore();
     expect(store.getState().tabs).toHaveLength(0);
     expect(store.getState().activeFilePath).toBeNull();
-    expect(store.getState().activeSurface).toBe('terminal');
+    expect(store.getState().activeSurface).toBe('editor');
   });
 
   it('SS-01b: two stores are independent — state in one doesn\'t appear in other', () => {

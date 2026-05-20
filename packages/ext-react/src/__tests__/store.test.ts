@@ -196,9 +196,9 @@ describe('IS-02: Store — card focus', () => {
 describe('IS-03: Store — activeSurface', () => {
   beforeEach(resetStore);
 
-  // IS-03a: initial state is terminal
-  it('IS-03a: initial activeSurface is terminal', () => {
-    expect(useNapStore.getState().activeSurface).toBe('terminal');
+  // IS-03a: initial state is editor (changed in 0651 — idle pane visible on boot)
+  it('IS-03a: initial activeSurface is editor', () => {
+    expect(useNapStore.getState().activeSurface).toBe('editor');
   });
 
   // IS-03b: openDoc switches to editor

@@ -5,8 +5,9 @@ import { TabBar } from './TabBar';
 import { ContentPane } from './ContentPane';
 import { TerminalPane } from './TerminalPane';
 import { Sidebar } from './Sidebar';
-import { createSession, getStateKey, SessionContext, useNapStore } from './session';
+import { createSession, SessionContext, useNapStore } from './session';
 import type { Session } from './session';
+import { resolveBootState, type BootState } from './boot-gate';
 
 // Buffer polyfill — required before isomorphic-git
 (window as any).Buffer = Buffer;
@@ -65,7 +66,7 @@ function ResizeHandle() {
 
 // ── Header bar ──
 
-function HeaderBar({ onFetchLatest }: { onFetchLatest?: () => void }) {
+function HeaderBar({ onFetchLatest, onRefreshPr }: { onFetchLatest?: () => void; onRefreshPr?: () => void }) {
   const toggleSettings = useNapStore((s) => s.toggleSettings);
   const toggleSidebar = useNapStore((s) => s.toggleSidebar);
 
@@ -87,6 +88,19 @@ function HeaderBar({ onFetchLatest }: { onFetchLatest?: () => void }) {
     >
       <span style={{ fontWeight: 600, color: 'var(--nap-text)' }} id="header-napkin-name" />
       <span style={{ flex: 1 }} />
+      <span
+        data-testid="refresh-pr-btn"
+        onClick={onRefreshPr}
+        style={{
+          cursor: 'pointer',
+          padding: '2px 8px',
+          border: '1px solid var(--nap-border)',
+          borderRadius: 3,
+          fontSize: 11,
+        }}
+      >
+        refresh PR
+      </span>
       <span
         data-testid="fetch-latest-btn"
         onClick={onFetchLatest}
@@ -294,7 +308,10 @@ function Panel() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
-      <HeaderBar onFetchLatest={() => model.fetchLatest()} />
+      <HeaderBar
+        onFetchLatest={() => model.fetchLatest()}
+        onRefreshPr={() => model.refreshPr()}
+      />
       <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <SurfaceTabBar />
@@ -341,47 +358,72 @@ function Panel() {
   );
 }
 
-// ── App (creates session, provides context) ──
+// ── Boot gate messages ──
+
+function BootMessage({ message, detail }: { message: string; detail?: string }) {
+  return (
+    <div
+      data-testid="boot-message"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        padding: 24,
+        fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+        color: 'var(--nap-text-muted)',
+        textAlign: 'center',
+      }}
+    >
+      <div style={{ fontSize: 14, marginBottom: 8 }}>{message}</div>
+      {detail && <div style={{ fontSize: 11, color: 'var(--nap-text-dim)' }}>{detail}</div>}
+    </div>
+  );
+}
+
+// ── App (reads tab URL, gates boot, creates session) ──
 
 function App() {
-  const [session, setSession] = useState<Session>(() => createSession(getStateKey()));
-  const sessionRef = useRef(session);
-  sessionRef.current = session;
+  const [bootState, setBootState] = useState<BootState | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const sessionRef = useRef<Session | null>(null);
 
-  // Session management: chrome messages + initial config request
+  // Tab URL reader — chrome.tabs.query on mount
   useEffect(() => {
-    let aborted = false;
-
-    function handleConfig(key: string, config: any): void {
-      if (aborted) return;
-      if (key !== sessionRef.current.key) {
-        sessionRef.current.model.destroy();
-        const newSession = createSession(key);
-        newSession.model.applyConfig(config);
-        setSession(newSession);
-      } else {
-        sessionRef.current.model.applyConfig(config);
-      }
+    if (typeof chrome !== 'undefined' && chrome.tabs?.query) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const url = tabs[0]?.url;
+        console.log(`[boot] tab URL: ${url}`);
+        const state = resolveBootState(url);
+        console.log(`[boot] state: ${state.state}`);
+        setBootState(state);
+      });
+    } else {
+      // No chrome API (dev mode) — try reading URL from window
+      const state = resolveBootState(window.location.href);
+      setBootState(state);
     }
+  }, []);
+
+  // Create session when boot state is 'session'
+  useEffect(() => {
+    if (!bootState || bootState.state !== 'session') return;
+
+    const newSession = createSession(bootState.key, bootState.config);
+    sessionRef.current = newSession;
+    setSession(newSession);
 
     // Console API
-    (window as any).__switchSession__ = (key: string) => {
-      console.log(`[session] switching to key: ${key}`);
-      sessionRef.current.model.destroy();
-      setSession(createSession(key));
-    };
-
     (window as any).__wipeCurrentSession__ = async () => {
-      const key = sessionRef.current.key;
+      const key = newSession.key;
       console.log(`[session] wiping: key=${key}`);
-      sessionRef.current.model.destroy();
+      newSession.model.destroy();
 
-      // Wipe filesystem IDB databases
       const fsName = `nap-fs-${key}`;
       indexedDB.deleteDatabase(fsName);
       indexedDB.deleteDatabase(`${fsName}_lock`);
 
-      // Wipe UI state from nap-state kv store
       const uiKey = `nap-ui-${key}`;
       try {
         const req = indexedDB.open('nap-state');
@@ -400,41 +442,45 @@ function App() {
       } catch { /* best effort */ }
 
       console.log(`[session] wiped fs=${fsName}, ui=${uiKey} — recreating fresh`);
-      setSession(createSession(key));
+      const fresh = createSession(key, bootState.config);
+      sessionRef.current = fresh;
+      setSession(fresh);
     };
-
-    // Listen for content script messages
-    let listener: ((msg: any) => void) | undefined;
-    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-      listener = (msg: any) => {
-        if (msg.type === 'nap-config' && msg.key) {
-          handleConfig(msg.key, msg.config);
-        } else if (msg.type === 'session-key-changed' && msg.key) {
-          (window as any).__switchSession__(msg.key);
-        }
-      };
-      chrome.runtime.onMessage.addListener(listener);
-    }
-
-    // Request config from content script (handles panel-opens-after-content-script)
-    if (typeof chrome !== 'undefined' && chrome.tabs?.sendMessage) {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tabId = tabs[0]?.id;
-        if (tabId == null) return;
-        chrome.tabs.sendMessage(tabId, { type: 'get-nap-config' }, (response) => {
-          if (chrome.runtime.lastError) return;
-          if (response?.key) handleConfig(response.key, response.config);
-        });
-      });
-    }
 
     return () => {
-      aborted = true;
-      if (listener && typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-        chrome.runtime.onMessage.removeListener(listener);
-      }
+      newSession.model.destroy();
     };
-  }, [session]);
+  }, [bootState]);
+
+  // Loading — waiting for chrome.tabs.query
+  if (!bootState) {
+    return (
+      <div
+        data-testid="boot-loading"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+          fontSize: 12,
+          color: 'var(--nap-text-muted)',
+        }}
+      />
+    );
+  }
+
+  // Gate messages
+  if (bootState.state === 'no-hash') {
+    return <BootMessage message="ask the author for a review link" detail="open a PR with a #nap-repo=... hash" />;
+  }
+
+  if (bootState.state === 'wrong-page') {
+    return <BootMessage message="open on a GitHub page" detail="nap works on github.com pull request pages" />;
+  }
+
+  // Session — render the panel
+  if (!session) return null;
 
   return (
     <SessionContext.Provider value={session}>

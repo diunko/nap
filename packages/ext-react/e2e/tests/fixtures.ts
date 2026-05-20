@@ -80,12 +80,15 @@ export async function openSidePanel(
   return panelPage;
 }
 
+/** Default URL with nap hash — boot gate requires hash for session. */
+const DEFAULT_GITHUB_URL = 'https://github.com/diunko/nap-test-main#nap-repo=github/diunko/nap-test-nap&napkin=01-v1/0100-delivery-pipeline';
+
 /**
  * Navigate to a github.com page and wait for content script to inject.
  */
 export async function openGitHub(
   context: BrowserContext,
-  url = 'https://github.com/diunko/nap-test-main',
+  url = DEFAULT_GITHUB_URL,
 ): Promise<Page> {
   const page = context.pages()[0] || await context.newPage();
   console.log(`[openGitHub] navigating to ${url}`);
@@ -184,14 +187,12 @@ export async function cmdClickLink(panel: Page, href: string): Promise<void> {
 
 // ── Shared helpers for IM-02 through IM-08 ──
 
-/** Clone the fixture repo and wait for nav to populate. */
+/**
+ * Wait for repo clone and nav to populate.
+ * With boot gate (0651), auto-clone fires when config + init + shell are ready.
+ * Just wait for nav sections to appear.
+ */
 export async function cloneFixtureRepo(panel: Page): Promise<void> {
-  await panel.waitForSelector('.wterm', { timeout: 10_000 });
-  await panel.waitForTimeout(2000);
-  await panel.locator('.wterm').click();
-  await panel.waitForTimeout(500);
-  await panel.keyboard.type('git clone https://github.com/diunko/nap-test-nap', { delay: 30 });
-  await panel.keyboard.press('Enter');
   await panel.waitForFunction(
     () => (window as any).__napStore__.getState().navSections.length > 0,
     { timeout: 45_000 },

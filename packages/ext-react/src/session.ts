@@ -11,6 +11,7 @@ import { LightningFsAdapter } from './fs-adapter';
 import { createNapStore, type NapStore, type NapStoreApi } from './store';
 import { createModel, type NapModel } from './model';
 import { idbStorage } from './state-store';
+import type { NapConfig } from './url-config';
 
 export interface Session {
   key: string;
@@ -24,12 +25,14 @@ export interface Session {
  * Create an isolated session. Everything is keyed:
  * - LFS database: `nap-fs-${key}`
  * - UI state: `nap-ui-${key}` in IndexedDB 'nap-state'
+ *
+ * Config is required — model receives it at construction.
  */
-export function createSession(key: string): Session {
+export function createSession(key: string, config: NapConfig): Session {
   const lfs = new LightningFS(`nap-fs-${key}`);
   const adapter = new LightningFsAdapter(lfs);
   const store = createNapStore(key, idbStorage);
-  const model = createModel({ adapter, store });
+  const model = createModel({ adapter, store, config });
 
   // Expose for Playwright tests
   if (typeof window !== 'undefined') {
@@ -38,11 +41,6 @@ export function createSession(key: string): Session {
 
   console.log(`[session] created: key=${key}, lfs=nap-fs-${key}, ui=nap-ui-${key}`);
   return { key, lfs, adapter, store, model };
-}
-
-/** Get the state key. Default for now, URL hash parsing in napkin 0400. */
-export function getStateKey(): string {
-  return 'default';
 }
 
 // ── React context ──

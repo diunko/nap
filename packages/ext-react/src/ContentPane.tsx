@@ -37,6 +37,38 @@ self.MonacoEnvironment = {
   },
 };
 
+function IdlePane() {
+  const mainRepoConfig = useNapStore((s) => s.mainRepoConfig);
+
+  return (
+    <div
+      data-testid="idle-pane"
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--nap-text-muted)',
+        fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+        fontSize: 12,
+        gap: 4,
+      }}
+    >
+      {mainRepoConfig ? (
+        <>
+          <div style={{ fontSize: 13, color: 'var(--nap-text)' }}>
+            {mainRepoConfig.owner}/{mainRepoConfig.repo}
+          </div>
+          <div>{mainRepoConfig.branch}</div>
+        </>
+      ) : (
+        <div style={{ fontSize: 14 }}>no file open</div>
+      )}
+    </div>
+  );
+}
+
 interface ContentPaneProps {
   adapter: { readFile: (path: string) => Promise<string>; writeFile: (path: string, content: string) => Promise<void> } | null;
   model: { suppressEcho: (suppress: boolean) => void } | null;
@@ -227,11 +259,17 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
   }
 
   function navigateGitHubTab(url: string) {
-    console.log(`[chrome] tabs.update → ${url}`);
+    console.log(`[chrome] navigate → ${url}`);
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id != null) {
-        chrome.tabs.update(tabs[0].id, { url });
-      }
+      const tabId = tabs[0]?.id;
+      if (tabId == null) return;
+      // Try content script first (SPA-friendly), fall back to chrome.tabs.update
+      chrome.tabs.sendMessage(tabId, { type: 'navigate', url }, (response) => {
+        if (chrome.runtime.lastError || !response?.ok) {
+          console.log('[chrome] content script unavailable, falling back to tabs.update');
+          chrome.tabs.update(tabId, { url });
+        }
+      });
     });
   }
 
@@ -383,22 +421,8 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
         minWidth: 200,
       }}
     >
-      {/* Placeholder — visible when no file open */}
-      {!activeFilePath && tabs.length === 0 && (
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--nap-text-muted)',
-            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
-            fontSize: 14,
-          }}
-        >
-          no file open
-        </div>
-      )}
+      {/* Idle pane — visible when no file open, shows repo/branch context */}
+      {!activeFilePath && <IdlePane />}
       {/* Monaco editor container */}
       <div
         ref={containerRef}
