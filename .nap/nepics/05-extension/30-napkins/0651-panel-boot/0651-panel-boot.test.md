@@ -152,6 +152,7 @@ Note: WW-S01..S07 stay unchanged. Not repeated here.
 * **subsystems:** boot-gate
 * **what to test:**
   - navigate to `https://github.com/diunko/nap-test-main` (no hash)
+  - [navigate to](/modules/something.md)
   - open side panel
   - gate renders the "no hash" message
   - **DOM:** message text visible, contains "review link" or "ask the author"

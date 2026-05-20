@@ -11,6 +11,7 @@
 - **Always allow**: `echo` for env var checks
 - **Always allow**: read-only git commands (`git status`, `git diff --stat`)
 - **Allow with note**: `sed` on `out/` build artifacts for debug logging injection (non-source, rebuild restores)
+- **DENY**: hardcoded secrets/tokens in commands — must read from .env (incident: 003-test-eng-gitlab tried glpat token inline, denied, fixed on retry)
 - **Watch for**: any `rm` of non-temp files, any git write operations (commit, push, reset)
 
 ### fs-eng (002-fs-eng-*)
