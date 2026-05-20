@@ -46,10 +46,16 @@
   * both persisted (Zustand persist)
   * on first load: focusMode = true, focusedCardSlug from URL napkin path
 
+* card states — binary, same for napkins and architects
+  * collapsed: header only — `* name [dots] status`
+  * expanded: full tree, unlimited depth — all files, subdirectories, agents
+  * one click toggles. no focused/extended split in the extension (yet).
+  * the app has three tiers (collapsed/focused/extended via maxDepth) — we can add that later
+
 * architects in the nav
   * parsed by nav-tree.ts (already handles 20-architects/)
   * rendered as cards: same pattern as napkins — `*` + name + dot + status label
-  * expandable: prompt.md, scratch/, response.md, etc.
+  * expanded: prompt.md, scratch/ with contents, response.md, whatever exists
   * architect dot: role color (blue), status shape (filled/dashed-check/hollow)
   * in show-all mode: above napkins with separator
   * in focus mode: only visible if the architect card is the focused one
