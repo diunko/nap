@@ -307,7 +307,7 @@ export function createModel(options: ModelOptions): NapModel {
     diffFetchInFlight = true;
     const { owner, repo } = s.mainRepoConfig;
     console.log(`[model] fetching PR diff ranges for ${owner}/${repo}#${s.prNum}`);
-    fetchPrDiffRanges(owner, repo, s.prNum).then((ranges) => {
+    fetchPrDiffRanges(owner, repo, s.prNum, s.githubToken || undefined).then((ranges) => {
       diffFetchInFlight = false;
       if (destroyed) return;
       if (ranges) {
