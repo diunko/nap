@@ -8,89 +8,60 @@
 - `.nap/nepics/05-extension/10-docs/ext-react/04-testing.md`
 - `.nap/nepics/05-extension/30-napkins/0650-workflow-wiring/0650-workflow-wiring.nap.md`
 
-## Boot sequence
-
-Panel mount is a state machine with three terminal states:
+## Boot state machine
 
 ```
 mount → chrome.tabs.query({ active: true, currentWindow: true })
-  → tab.url on github.com + has nap hash   → SESSION (auto-clone or IDB resume)
-  → tab.url on github.com + no nap hash    → CONNECT MODAL
-  → tab.url not github.com                 → NOT_GITHUB message
+  → github.com + nap hash   → SESSION
+  → github.com + no hash    → MESSAGE ("ask author for review link")
+  → not github.com          → MESSAGE ("open on a GitHub page")
 ```
 
-Nothing renders (no terminal, no sidebar, no editor) until one of the three states is reached. The gate component shows a loading indicator during the `chrome.tabs.query` call.
+Nothing renders until a state is reached. Gate component shows loading during the `chrome.tabs.query` call.
 
 ## Config derivation
 
-Identical to 0650 — pure functions in `url-config.ts`:
-- `parseNapHash(hash)` → `NapHashConfig | null`
-- `parsePageUrl(pathname)` → `PageInfo`
-- `deriveStateKey(page, hash)` → string
-- `buildNapConfig(page, hash)` → `NapConfig`
-
-One change: `mainBranch` defaults to `main`. The `.head-ref` DOM read is gone (panel can't access page DOM). Acceptable for v0 — `mainBranch` only affects blob URL construction, and `main` is correct for most cases.
+Same pure functions as 0650 (`url-config.ts`). One change: `mainBranch` defaults to `main` — no `.head-ref` DOM read (panel can't access page DOM).
 
 ## Session creation
 
-Session is created AFTER config is known. The model receives config at construction time, not via a deferred `applyConfig` call.
+Session created AFTER config known. Model receives config at construction, not via deferred `applyConfig`.
 
 ```
-config known → createSession(key) → model created with config → model.init()
-  → scanExistingRepos → checkAutoClone (simplified: config always present)
+config → createSession(key) → model(config) → init() → scan → autoClone
 ```
 
-`checkAutoClone` loses two guards: `if (!config) return` and the `initComplete` sequencing with `applyConfig`. Config is a constructor dependency, not a late-arriving message.
+`checkAutoClone` simplifies: config always present, no timing dance.
 
 ## Content script
 
-Shrinks to:
-- `chrome.runtime.onMessage` handler for `{ type: 'navigate', url }` → `window.location.href = url`
-- Trigger button (`#nap-open-panel`) for Playwright tests
-- `document.body.dataset.napLoaded = 'true'` marker
+~20 lines. Keeps:
+- `navigate` handler (`window.location.href = url`)
+- trigger button (Playwright)
+- `napLoaded` marker
 
-Everything else deleted: hash parsing, config messaging, SPA observer, `get-nap-config` handler.
+Deletes: hash parsing, config messaging, SPA observer, `get-nap-config`.
 
-## Connect modal
-
-Shown when `parseNapHash` returns null on a github.com page.
-
-Fields:
-- Nap repo URL (required) — e.g. `https://github.com/org/nap-repo`
-- Branch (optional, default `main`)
-- Napkin path (optional) — e.g. `01-v1/0100-feature`
-
-Auto-filled from tab URL:
-- Main repo owner + name (from pathname)
-- PR number (from `/pull/N` in pathname, or 0)
-
-Submit builds `NapConfig` from form values → same flow as hash-derived config.
+If content script missing (ext reload), link clicks fall back to `chrome.tabs.update(tabId, { url })`.
 
 ## Refresh PR
 
 Header bar button. On click:
 1. `chrome.tabs.query({ active: true })` → re-read tab URL
-2. Re-parse hash (may have changed if user edited URL)
-3. Update `store.mainRepoConfig` if changed
-4. Update `store.prNum` if changed
-5. Invalidate `store.prDiffRanges` → re-fetch from GitHub API
+2. Re-parse hash, update `mainRepoConfig` + `prNum` if changed
+3. Invalidate `prDiffRanges` → re-fetch from GitHub API
 
-Does NOT:
-- Switch session or remount
-- Touch the .nap filesystem
-- Trigger git operations
+Does NOT switch session, remount, or touch .nap filesystem.
 
-## Manifest changes
+## Idle pane
 
-Add `"scripting"` to permissions — needed for content script injection on handshake failure.
-
-Handshake: panel sends `nap-hello` to active tab → expects `nap-here` response. If no response (content script not injected), panel uses `chrome.scripting.executeScript` to inject `content.js`, then retries. This is only needed for the `navigate` handler — config is independent.
+Default surface is editor (not terminal). No file open → shows repo name, branch, calm bg. Terminal hidden until user clicks Terminal tab.
 
 ## What "done" looks like
 
-- Open panel on PR with nap hash → session starts, clone, nav, links work. No blank screen.
-- Open panel on PR with nap hash after extension reload → same. No page reload needed.
-- Open panel on bare github.com → connect modal. Fill in repo → session starts.
-- Open panel on google.com → "open on GitHub" message.
-- Click [refresh PR] → diff ranges update. Click [fetch latest] → .nap repo updates.
-- Two browser windows with different PRs → two independent sessions.
+- Open panel on PR with nap hash → session starts, no blank screen. Works after ext reload.
+- Open panel on bare github.com → message. No terminal, no sidebar.
+- Open panel on google.com → message.
+- [refresh PR] → diff ranges update. [fetch latest] → .nap repo updates.
+- Two windows, two PRs → two independent sessions.
+- No file selected → idle pane with repo context. Terminal on demand.
