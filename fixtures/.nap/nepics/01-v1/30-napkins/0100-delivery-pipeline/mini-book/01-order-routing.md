@@ -49,7 +49,7 @@ After dispatch, the pizza is in warp. Transit times are fixed per destination ([
 - **Europa:** 40 minutes — Jupiter distance. Crust quality degrades but is still edible.
 - **Titan:** 80 minutes — Saturn. Only thin crust and stuffed survive the transit. Deep-dish arrives as a brick.
 
-The ETA the customer sees includes both transit time AND wait time in the queue. Each position in the queue adds ~30 seconds.
+The ETA the customer sees includes both transit time AND wait time in the queue. Each position in the queue adds ~30 seconds. The queue depth formula is documented at https://docs.warp-logistics.dev/gate-api and implemented in warp-queue.ts:31.
 
 ## What Happens Next
 

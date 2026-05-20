@@ -18,9 +18,11 @@ function ensureRegistered(): void {
   registerTheme();
   applyTheme();
 
-  // Inject role palette CSS
+  // Inject role palette CSS + link decoration CSS
   const style = document.createElement('style');
-  style.textContent = generatePaletteCss(false);
+  style.textContent = generatePaletteCss(false) + '\n' +
+    '.nap-link { text-decoration: underline; color: var(--nap-link); }\n' +
+    '.nap-link-hover { color: var(--nap-accent); cursor: pointer; }';
   document.head.appendChild(style);
 
   // Expose Monaco for tests
@@ -84,6 +86,8 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
   const monacoModelRef = useRef<monaco.editor.ITextModel | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const roleDecorationsRef = useRef<string[]>([]);
+  const linkDecorationsRef = useRef<string[]>([]);
+  const hoverDecorationsRef = useRef<string[]>([]);
   const shiftEnterDisposableRef = useRef<monaco.IDisposable | null>(null);
   // With key={session.key} on Panel, this component remounts on session change.
   // Closures safely capture adapter, model, store — they're stable for this lifetime.
@@ -121,6 +125,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     // Auto-save on change (1s debounce)
     editor.onDidChangeModelContent(() => {
       refreshRoleDecorations();
+      refreshLinkDecorations();
       clearTimeout(saveTimerRef.current);
       const filePath = store.getState().activeFilePath;
       if (!filePath || !adapter) return;
@@ -215,6 +220,72 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
       }
     });
 
+    // Cmd+hover: add temporary nap-link-hover decoration
+    editor.onMouseMove((e) => {
+      if (!e.event.metaKey) {
+        if (hoverDecorationsRef.current.length > 0) {
+          hoverDecorationsRef.current = editor.deltaDecorations(hoverDecorationsRef.current, []);
+          console.log('[contentpane] link-hover cleared');
+        }
+        return;
+      }
+
+      const position = e.target.position;
+      if (!position) {
+        if (hoverDecorationsRef.current.length > 0) {
+          hoverDecorationsRef.current = editor.deltaDecorations(hoverDecorationsRef.current, []);
+          console.log('[contentpane] link-hover cleared');
+        }
+        return;
+      }
+
+      const editorModel = editor.getModel();
+      if (!editorModel) return;
+
+      const lineContent = editorModel.getLineContent(position.lineNumber);
+      const links = detectLinks(lineContent, position.lineNumber);
+      const col = position.column;
+
+      let hoverLink = null;
+      for (const link of links) {
+        if (col >= link.range.startColumn && col < link.range.endColumn) {
+          hoverLink = link;
+          break;
+        }
+      }
+
+      if (hoverLink) {
+        console.log(`[contentpane] link-hover on line ${position.lineNumber}`);
+        hoverDecorationsRef.current = editor.deltaDecorations(hoverDecorationsRef.current, [{
+          range: new monaco.Range(
+            hoverLink.range.startLineNumber, hoverLink.range.startColumn,
+            hoverLink.range.endLineNumber, hoverLink.range.endColumn,
+          ),
+          options: { inlineClassName: 'nap-link-hover' },
+        }]);
+      } else if (hoverDecorationsRef.current.length > 0) {
+        hoverDecorationsRef.current = editor.deltaDecorations(hoverDecorationsRef.current, []);
+        console.log('[contentpane] link-hover cleared');
+      }
+    });
+
+    // Keyup: clear hover decorations when Meta released
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Meta' && hoverDecorationsRef.current.length > 0) {
+        hoverDecorationsRef.current = editor.deltaDecorations(hoverDecorationsRef.current, []);
+        console.log('[contentpane] link-hover cleared');
+      }
+    };
+    // Keydown: clear hover if a non-meta key pressed (meta no longer held)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!e.metaKey && hoverDecorationsRef.current.length > 0) {
+        hoverDecorationsRef.current = editor.deltaDecorations(hoverDecorationsRef.current, []);
+        console.log('[contentpane] link-hover cleared');
+      }
+    };
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('keydown', handleKeyDown);
+
     // ResizeObserver → editor.layout()
     const observer = new ResizeObserver(() => editor.layout());
     observer.observe(containerRef.current);
@@ -222,6 +293,8 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     return () => {
       clearTimeout(saveTimerRef.current);
       shiftEnterDisposableRef.current?.dispose();
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('keydown', handleKeyDown);
       observer.disconnect();
       editor.dispose();
       editorRef.current = null;
@@ -256,6 +329,33 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
     }
 
     roleDecorationsRef.current = editor.deltaDecorations(roleDecorationsRef.current, decorations);
+  }
+
+  function refreshLinkDecorations() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const editorModel = editor.getModel();
+    if (!editorModel) return;
+
+    const decorations: monaco.editor.IModelDeltaDecoration[] = [];
+    const lineCount = editorModel.getLineCount();
+
+    for (let i = 1; i <= lineCount; i++) {
+      const line = editorModel.getLineContent(i);
+      const links = detectLinks(line, i);
+      for (const link of links) {
+        decorations.push({
+          range: new monaco.Range(
+            link.range.startLineNumber, link.range.startColumn,
+            link.range.endLineNumber, link.range.endColumn,
+          ),
+          options: { inlineClassName: 'nap-link' },
+        });
+      }
+    }
+
+    linkDecorationsRef.current = editor.deltaDecorations(linkDecorationsRef.current, decorations);
+    console.log(`[contentpane] refreshLinkDecorations (${decorations.length} links)`);
   }
 
   function navigateGitHubTab(url: string) {
@@ -337,6 +437,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
       // visibility changes (editor surface hidden → visible).
       requestAnimationFrame(() => editor.layout());
       refreshRoleDecorations();
+      refreshLinkDecorations();
       console.log(`[contentpane] refreshRoleDecorations`);
 
       // Restore scroll/cursor from tab state
@@ -390,6 +491,7 @@ export function ContentPane({ adapter, model }: ContentPaneProps) {
         if (position) editor.setPosition(position);
         if (scrollTop !== undefined) editor.setScrollTop(scrollTop);
         refreshRoleDecorations();
+        refreshLinkDecorations();
       }).catch(() => {});
     }
     window.addEventListener('nap-external-change', handleExternalChange);
