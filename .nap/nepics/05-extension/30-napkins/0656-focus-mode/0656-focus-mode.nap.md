@@ -46,11 +46,13 @@
   * both persisted (Zustand persist)
   * on first load: focusMode = true, focusedCardSlug from URL napkin path
 
-* card states — binary, same for napkins and architects
+* card states — three tiers, same for napkins and architects
   * collapsed: header only — `* name [dots] status`
-  * expanded: full tree, unlimited depth — all files, subdirectories, agents
-  * one click toggles. no focused/extended split in the extension (yet).
-  * the app has three tiers (collapsed/focused/extended via maxDepth) — we can add that later
+  * focused: top-level files at depth 0 (prompt.md, scratch/, agents)
+  * extended: full tree, unlimited depth — scratch/ contents, agent files, everything
+  * click header: collapsed → focused → collapsed (toggle)
+  * Cmd+E (or equivalent): focused ↔ extended
+  * consistent between napkins and architects
 
 * architects in the nav
   * parsed by nav-tree.ts (already handles 20-architects/)
