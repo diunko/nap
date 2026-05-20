@@ -48,6 +48,7 @@ describe('IS-05: Model — debounce + echo suppression', () => {
         cloneUrl: 'https://github.com/test/repo.git',
         napBranch: 'main',
         napkinFocus: null,
+        nepicSlug: null,
         mainOwner: 'test',
         mainRepo: 'repo',
         mainBranch: 'main',
@@ -110,5 +111,105 @@ describe('IS-05: Model — debounce + echo suppression', () => {
     // Should detect git command and attempt to scan for nepic root
     vi.advanceTimersByTime(250);
     // No error — model handled the command
+  });
+});
+
+// ── Multi-nepic: findNepicRoot should use nepicSlug hint ──
+
+describe('multi-nepic: model selects correct nepic from config', () => {
+  /**
+   * Mock adapter simulating a repo with two nepics:
+   *   /home/user/apps-napkins/nepics/01-v1/
+   *   /home/user/apps-napkins/nepics/03-features/
+   */
+  function createMultiNepicAdapter() {
+    const tree: Record<string, string[]> = {
+      '/home/user': ['apps-napkins'],
+      '/home/user/apps-napkins/nepics': ['01-v1', '03-features'],
+    };
+    const dirs = new Set([
+      '/home/user/apps-napkins',
+      '/home/user/apps-napkins/nepics',
+      '/home/user/apps-napkins/nepics/01-v1',
+      '/home/user/apps-napkins/nepics/03-features',
+    ]);
+    const listeners: Array<(e: FsChangeEvent) => void> = [];
+
+    return {
+      onChange: (fn: (e: FsChangeEvent) => void) => {
+        listeners.push(fn);
+        return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); };
+      },
+      emit: (e: FsChangeEvent) => { for (const fn of listeners) fn(e); },
+      readFile: vi.fn(async () => ''),
+      readdir: vi.fn(async (path: string) => tree[path] ?? []),
+      stat: vi.fn(async (path: string) => ({
+        isDirectory: dirs.has(path),
+        isFile: !dirs.has(path),
+      })),
+      exists: vi.fn(async (path: string) => dirs.has(path) || tree[path] !== undefined),
+      mkdir: vi.fn(async () => {}),
+    };
+  }
+
+  it('with nepicSlug=03-features, model picks /nepics/03-features not /nepics/01-v1', async () => {
+    vi.useRealTimers();
+    _resetTabIdCounter();
+    const store = createNapStore();
+    const adapter = createMultiNepicAdapter();
+
+    const { createModel } = await import('../model');
+    const model = createModel({
+      adapter: adapter as any,
+      store,
+      config: {
+        provider: 'gitlab',
+        cloneUrl: 'https://gitlab.grammarly.io/dmitry.unkovsky/apps-napkins.git',
+        napBranch: 'main',
+        napkinFocus: '0330-state-persistence',
+        nepicSlug: '03-features',
+        mainOwner: 'coda',
+        mainRepo: 'coda',
+        mainBranch: 'main',
+        prNum: 148817,
+      },
+    });
+
+    await model.scanExistingRepos();
+
+    expect(model.getNepicRoot()).toBe('/home/user/apps-napkins/nepics/03-features');
+
+    model.destroy();
+  });
+
+  it('without nepicSlug, model falls back to first nepic', async () => {
+    vi.useRealTimers();
+    _resetTabIdCounter();
+    const store = createNapStore();
+    const adapter = createMultiNepicAdapter();
+
+    const { createModel } = await import('../model');
+    const model = createModel({
+      adapter: adapter as any,
+      store,
+      config: {
+        provider: 'github',
+        cloneUrl: 'https://github.com/test/repo.git',
+        napBranch: 'main',
+        napkinFocus: null,
+        nepicSlug: null,
+        mainOwner: 'test',
+        mainRepo: 'repo',
+        mainBranch: 'main',
+        prNum: 0,
+      },
+    });
+
+    await model.scanExistingRepos();
+
+    // Falls back to first — 01-v1
+    expect(model.getNepicRoot()).toBe('/home/user/apps-napkins/nepics/01-v1');
+
+    model.destroy();
   });
 });

@@ -5,3 +5,4 @@ out-*-stable/
 .DS_Store
 test-results/
 _vendor/
+.env

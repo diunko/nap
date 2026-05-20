@@ -29,6 +29,7 @@ export interface NapConfig {
   cloneUrl: string;
   napBranch: string;
   napkinFocus: string | null;
+  nepicSlug: string | null;
   mainOwner: string;
   mainRepo: string;
   mainBranch: string;
@@ -131,6 +132,17 @@ export function napkinSlug(napkinPath: string): string {
 }
 
 /**
+ * Extract the nepic slug (first path segment) from a napkin path.
+ * e.g. "03-features/0330-state-persistence" → "03-features"
+ * Returns null if the path has no slash (bare napkin slug with no nepic prefix).
+ */
+export function nepicSlug(napkinPath: string): string | null {
+  const slashIdx = napkinPath.indexOf('/');
+  if (slashIdx === -1) return null;
+  return napkinPath.slice(0, slashIdx);
+}
+
+/**
  * Build the full NapConfig from page info and hash config.
  * mainBranch defaults to 'main' — content script can override from DOM.
  */
@@ -140,6 +152,7 @@ export function buildNapConfig(page: PageInfo, hash: NapHashConfig, mainBranch?:
     cloneUrl: buildCloneUrl(hash.provider, hash.napOwner, hash.napRepo),
     napBranch: hash.napBranch,
     napkinFocus: hash.napkin ? napkinSlug(hash.napkin) : null,
+    nepicSlug: hash.napkin ? nepicSlug(hash.napkin) : null,
     mainOwner: page.mainOwner,
     mainRepo: page.mainRepo,
     mainBranch: mainBranch || 'main',

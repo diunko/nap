@@ -39,6 +39,7 @@ function makeConfig(overrides?: Partial<NapConfig>): NapConfig {
     cloneUrl: 'https://github.com/diunko/nap-test-nap.git',
     napBranch: 'main',
     napkinFocus: '0100-delivery-pipeline',
+    nepicSlug: '01-v1',
     mainOwner: 'diunko',
     mainRepo: 'nap-test-main',
     mainBranch: 'feature/delivery-v2',

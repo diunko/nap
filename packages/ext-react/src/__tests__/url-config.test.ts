@@ -154,6 +154,7 @@ describe('buildNapConfig', () => {
       cloneUrl: 'https://github.com/diunko/nap-test-nap.git',
       napBranch: 'main',
       napkinFocus: '0100-delivery-pipeline',
+      nepicSlug: '01-v1',
       mainOwner: 'diunko',
       mainRepo: 'nap-test-main',
       mainBranch: 'feature/delivery-v2',
@@ -166,5 +167,28 @@ describe('buildNapConfig', () => {
     const hash = parseNapHash('#nap-repo=github/org/nap')!;
     const config = buildNapConfig(page, hash);
     expect(config.mainBranch).toBe('main');
+  });
+
+  it('extracts nepicSlug from napkin path with nepic prefix', () => {
+    const page = parsePageUrl('/coda/coda/pull/148817');
+    const hash = parseNapHash('#nap-repo=gitlab/dmitry.unkovsky/apps-napkins&napkin=03-features/0330-state-persistence')!;
+    const config = buildNapConfig(page, hash);
+    expect(config.napkinFocus).toBe('0330-state-persistence');
+    expect(config.nepicSlug).toBe('03-features');
+  });
+
+  it('nepicSlug is null when no napkin in URL', () => {
+    const page = parsePageUrl('/org/repo/pull/5');
+    const hash = parseNapHash('#nap-repo=github/org/nap')!;
+    const config = buildNapConfig(page, hash);
+    expect(config.nepicSlug).toBeNull();
+  });
+
+  it('nepicSlug is null when napkin has no slash (bare slug)', () => {
+    const page = parsePageUrl('/org/repo/pull/5');
+    const hash = parseNapHash('#nap-repo=github/org/nap&napkin=0100-feature')!;
+    const config = buildNapConfig(page, hash);
+    expect(config.napkinFocus).toBe('0100-feature');
+    expect(config.nepicSlug).toBeNull();
   });
 });

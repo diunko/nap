@@ -118,7 +118,7 @@ export function createModel(options: ModelOptions): NapModel {
     if (!isGitCommand) return;
 
     console.log('[model] git command detected → scanning for nepic root');
-    findNepicRoot(adapter).then(async (root) => {
+    findNepicRoot(adapter, config.nepicSlug).then(async (root) => {
       if (destroyed) return;
 
       if (root) {
@@ -206,7 +206,7 @@ export function createModel(options: ModelOptions): NapModel {
 
   async function scanExistingRepos(): Promise<void> {
     console.log('[model] scanning for existing repos on startup');
-    const root = await findNepicRoot(adapter);
+    const root = await findNepicRoot(adapter, config.nepicSlug);
     if (root) {
       console.log(`[model] startup scan found nepic root: ${root}`);
       nepicRoot = root;
@@ -399,8 +399,8 @@ export function createModel(options: ModelOptions): NapModel {
 
 // ── Nepic root scanner ──
 
-async function findNepicRoot(adapter: LightningFsAdapter): Promise<string | null> {
-  console.log(`[model] findNepicRoot: scanning /home/user/`);
+async function findNepicRoot(adapter: LightningFsAdapter, nepicHint?: string | null): Promise<string | null> {
+  console.log(`[model] findNepicRoot: scanning /home/user/ (hint=${nepicHint ?? 'none'})`);
   try {
     const homeEntries = await adapter.readdir('/home/user');
     console.log(`[model] findNepicRoot: /home/user/ contains: [${homeEntries.join(', ')}]`);
@@ -409,33 +409,9 @@ async function findNepicRoot(adapter: LightningFsAdapter): Promise<string | null
         const stat = await adapter.stat(`/home/user/${dir}`);
         if (!stat.isDirectory) continue;
 
-        const napExists = await adapter.exists(`/home/user/${dir}/nepics`);
-        console.log(`[model] findNepicRoot: /home/user/${dir}/nepics exists=${napExists}`);
-        if (napExists) {
-          const nepicDirs = await adapter.readdir(`/home/user/${dir}/nepics`);
-          console.log(`[model] findNepicRoot: nepics/ contains: [${nepicDirs.join(', ')}]`);
-          for (const nepic of nepicDirs) {
-            const nStat = await adapter.stat(`/home/user/${dir}/nepics/${nepic}`);
-            if (nStat.isDirectory) {
-              const result = `/home/user/${dir}/nepics/${nepic}`;
-              console.log(`[model] findNepicRoot: found ${result}`);
-              return result;
-            }
-          }
-        }
-
-        const dotNapExists = await adapter.exists(`/home/user/${dir}/.nap/nepics`);
-        if (dotNapExists) {
-          const nepicDirs = await adapter.readdir(`/home/user/${dir}/.nap/nepics`);
-          for (const nepic of nepicDirs) {
-            const nStat = await adapter.stat(`/home/user/${dir}/.nap/nepics/${nepic}`);
-            if (nStat.isDirectory) {
-              const result = `/home/user/${dir}/.nap/nepics/${nepic}`;
-              console.log(`[model] findNepicRoot: found ${result}`);
-              return result;
-            }
-          }
-        }
+        const result = await findNepicInRepo(`/home/user/${dir}`, 'nepics', adapter, nepicHint)
+          ?? await findNepicInRepo(`/home/user/${dir}`, '.nap/nepics', adapter, nepicHint);
+        if (result) return result;
       } catch (e) {
         console.log(`[model] findNepicRoot: error scanning /home/user/${dir}:`, e);
         continue;
@@ -445,5 +421,41 @@ async function findNepicRoot(adapter: LightningFsAdapter): Promise<string | null
     console.log(`[model] findNepicRoot: error reading /home/user:`, e);
   }
   console.log(`[model] findNepicRoot: not found`);
+  return null;
+}
+
+/** Scan a nepics/ directory for nepic subdirs. If nepicHint is given, prefer that one. */
+async function findNepicInRepo(
+  repoDir: string,
+  nepicsRel: string,
+  adapter: LightningFsAdapter,
+  nepicHint?: string | null,
+): Promise<string | null> {
+  const nepicsPath = `${repoDir}/${nepicsRel}`;
+  const exists = await adapter.exists(nepicsPath);
+  if (!exists) return null;
+
+  const nepicDirs = await adapter.readdir(nepicsPath);
+  console.log(`[model] findNepicRoot: ${nepicsPath}/ contains: [${nepicDirs.join(', ')}]`);
+
+  // If hint matches a directory, use it directly
+  if (nepicHint && nepicDirs.includes(nepicHint)) {
+    const hintPath = `${nepicsPath}/${nepicHint}`;
+    const hStat = await adapter.stat(hintPath);
+    if (hStat.isDirectory) {
+      console.log(`[model] findNepicRoot: matched hint → ${hintPath}`);
+      return hintPath;
+    }
+  }
+
+  // Fallback: first directory
+  for (const nepic of nepicDirs) {
+    const nStat = await adapter.stat(`${nepicsPath}/${nepic}`);
+    if (nStat.isDirectory) {
+      const result = `${nepicsPath}/${nepic}`;
+      console.log(`[model] findNepicRoot: found ${result}`);
+      return result;
+    }
+  }
   return null;
 }
