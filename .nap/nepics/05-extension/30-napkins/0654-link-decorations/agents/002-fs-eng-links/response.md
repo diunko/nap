@@ -51,3 +51,7 @@ File: `e2e/tests/ld-link-decorations.test.ts`
 - `packages/ext-react/src/ContentPane.tsx` — `refreshLinkDecorations()`, Cmd+hover handlers, CSS injection, wiring
 - `packages/ext-react/e2e/tests/ld-link-decorations.test.ts` — 3 Playwright tests (new file)
 - `fixtures/.nap/.../01-order-routing.md` — added bare URL + bare file path for fixture completeness
+
+## Post-review fix: hover color specificity
+
+Manual testing confirmed pointer cursor worked on Cmd+hover but the color didn't change. Root cause: Monaco nests decoration `<span>` elements, so `.nap-link`'s `color` rule had equal specificity to `.nap-link-hover` and won by source order (it appears on the inner span). Fix: added `!important` to `.nap-link-hover`'s color rule. Pointer cursor was unaffected because only the hover class sets `cursor: pointer`. Commit `906f6b6`.

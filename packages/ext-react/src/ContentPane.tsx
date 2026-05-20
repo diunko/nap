@@ -22,7 +22,7 @@ function ensureRegistered(): void {
   const style = document.createElement('style');
   style.textContent = generatePaletteCss(false) + '\n' +
     '.nap-link { text-decoration: underline; color: var(--nap-link); }\n' +
-    '.nap-link-hover { color: var(--nap-accent); cursor: pointer; }';
+    '.nap-link-hover { color: var(--nap-accent) !important; cursor: pointer; }';
   document.head.appendChild(style);
 
   // Expose Monaco for tests
