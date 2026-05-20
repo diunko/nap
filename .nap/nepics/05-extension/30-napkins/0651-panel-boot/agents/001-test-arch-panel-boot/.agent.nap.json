@@ -1,0 +1,13 @@
+{
+  "cc_session_uuid": "da5844fb-cd83-4dc1-9b3d-0272e34ea6b7",
+  "role": "test-arch",
+  "name": "001-test-arch-panel-boot",
+  "napkin": "0651-panel-boot",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779259738631,
+  "started": true,
+  "exited": false,
+  "done": true
+}
