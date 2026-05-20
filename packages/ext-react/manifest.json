@@ -11,7 +11,7 @@
   ],
   "host_permissions": [
     "https://github.com/*",
-    "https://gitlab.com/*"
+    "https://gitlab.grammarly.io/*"
   ],
   "side_panel": {
     "default_path": "side-panel.html"

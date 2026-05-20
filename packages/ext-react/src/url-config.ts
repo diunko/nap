@@ -25,6 +25,7 @@ export interface PageInfo {
 }
 
 export interface NapConfig {
+  provider: string;
   cloneUrl: string;
   napBranch: string;
   napkinFocus: string | null;
@@ -33,6 +34,12 @@ export interface NapConfig {
   mainBranch: string;
   prNum: number;
 }
+
+/** Provider registry — single source of truth for hostname mapping. */
+export const PROVIDERS: Record<string, { hostname: string; label: string }> = {
+  github: { hostname: 'github.com', label: 'GitHub' },
+  gitlab: { hostname: 'gitlab.grammarly.io', label: 'GitLab' },
+};
 
 /**
  * Parse the URL hash fragment into a NapHashConfig.
@@ -89,10 +96,29 @@ export function deriveStateKey(page: PageInfo, hash: NapHashConfig): string {
 
 /**
  * Build an HTTPS clone URL from provider/owner/repo.
+ * Uses the provider registry — unknown provider throws.
  */
 export function buildCloneUrl(provider: string, owner: string, repo: string): string {
-  if (provider === 'gitlab') return `https://gitlab.com/${owner}/${repo}`;
-  return `https://github.com/${owner}/${repo}`;
+  const entry = PROVIDERS[provider];
+  if (!entry) throw new Error(`Unknown provider: "${provider}". Known providers: ${Object.keys(PROVIDERS).join(', ')}`);
+  return `https://${entry.hostname}/${owner}/${repo}`;
+}
+
+/**
+ * Select the right auth token based on provider key.
+ * Returns { username, password } for isomorphic-git onAuth, or undefined if no token.
+ */
+export function getTokenForProvider(
+  provider: string,
+  tokens: { githubToken?: string; gitlabToken?: string },
+): { username: string; password: string } | undefined {
+  const tokenMap: Record<string, string | undefined> = {
+    github: tokens.githubToken,
+    gitlab: tokens.gitlabToken,
+  };
+  const token = tokenMap[provider];
+  if (!token) return undefined;
+  return { username: 'oauth2', password: token };
 }
 
 /**
@@ -110,6 +136,7 @@ export function napkinSlug(napkinPath: string): string {
  */
 export function buildNapConfig(page: PageInfo, hash: NapHashConfig, mainBranch?: string): NapConfig {
   return {
+    provider: hash.provider,
     cloneUrl: buildCloneUrl(hash.provider, hash.napOwner, hash.napRepo),
     napBranch: hash.napBranch,
     napkinFocus: hash.napkin ? napkinSlug(hash.napkin) : null,

@@ -120,14 +120,13 @@ describe('WW-S03: buildCloneUrl', () => {
       .toBe('https://github.com/diunko/nap-test-nap');
   });
 
-  it('builds GitLab clone URL', () => {
+  it('builds GitLab clone URL with grammarly hostname', () => {
     expect(buildCloneUrl('gitlab', 'org', 'project'))
-      .toBe('https://gitlab.com/org/project');
+      .toBe('https://gitlab.grammarly.io/org/project');
   });
 
-  it('defaults unknown providers to GitHub', () => {
-    expect(buildCloneUrl('bitbucket', 'org', 'repo'))
-      .toBe('https://github.com/org/repo');
+  it('unknown provider throws', () => {
+    expect(() => buildCloneUrl('bitbucket', 'org', 'repo')).toThrow(/Unknown provider/);
   });
 });
 
@@ -151,6 +150,7 @@ describe('buildNapConfig', () => {
     const hash = parseNapHash('#nap-repo=github/diunko/nap-test-nap&napkin=01-v1/0100-delivery-pipeline')!;
     const config = buildNapConfig(page, hash, 'feature/delivery-v2');
     expect(config).toEqual({
+      provider: 'github',
       cloneUrl: 'https://github.com/diunko/nap-test-nap',
       napBranch: 'main',
       napkinFocus: '0100-delivery-pipeline',

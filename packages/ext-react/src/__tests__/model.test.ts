@@ -44,6 +44,7 @@ describe('IS-05: Model — debounce + echo suppression', () => {
       adapter: mockAdapter as any,
       store,
       config: {
+        provider: 'github',
         cloneUrl: 'https://github.com/test/repo',
         napBranch: 'main',
         napkinFocus: null,

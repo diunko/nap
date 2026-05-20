@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "96abebef-edc4-46bc-81ab-75b04b1bcd85",
+  "role": "test-eng",
+  "name": "003-test-eng-gitlab",
+  "napkin": "0658-gitlab-support",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779292768829,
+  "started": false,
+  "exited": false
+}

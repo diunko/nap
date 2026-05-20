@@ -35,6 +35,7 @@ function createMockAdapter(): LightningFsAdapter {
 
 function makeConfig(overrides?: Partial<NapConfig>): NapConfig {
   return {
+    provider: 'github',
     cloneUrl: 'https://github.com/diunko/nap-test-nap',
     napBranch: 'main',
     napkinFocus: '0100-delivery-pipeline',

@@ -52,6 +52,8 @@ export interface NapModel {
   fetchLatest: () => void;
   /** Re-read tab URL, update config + store, invalidate + re-fetch diff ranges. No remount. */
   refreshPr: () => void;
+  /** Get the provider key from the current config. */
+  getProvider: () => string;
 }
 
 export function createModel(options: ModelOptions): NapModel {
@@ -391,6 +393,7 @@ export function createModel(options: ModelOptions): NapModel {
     registerShell,
     fetchLatest,
     refreshPr,
+    getProvider: () => config.provider,
   };
 }
 

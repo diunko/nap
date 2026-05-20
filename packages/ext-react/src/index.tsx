@@ -8,6 +8,7 @@ import { Sidebar } from './Sidebar';
 import { createSession, SessionContext, useNapStore } from './session';
 import type { Session } from './session';
 import { resolveBootState, type BootState } from './boot-gate';
+import { getTokenForProvider } from './url-config';
 
 // Buffer polyfill — required before isomorphic-git
 (window as any).Buffer = Buffer;
@@ -122,7 +123,7 @@ function HeaderBar({ onFetchLatest, onRefreshPr }: { onFetchLatest?: () => void;
         title={focusMode ? 'Show all cards (Ctrl+Shift+F)' : 'Focus on current card (Ctrl+Shift+F)'}
         style={{ cursor: 'pointer', padding: '2px 6px', borderRadius: 3, fontSize: 14 }}
       >
-        {focusMode ? '\u2922' : '\u2921'}
+        {focusMode ? '\u25C9' : '\u25CE'}
       </span>
       <span
         onClick={toggleSettings}
@@ -201,13 +202,28 @@ function SettingsOverlay() {
   const settingsVisible = useNapStore((s) => s.settingsVisible);
   const mainRepoConfig = useNapStore((s) => s.mainRepoConfig);
   const toggleSettings = useNapStore((s) => s.toggleSettings);
-  const [patInput, setPatInput] = useState('');
+  const githubToken = useNapStore((s) => s.githubToken);
+  const gitlabToken = useNapStore((s) => s.gitlabToken);
+  const setGithubToken = useNapStore((s) => s.setGithubToken);
+  const setGitlabToken = useNapStore((s) => s.setGitlabToken);
+  const [ghInput, setGhInput] = useState('');
+  const [glInput, setGlInput] = useState('');
+
+  // Sync inputs from store on open
+  useEffect(() => {
+    if (settingsVisible) {
+      setGhInput(githubToken);
+      setGlInput(gitlabToken);
+    }
+  }, [settingsVisible]);
 
   if (!settingsVisible) return null;
 
+  const inputStyle = { width: '100%', padding: '4px 6px', border: '1px solid var(--nap-border)', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, background: 'var(--nap-bg)', color: 'var(--nap-text)' } as const;
+
   function handleSave() {
-    // PAT storage would go here (e.g., chrome.storage.local)
-    // For now, just close
+    setGithubToken(ghInput);
+    setGitlabToken(glInput);
     toggleSettings();
   }
 
@@ -239,12 +255,26 @@ function SettingsOverlay() {
         GitHub PAT (optional, for private repos)
       </label>
       <input
+        data-testid="settings-github-token"
         type="password"
-        value={patInput}
-        onChange={(e) => setPatInput(e.target.value)}
+        value={ghInput}
+        onChange={(e) => setGhInput(e.target.value)}
         placeholder="ghp_..."
-        style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--nap-border)', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, background: 'var(--nap-bg)', color: 'var(--nap-text)' }}
+        style={inputStyle}
       />
+
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--nap-text-muted)', marginBottom: 2, marginTop: 12 }}>
+        GitLab PAT (optional, for GitLab-hosted .nap repos)
+      </label>
+      <input
+        data-testid="settings-gitlab-token"
+        type="password"
+        value={glInput}
+        onChange={(e) => setGlInput(e.target.value)}
+        placeholder="glpat-..."
+        style={inputStyle}
+      />
+
       <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
         <button
           onClick={handleSave}
@@ -269,6 +299,13 @@ function Panel() {
   const { store, lfs, adapter, model } = React.useContext(SessionContext)!;
   const activeSurface = useNapStore((s) => s.activeSurface);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
+
+  // Auth callback — reads provider from model config, tokens from store
+  const getAuth = useCallback(async () => {
+    const s = store.getState();
+    const provider = model.getProvider();
+    return getTokenForProvider(provider, { githubToken: s.githubToken, gitlabToken: s.gitlabToken });
+  }, [store, model]);
 
   // Init model + cleanup
   useEffect(() => {
@@ -361,6 +398,7 @@ function Panel() {
                 adapter={adapter}
                 onCommandComplete={(cmd) => model.onCommandComplete(cmd)}
                 onShellReady={(exec) => model.registerShell(exec)}
+                getAuth={getAuth}
               />
             </div>
           </div>
