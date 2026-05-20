@@ -1,0 +1,13 @@
+{
+  "cc_session_uuid": "3a52ecf9-97b4-4f4f-9946-f7e899bae79f",
+  "role": "test-eng",
+  "name": "003-test-eng-panel-boot",
+  "napkin": "0651-panel-boot",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779261269215,
+  "started": true,
+  "exited": false,
+  "done": true
+}
