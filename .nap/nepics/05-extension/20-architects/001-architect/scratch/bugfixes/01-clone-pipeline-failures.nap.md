@@ -100,13 +100,6 @@
 
 ---
 
-## the token problem
-
-* tokens are per-session (Zustand persist, keyed by state-key)
-* switch PR = new session = empty tokens
-* user re-enters tokens every time they switch PRs
-* fix: global tokens in chrome.storage.sync, read on boot, not tied to session
-
 ## the silent failure problem
 
 * every failure in steps 4-8 results in: nav shows "cloning..." forever
