@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "72d54c4e-199b-409c-beec-8cfb73ff5539",
+  "role": "fs-eng",
+  "name": "002-fs-eng-pipeline",
+  "napkin": "0660-loading-pipeline",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779365212205,
+  "started": false,
+  "exited": false
+}
