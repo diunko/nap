@@ -9,6 +9,23 @@ import { createSession, SessionContext, useNapStore } from './session';
 import type { Session } from './session';
 import { resolveBootState, type BootState } from './boot-gate';
 import { getTokenForProvider } from './url-config';
+import { createPipeline, type Pipeline } from './pipeline';
+import { findNepicRoot } from './model';
+import { fetchPrDiffRanges } from './pr-diff';
+import {
+  makeValidateStep,
+  makeSessionStep,
+  makeInitFsStep,
+  makeCheckReposStep,
+  makeCloneStep,
+  makeScanRepoStep,
+  makeLoadNavStep,
+  makeFetchDiffStep,
+  type CloneFn,
+} from './pipeline-steps';
+import { LoadingGate } from './LoadingGate';
+import git from 'isomorphic-git';
+import http from 'isomorphic-git/http/web';
 
 // Buffer polyfill — required before isomorphic-git
 (window as any).Buffer = Buffer;
@@ -307,9 +324,8 @@ function Panel() {
     return getTokenForProvider(provider, { githubToken: s.githubToken, gitlabToken: s.gitlabToken });
   }, [store, model]);
 
-  // Init model + cleanup
+  // Model cleanup (init is done by pipeline before Panel mounts)
   useEffect(() => {
-    model.init();
     return () => {
       model.registerShell(null);
       model.destroy();
@@ -434,12 +450,27 @@ function BootMessage({ message, detail }: { message: string; detail?: string }) 
   );
 }
 
-// ── App (reads tab URL, gates boot, creates session) ──
+// ── Production clone function (wraps isomorphic-git) ──
+
+const realCloneFn: CloneFn = async (url, dir, lfs, auth) => {
+  await git.clone({
+    fs: lfs,
+    http,
+    dir,
+    url,
+    singleBranch: true,
+    depth: 20,
+    ...(auth ? { onAuth: () => auth } : {}),
+  });
+};
+
+// ── App (reads tab URL, gates boot, runs pipeline) ──
 
 function App() {
   const [bootState, setBootState] = useState<BootState | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const sessionRef = useRef<Session | null>(null);
+  const pipelineRef = useRef<Pipeline | null>(null);
+  const [pipelineDone, setPipelineDone] = useState(false);
+  const [, forceUpdate] = useState(0);
 
   // Tab URL reader — chrome.tabs.query on mount
   useEffect(() => {
@@ -452,55 +483,53 @@ function App() {
         setBootState(state);
       });
     } else {
-      // No chrome API (dev mode) — try reading URL from window
       const state = resolveBootState(window.location.href);
       setBootState(state);
     }
   }, []);
 
-  // Create session when boot state is 'session'
+  // Create and run pipeline when boot state is 'session'
   useEffect(() => {
     if (!bootState || bootState.state !== 'session') return;
 
-    const newSession = createSession(bootState.key, bootState.config);
-    sessionRef.current = newSession;
-    setSession(newSession);
+    const config = bootState.config;
+    const steps = [
+      makeValidateStep(),
+      makeSessionStep(createSession),
+      makeInitFsStep(),
+      makeCheckReposStep(findNepicRoot),
+      makeCloneStep(realCloneFn, config),
+      makeScanRepoStep(findNepicRoot, config),
+      makeLoadNavStep(),
+      makeFetchDiffStep(fetchPrDiffRanges),
+    ];
 
-    // Console API
-    (window as any).__wipeCurrentSession__ = async () => {
-      const key = newSession.key;
-      console.log(`[session] wiping: key=${key}`);
-      newSession.model.destroy();
+    const pipeline = createPipeline(steps, {
+      config,
+      stateKey: bootState.key,
+    });
+    pipelineRef.current = pipeline;
 
-      const fsName = `nap-fs-${key}`;
-      indexedDB.deleteDatabase(fsName);
-      indexedDB.deleteDatabase(`${fsName}_lock`);
+    const unsub = pipeline.subscribe((state) => {
+      if (state.overall === 'done') {
+        setPipelineDone(true);
+      }
+      // Force re-render so LoadingGate updates
+      forceUpdate((n) => n + 1);
+    });
 
-      const uiKey = `nap-ui-${key}`;
-      try {
-        const req = indexedDB.open('nap-state');
-        await new Promise<void>((resolve, reject) => {
-          req.onsuccess = () => {
-            try {
-              const db = req.result;
-              const tx = db.transaction('kv', 'readwrite');
-              tx.objectStore('kv').delete(uiKey);
-              tx.oncomplete = () => { db.close(); resolve(); };
-              tx.onerror = () => { db.close(); reject(tx.error); };
-            } catch { resolve(); }
-          };
-          req.onerror = () => resolve();
-        });
-      } catch { /* best effort */ }
+    console.log('[pipeline] starting');
+    pipeline.run();
 
-      console.log(`[session] wiped fs=${fsName}, ui=${uiKey} — recreating fresh`);
-      const fresh = createSession(key, bootState.config);
-      sessionRef.current = fresh;
-      setSession(fresh);
-    };
+    // Console API for debugging
+    (window as any).__napPipeline__ = pipeline;
 
     return () => {
-      newSession.model.destroy();
+      unsub();
+      pipeline.destroy();
+      // Destroy session if it was created
+      const ctx = pipeline.getCtx();
+      if (ctx.model) ctx.model.destroy();
     };
   }, [bootState]);
 
@@ -522,7 +551,7 @@ function App() {
     );
   }
 
-  // Gate messages
+  // Gate messages (pre-pipeline)
   if (bootState.state === 'no-hash') {
     return <BootMessage message="ask the author for a review link" detail="open a PR with a #nap-repo=... hash" />;
   }
@@ -531,7 +560,14 @@ function App() {
     return <BootMessage message="open on a GitHub page" detail="nap works on github.com pull request pages" />;
   }
 
-  // Session — render the panel
+  // Pipeline running — show loading gate
+  if (!pipelineDone && pipelineRef.current) {
+    return <LoadingGate pipeline={pipelineRef.current} />;
+  }
+
+  // Pipeline done — render the panel with session from pipeline ctx
+  const ctx = pipelineRef.current?.getCtx();
+  const session = ctx?.session as Session | undefined;
   if (!session) return null;
 
   return (

@@ -311,7 +311,7 @@ export function Sidebar() {
   const cardViewMode = useNapStore((s) => s.cardViewMode);
   const focusMode = useNapStore((s) => s.focusMode);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
-  const cloningStatus = useNapStore((s) => s.cloningStatus);
+  // cloningStatus removed — pipeline owns loading state via LoadingGate
 
   // Resizable width
   const widthRef = useRef(240);
@@ -396,15 +396,9 @@ export function Sidebar() {
 
       {/* Card list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0', scrollBehavior: 'smooth' }}>
-        {napkins.length === 0 && architects.length === 0 && cloningStatus === 'cloning' && (
-          <div data-testid="clone-loading" style={{ padding: '16px 12px', color: 'var(--nap-text-dim)', fontSize: 11 }}>
-            cloning...
-          </div>
-        )}
-
-        {napkins.length === 0 && architects.length === 0 && cloningStatus !== 'cloning' && (
+        {napkins.length === 0 && architects.length === 0 && (
           <div style={{ padding: '16px 12px', color: 'var(--nap-text-dim)', fontSize: 11 }}>
-            Clone a .nap repo in the terminal to get started.
+            No napkins loaded.
           </div>
         )}
 

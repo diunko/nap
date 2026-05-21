@@ -123,64 +123,11 @@ describe('PB-S02: activeSurface default', () => {
   });
 });
 
-// ── PB-M01: model constructed with config ──
+// PB-M01: model-with-config tests removed — clone orchestration moved to pipeline.
+// See pipeline.test.ts LP-S01..S10, LP-S20..S27 for replacement coverage.
 
-describe('PB-M01: model with config at construction', () => {
+describe('PB-M01: model store config at construction', () => {
   beforeEach(_resetTabIdCounter);
-
-  it('model created with config + empty LFS → after init + registerShell → clone fires', async () => {
-    const store = createNapStore();
-    const adapter = createMockAdapter();
-    const model = createModel({ adapter, store, config: makeConfig() });
-    const mockExec = vi.fn();
-
-    model.registerShell(mockExec);
-    await model.init();
-
-    expect(mockExec).toHaveBeenCalledTimes(1);
-    expect(mockExec.mock.calls[0][0]).toMatch(/git clone.*nap-test-nap/);
-
-    model.destroy();
-  });
-
-  it('model created with config + existing repos → no clone', async () => {
-    const store = createNapStore();
-    const adapter = createMockAdapter();
-
-    // Simulate existing repos
-    store.getState().refreshNav([
-      { type: 'section', name: '30-napkins', displayName: '30-napkins', path: '/test' },
-    ]);
-
-    const model = createModel({ adapter, store, config: makeConfig() });
-    const mockExec = vi.fn();
-
-    model.registerShell(mockExec);
-    await model.init();
-
-    expect(mockExec).not.toHaveBeenCalled();
-
-    model.destroy();
-  });
-
-  it('model created with config + navSections populated (IDB return visit) → no clone', async () => {
-    const store = createNapStore();
-    const adapter = createMockAdapter();
-
-    store.getState().refreshNav([
-      { type: 'section', name: '30-napkins', displayName: '30-napkins', path: '/test' },
-    ]);
-
-    const model = createModel({ adapter, store, config: makeConfig() });
-    const mockExec = vi.fn();
-
-    model.registerShell(mockExec);
-    await model.init();
-
-    expect(mockExec).not.toHaveBeenCalled();
-
-    model.destroy();
-  });
 
   it('store has mainRepoConfig and prNum set at construction time', () => {
     const store = createNapStore();
@@ -193,21 +140,6 @@ describe('PB-M01: model with config at construction', () => {
       branch: 'feature/delivery-v2',
     });
     expect(store.getState().prNum).toBe(1);
-
-    model.destroy();
-  });
-
-  it('shell registered before init → clone fires after init', async () => {
-    const store = createNapStore();
-    const adapter = createMockAdapter();
-    const model = createModel({ adapter, store, config: makeConfig() });
-    const mockExec = vi.fn();
-
-    model.registerShell(mockExec);
-    expect(mockExec).not.toHaveBeenCalled(); // init not done
-
-    await model.init();
-    expect(mockExec).toHaveBeenCalledTimes(1);
 
     model.destroy();
   });

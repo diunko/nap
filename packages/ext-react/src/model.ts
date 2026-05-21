@@ -1,17 +1,15 @@
 /**
- * Model layer — owns the data pipeline between filesystem and store,
- * AND the workflow orchestration (auto-clone, diff ranges, fetch latest).
+ * Model layer — owns the data pipeline between filesystem and store.
  *
  * Responsibilities:
  * - Subscribe to adapter change events → debounce → refresh nav or reload file
  * - Handle git command completion → scan for nepic root → refresh nav
  * - Echo suppression for auto-save writes
  * - Reload active file on external changes
- * - Auto-clone on empty LFS when shell is available (config always present)
- * - Fetch PR diff ranges from GitHub API
  * - Fetch latest (git fetch + checkout)
  * - Refresh PR (re-read tab URL, update config, re-fetch diff ranges)
  *
+ * Clone orchestration moved to pipeline.ts / pipeline-steps.ts.
  * Components call model methods. Model calls store actions. One direction.
  */
 import type { LightningFsAdapter, FsChangeEvent } from './fs-adapter';
@@ -39,7 +37,9 @@ export interface NapModel {
   onCommandComplete: (command: string) => void;
   /** Get the discovered nepic root (null if not found yet). */
   getNepicRoot: () => string | null;
-  /** Bootstrap filesystem + scan for existing repos. Call once after creation. */
+  /** Set the nepic root and refresh navigation. Called by pipeline after scan. */
+  setNepicRoot: (root: string) => Promise<void>;
+  /** Bootstrap filesystem + scan for existing repos. */
   init: () => Promise<void>;
   /** Scan for existing repos in LFS (callable independently). */
   scanExistingRepos: () => Promise<void>;
@@ -67,11 +67,8 @@ export function createModel(options: ModelOptions): NapModel {
   // ── Orchestration state ──
   let shellExec: ((cmd: string) => Promise<void>) | null = null;
   let config: NapConfig = options.config;
-  let cloneTriggered = false;
-  let pendingNapkinFocus: string | null = null;
   let diffFetchInFlight = false;
   let destroyed = false;
-  let initComplete = false;
 
   // Apply config to store immediately at construction
   applyConfigToStore(config);
@@ -126,16 +123,6 @@ export function createModel(options: ModelOptions): NapModel {
         nepicRoot = root;
         console.log(`[model] repo-changed → refreshNav`);
         await refreshNavFromRoot(root);
-
-        // Post-clone: update status and focus napkin
-        if (isClone && cloneTriggered) {
-          store.getState().setCloningStatus('done');
-          if (pendingNapkinFocus) {
-            console.log(`[model] post-clone → expandCard ${pendingNapkinFocus}`);
-            store.getState().expandCard(pendingNapkinFocus);
-            pendingNapkinFocus = null;
-          }
-        }
       } else {
         console.log(`[model] nepic root not found after command`);
       }
@@ -221,78 +208,28 @@ export function createModel(options: ModelOptions): NapModel {
     try { await adapter.mkdir('/home/user', { recursive: true }); } catch { /* exists */ }
     console.log('[model] ensured /home/user exists');
     await scanExistingRepos();
-    initComplete = true;
-    checkAutoClone();
+  }
 
-    // Wait for Zustand persist hydration before checking diff ranges.
-    // On return visit, hydration restores cached prDiffRanges → avoids redundant fetch.
-    const persist = (store as any).persist;
-    if (persist?.hasHydrated?.()) {
-      checkDiffRanges();
-    } else if (persist?.onFinishHydration) {
-      persist.onFinishHydration(() => {
-        if (!destroyed) checkDiffRanges();
-      });
-    } else {
-      // Non-persisted store (vitest) — check immediately
-      checkDiffRanges();
-    }
+  /** Set the nepic root and refresh navigation. Called by pipeline after scan. */
+  async function setNepicRoot(root: string): Promise<void> {
+    nepicRoot = root;
+    console.log(`[model] setNepicRoot: ${root}`);
+    await refreshNavFromRoot(root);
   }
 
   // ── Workflow orchestration ──
 
   function registerShell(exec: ((cmd: string) => Promise<void>) | null): void {
     shellExec = exec;
-    if (exec) {
-      console.log('[model] shell registered');
-      checkAutoClone();
-    } else {
-      console.log('[model] shell unregistered');
-    }
+    console.log(exec ? '[model] shell registered' : '[model] shell unregistered');
   }
 
-  /** Apply config to store state + set up napkin focus. Internal helper. */
+  /** Apply config to store state. Internal helper. */
   function applyConfigToStore(cfg: NapConfig): void {
-    console.log(`[model] applyConfig: clone=${cfg.cloneUrl} napkin=${cfg.napkinFocus} pr=${cfg.prNum}`);
-
+    console.log(`[model] applyConfig: clone=${cfg.cloneUrl} pr=${cfg.prNum}`);
     const s = store.getState();
     s.setMainRepo({ owner: cfg.mainOwner, repo: cfg.mainRepo, branch: cfg.mainBranch });
     s.setPrNum(cfg.prNum);
-
-    if (cfg.napkinFocus) {
-      // Return visit: nav already populated → focus immediately
-      if (s.navSections.length > 0) {
-        console.log(`[model] return visit → expandCard ${cfg.napkinFocus}`);
-        s.expandCard(cfg.napkinFocus);
-      } else {
-        // First visit: defer focus until after clone + nav populate
-        pendingNapkinFocus = cfg.napkinFocus;
-      }
-    }
-  }
-
-  /**
-   * Auto-clone check. Called from two places (config always present):
-   * - registerShell() — shell just became available
-   * - init() after scanExistingRepos() — scan finished
-   *
-   * Whichever fires last completes the preconditions and triggers the clone.
-   * The cloneTriggered boolean prevents double-fire.
-   */
-  function checkAutoClone(): void {
-    if (destroyed) return;
-    if (!initComplete) return;  // wait for init to create dirs + scan
-    if (!shellExec) return;     // shell not ready yet
-    if (cloneTriggered) return; // already started
-    if (nepicRoot) return;      // repos already exist (from scan)
-
-    // Also check store — on return visit, navSections may be populated from hydration
-    if (store.getState().navSections.length > 0) return;
-
-    cloneTriggered = true;
-    store.getState().setCloningStatus('cloning');
-    console.log(`[auto-clone] starting: git clone ${config.cloneUrl}`);
-    shellExec(`git clone ${config.cloneUrl}\r`);
   }
 
   function checkDiffRanges(): void {
@@ -388,6 +325,7 @@ export function createModel(options: ModelOptions): NapModel {
     },
     onCommandComplete,
     getNepicRoot: () => nepicRoot,
+    setNepicRoot,
     init,
     scanExistingRepos,
     registerShell,
@@ -399,12 +337,13 @@ export function createModel(options: ModelOptions): NapModel {
 
 // ── Nepic root scanner ──
 
-async function findNepicRoot(adapter: LightningFsAdapter, nepicHint?: string | null): Promise<string | null> {
+export async function findNepicRoot(adapter: LightningFsAdapter, nepicHint?: string | null): Promise<string | null> {
   console.log(`[model] findNepicRoot: scanning /home/user/ (hint=${nepicHint ?? 'none'})`);
   try {
     const homeEntries = await adapter.readdir('/home/user');
     console.log(`[model] findNepicRoot: /home/user/ contains: [${homeEntries.join(', ')}]`);
     for (const dir of homeEntries) {
+      if (dir.startsWith('.')) continue; // Skip staging dirs (.tmp-*) and other dotfiles
       try {
         const stat = await adapter.stat(`/home/user/${dir}`);
         if (!stat.isDirectory) continue;
