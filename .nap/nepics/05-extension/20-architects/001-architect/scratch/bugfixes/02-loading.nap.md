@@ -44,10 +44,20 @@
       * runs steps in order
       * tracks state
       * exposes retry(stepIndex)
+        * // also retry all
+          * // means wipe all and retry
+            * // => wiping runner-managed state means all is wiped?
+            * // how to clear it all up?
+            * // each step provides cleanup fn?
+            * // or just blow the whole thig? __wipeSession__?
+            * //A: each step has cleanup(). retry-all = run cleanup on each completed step (reverse order), then re-run all. simple, no __wipeSession__ needed.
     * step
       * async function
       * returns `{ ok }` or `{ error, hint, retryable }`
       * owns its business logic
+      * provides cleanup() for retry-all
+        * called before re-running the step
+        * removes own staging artifacts
     * staging
       * `.tmp-{name}` dirs, invisible to scanner
       * clone there, rename on success
@@ -87,8 +97,10 @@
       * new staging dir, zero carry-over
     * pipeline state is ephemeral
       * not persisted, restart on reopen
-    * tokens are global
-      * chrome.storage.sync, survive across sessions
+    * no token = retryable error
+      * user enters token (wherever tokens live)
+      * user clicks retry
+      * token storage is orthogonal to pipeline
     * side effects contained until committed
       * staging pattern
 
