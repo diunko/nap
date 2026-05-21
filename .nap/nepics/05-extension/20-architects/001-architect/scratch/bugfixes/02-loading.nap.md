@@ -40,22 +40,55 @@
 
 * //A:
   * components
-    * pipeline runner — runs steps in order, tracks state, exposes retry(stepIndex)
-    * step — async function returning `{ ok } | { error, hint, retryable }`. owns its business logic.
-    * staging — `.tmp-{name}` dirs invisible to scanner. clone there, rename on success. new attempt = new staging dir.
-    * pipeline state — `{ steps[], currentStep, status, error }`. ephemeral (ref, not persisted). panel close = gone.
-    * loading gate UI — reads pipeline state, renders step list with checkmarks / spinner / error+retry
+    * pipeline runner
+      * runs steps in order
+      * tracks state
+      * exposes retry(stepIndex)
+    * step
+      * async function
+      * returns `{ ok }` or `{ error, hint, retryable }`
+      * owns its business logic
+    * staging
+      * `.tmp-{name}` dirs, invisible to scanner
+      * clone there, rename on success
+      * new attempt = new staging dir
+    * pipeline state
+      * `{ steps[], currentStep, status, error }`
+      * ephemeral (ref, not persisted)
+      * panel close = gone
+    * loading gate UI
+      * reads pipeline state
+      * renders step list
+        * checkmark / spinner / error+retry
   * workflows
-    * fresh visit: parse → session → init → shell → clone (staging → rename) → scan → nav → diff fetch
-    * return visit: parse → session → init → shell → scan finds repo → skip clone → nav → diff fetch
-    * auth failure: clone → 401 → error (retryable, "enter token") → user enters → retry → clone again (fresh staging)
-    * network failure: clone → fetch error → error (retryable, "check connection") → user fixes → retry
-    * mid-flight close: staging dir left behind → next boot ignores it (dotfile) → fresh pipeline, fresh staging
-    * wrong repo: clone succeeds → scan finds no nepics/ → error (permanent, "not a .nap repo")
+    * fresh visit
+      * parse → session → init → shell
+      * → clone (staging → rename) → scan → nav → diff fetch
+    * return visit
+      * parse → session → init → shell
+      * → scan finds repo → skip clone → nav → diff fetch
+    * auth failure
+      * clone → 401 → error (retryable, "enter token")
+      * user enters → retry → fresh staging → clone
+    * network failure
+      * clone → fetch error → error (retryable, "check connection")
+      * user fixes → retry
+    * mid-flight close
+      * staging dir left behind
+      * next boot ignores it (dotfile)
+      * fresh pipeline, fresh staging
+    * wrong repo
+      * clone succeeds → scan finds no nepics/
+      * error (permanent, "not a .nap repo")
   * invariants
-    * user never sees partial state — staging is invisible, rename is atomic
-    * retry = fresh attempt — new staging dir, zero carry-over from failed run
-    * pipeline state is ephemeral — not persisted, restart from scratch on panel reopen
-    * tokens are global — chrome.storage.sync, survive across sessions
-    * each step's side effects are contained until explicitly committed (staging pattern)
+    * user never sees partial state
+      * staging invisible, rename atomic
+    * retry = fresh attempt
+      * new staging dir, zero carry-over
+    * pipeline state is ephemeral
+      * not persisted, restart on reopen
+    * tokens are global
+      * chrome.storage.sync, survive across sessions
+    * side effects contained until committed
+      * staging pattern
 
