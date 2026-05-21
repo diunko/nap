@@ -510,10 +510,28 @@ function App() {
     });
     pipelineRef.current = pipeline;
 
+    // Clone step index — used to bridge pipeline state → store.cloningStatus
+    const cloneStepIdx = steps.findIndex((s) => s.name.startsWith('cloning'));
+
     const unsub = pipeline.subscribe((state) => {
       if (state.overall === 'done') {
         setPipelineDone(true);
       }
+
+      // Bridge pipeline clone step → legacy store.cloningStatus
+      // Existing Playwright tests assert on cloningStatus ('done' for fresh, 'idle' for return)
+      if (cloneStepIdx >= 0) {
+        const ctx = pipeline.getCtx();
+        const cloneStep = state.steps[cloneStepIdx];
+        if (ctx.store && !ctx.skipClone) {
+          if (cloneStep.status === 'running') {
+            ctx.store.getState().setCloningStatus('cloning');
+          } else if (cloneStep.status === 'done') {
+            ctx.store.getState().setCloningStatus('done');
+          }
+        }
+      }
+
       // Force re-render so LoadingGate updates
       forceUpdate((n) => n + 1);
     });

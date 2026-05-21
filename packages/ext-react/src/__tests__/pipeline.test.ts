@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createPipeline, type StepDef, type PipelineState } from '../pipeline';
 import {
   makeCloneStep,
+  makeCheckReposStep,
   makeScanRepoStep,
   makeValidateStep,
   makeSessionStep,
@@ -9,7 +10,9 @@ import {
   type PipelineCtx,
   type CloneFn,
   type FindRootFn,
+  type CreateSessionFn,
 } from '../pipeline-steps';
+import { findNepicRoot } from '../model';
 import type { NapConfig } from '../url-config';
 
 // ── Test harness ──
@@ -624,6 +627,184 @@ describe('LP-S27: validate step — malformed config', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error).toContain('invalid review link');
+    }
+  });
+});
+
+// ── LP-S31: scanner never sees .tmp-* as valid repo (dotfile filter property) ──
+
+describe('LP-S31: no partial state visible — scanner property', () => {
+  /**
+   * Build a mock adapter that tracks its filesystem state.
+   * findNepicRoot can run against it to verify scanner behavior.
+   */
+  function makeFsState() {
+    const dirs = new Map<string, string[]>();
+    const statMap = new Map<string, { isDirectory: boolean }>();
+
+    function addDir(path: string, children: string[]) {
+      dirs.set(path, children);
+      statMap.set(path, { isDirectory: true });
+      for (const child of children) {
+        const childPath = `${path}/${child}`;
+        // Default everything to directory unless it's clearly a file
+        if (!statMap.has(childPath)) {
+          statMap.set(childPath, { isDirectory: true });
+        }
+      }
+    }
+
+    const adapter = {
+      readdir: vi.fn(async (path: string) => {
+        return dirs.get(path) ?? [];
+      }),
+      stat: vi.fn(async (path: string) => {
+        return statMap.get(path) ?? { isDirectory: false };
+      }),
+      exists: vi.fn(async (path: string) => {
+        return dirs.has(path) || statMap.has(path);
+      }),
+      readFile: vi.fn(async () => '{}'),
+    } as any;
+
+    return { adapter, addDir, statMap };
+  }
+
+  it('scanner skips .tmp-* staging dirs', async () => {
+    const { adapter, addDir } = makeFsState();
+
+    // /home/user has a staging dir and a real repo
+    addDir('/home/user', ['.tmp-nap-repo', 'nap-repo']);
+    // Staging dir has a valid nepics structure (would fool scanner if not filtered)
+    addDir('/home/user/.tmp-nap-repo', ['nepics']);
+    addDir('/home/user/.tmp-nap-repo/nepics', ['01-v1']);
+    addDir('/home/user/.tmp-nap-repo/nepics/01-v1', []);
+    // Real repo also has nepics
+    addDir('/home/user/nap-repo', ['nepics']);
+    addDir('/home/user/nap-repo/nepics', ['01-v1']);
+    addDir('/home/user/nap-repo/nepics/01-v1', []);
+
+    const result = await findNepicRoot(adapter, null);
+    // Must find real repo, never staging dir
+    expect(result).not.toBeNull();
+    expect(result).not.toContain('.tmp-');
+    expect(result).toContain('nap-repo/nepics/01-v1');
+  });
+
+  it('scanner returns null when only .tmp-* dirs exist', async () => {
+    const { adapter, addDir } = makeFsState();
+
+    // Only staging dir — no real repo
+    addDir('/home/user', ['.tmp-nap-repo']);
+    addDir('/home/user/.tmp-nap-repo', ['nepics']);
+    addDir('/home/user/.tmp-nap-repo/nepics', ['01-v1']);
+    addDir('/home/user/.tmp-nap-repo/nepics/01-v1', []);
+
+    const result = await findNepicRoot(adapter, null);
+    expect(result).toBeNull();
+  });
+
+  it('scanner skips all dotfile dirs, not just .tmp-*', async () => {
+    const { adapter, addDir } = makeFsState();
+
+    addDir('/home/user', ['.hidden-repo', '.git', 'real-repo']);
+    addDir('/home/user/.hidden-repo', ['nepics']);
+    addDir('/home/user/.hidden-repo/nepics', ['01-v1']);
+    addDir('/home/user/.hidden-repo/nepics/01-v1', []);
+    addDir('/home/user/real-repo', ['nepics']);
+    addDir('/home/user/real-repo/nepics', ['01-v1']);
+    addDir('/home/user/real-repo/nepics/01-v1', []);
+
+    const result = await findNepicRoot(adapter, null);
+    expect(result).not.toBeNull();
+    expect(result).not.toContain('.hidden');
+    expect(result).not.toContain('.git');
+    expect(result).toContain('real-repo');
+  });
+
+  it('property holds across run → fail → retry → retryAll sequence', async () => {
+    const { adapter, addDir, statMap } = makeFsState();
+    addDir('/home/user', []);
+
+    // Track what the scanner sees after each operation
+    async function scannerNeverSeesTmp() {
+      const root = await findNepicRoot(adapter, null);
+      if (root) {
+        expect(root).not.toContain('.tmp-');
+      }
+    }
+
+    // Simulate: after clone attempt, staging dir appears
+    addDir('/home/user', ['.tmp-nap-repo']);
+    addDir('/home/user/.tmp-nap-repo', ['nepics']);
+    addDir('/home/user/.tmp-nap-repo/nepics', ['01-v1']);
+    addDir('/home/user/.tmp-nap-repo/nepics/01-v1', []);
+    await scannerNeverSeesTmp();
+
+    // Simulate: after retry cleanup + successful clone + rename
+    addDir('/home/user', ['nap-repo']);
+    addDir('/home/user/nap-repo', ['nepics']);
+    addDir('/home/user/nap-repo/nepics', ['01-v1']);
+    addDir('/home/user/nap-repo/nepics/01-v1', []);
+    await scannerNeverSeesTmp();
+
+    // Simulate: after retryAll cleanup (both dirs gone, then fresh clone mid-flight)
+    addDir('/home/user', ['.tmp-nap-repo']);
+    await scannerNeverSeesTmp();
+  });
+});
+
+// ── LP-S28: session creation IDB full (QuotaExceededError) ──
+
+describe('LP-S28: session creation — IDB full', () => {
+  it('returns structured error when createSession throws QuotaExceededError', async () => {
+    const mockCreateSession: CreateSessionFn = () => {
+      const err = new DOMException('Quota exceeded', 'QuotaExceededError');
+      throw err;
+    };
+
+    const step = makeSessionStep(mockCreateSession);
+    const ctx = makeCtx();
+    const result = await step.run(ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe('storage full');
+      expect(result.hint).toContain('clear browser data');
+    }
+    // Session should NOT be set on ctx
+    expect(ctx.session).toBeNull();
+  });
+
+  it('returns structured error when createSession throws with quota message', async () => {
+    const mockCreateSession: CreateSessionFn = () => {
+      throw new Error('Failed to execute: quota exceeded for database');
+    };
+
+    const step = makeSessionStep(mockCreateSession);
+    const ctx = makeCtx();
+    const result = await step.run(ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe('storage full');
+      expect(result.hint).toContain('clear browser data');
+    }
+  });
+
+  it('returns generic error for non-quota session failures', async () => {
+    const mockCreateSession: CreateSessionFn = () => {
+      throw new Error('something completely different');
+    };
+
+    const step = makeSessionStep(mockCreateSession);
+    const ctx = makeCtx();
+    const result = await step.run(ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe('session creation failed');
+      expect(result.hint).toContain('reloading');
     }
   });
 });

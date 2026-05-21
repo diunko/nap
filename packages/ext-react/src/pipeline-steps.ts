@@ -228,8 +228,15 @@ export function makeLoadNavStep(): StepDef {
         await ctx.model!.setNepicRoot(ctx.nepicRoot!);
 
         // Focus napkin from URL (deferred until nav is populated)
+        // Only set if no card is currently focused — on return visit, the
+        // persisted focusedCardSlug takes priority over the URL hint.
+        // expandCard is a toggle, so calling it when already focused would
+        // collapse the card (bug on return visit).
         if (ctx.config.napkinFocus) {
-          ctx.store!.getState().expandCard(ctx.config.napkinFocus);
+          const s = ctx.store!.getState();
+          if (!s.focusedCardSlug) {
+            s.expandCard(ctx.config.napkinFocus);
+          }
         }
         return { ok: true };
       } catch {

@@ -1,28 +1,24 @@
 /**
  * Debugging scenarios — DS-P2-01 through DS-P4-02
  * Run one at a time to verify the pipeline trace.
+ *
+ * Adapted for loading pipeline: clone happens automatically via pipeline,
+ * not via manual terminal command. Terminal is available after Panel mounts.
  */
-import { test, expect, openGitHub, openSidePanel, cmdClickLink } from './fixtures';
+import { test, expect, openGitHub, openSidePanel, cloneFixtureRepo, cmdClickLink } from './fixtures';
 
 // ── DS-P2-01: panel renders with stubs ──
 test('DS-P2-01: panel renders with stubs', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
 
-  // Wait for React to mount
-  await panel.waitForFunction(
-    () => (window as any).__napStore__?.getState() != null,
-    { timeout: 10_000 },
-  );
+  // Wait for pipeline to complete and Panel to mount
+  await expect(panel.locator('[data-testid="header-bar"]')).toBeVisible({ timeout: 60_000 });
 
   // Verify DOM: layout visible
-  await expect(panel.locator('[data-testid="header-bar"]')).toBeVisible();
   await expect(panel.locator('[data-testid="tab-bar"]')).toBeVisible();
   await expect(panel.locator('[data-testid="sidebar"]')).toBeVisible();
 
-  // Expected console trace:
-  //   [store] initialized
-  //   [render] mounted — layout: [ContentPane | ResizeHandle | Sidebar]
   console.log('[DS-P2-01] PASS — panel renders, store initialized, layout visible');
 });
 
@@ -30,7 +26,7 @@ test('DS-P2-01: panel renders with stubs', async ({ context, extensionId }) => {
 test('DS-P2-02: store actions work from console', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
-  await panel.waitForFunction(() => (window as any).__napStore__?.getState() != null, { timeout: 10_000 });
+  await expect(panel.locator('[data-testid="header-bar"]')).toBeVisible({ timeout: 60_000 });
 
   // Call store.openDoc from Playwright evaluate
   await panel.evaluate(() => {
@@ -54,8 +50,6 @@ test('DS-P2-02: store actions work from console', async ({ context, extensionId 
   expect(state.activeFilePath).toBe('test.md');
   expect(state.activeSurface).toBe('editor');
 
-  // Expected console trace:
-  //   [store] openDoc test.md → upsertTab → activeFilePath=test.md
   console.log('[DS-P2-02] PASS — store.openDoc works, tab created, surface switched');
 });
 
@@ -63,33 +57,9 @@ test('DS-P2-02: store actions work from console', async ({ context, extensionId 
 test('DS-P3-01: clone → nav auto-populates', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
-  await panel.waitForFunction(() => (window as any).__napStore__?.getState() != null, { timeout: 10_000 });
 
-  // Wait for terminal + shell to be fully ready
-  await panel.waitForSelector('.wterm', { timeout: 5_000 });
-  await panel.waitForTimeout(2000);
-
-  // Focus terminal
-  await panel.locator('.wterm').click();
-  await panel.waitForTimeout(300);
-
-  // Type clone command
-  await panel.keyboard.type('git clone https://github.com/diunko/nap-test-nap', { delay: 20 });
-  await panel.keyboard.press('Enter');
-
-  // Wait for "done." to appear in terminal output — clone is complete
-  // Then wait a bit for the callback chain to fire
-  await panel.waitForFunction(
-    () => {
-      const wterm = document.querySelector('.wterm');
-      return wterm?.textContent?.includes('done.') ?? false;
-    },
-    { timeout: 20_000 },
-  );
-  console.log('[DS-P3-01] clone completed (done. in terminal)');
-
-  // Give callback chain time to run (handleCommandComplete → findNepicRoot → refreshNav)
-  await panel.waitForTimeout(2000);
+  // Pipeline handles auto-clone. Wait for nav to populate.
+  await cloneFixtureRepo(panel);
 
   // Check store state
   const state = await panel.evaluate(() => {
@@ -114,20 +84,9 @@ test('DS-P3-01: clone → nav auto-populates', async ({ context, extensionId }) 
 test('DS-P3-02: file click → editor loads', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
-  await panel.waitForFunction(() => (window as any).__napStore__?.getState() != null, { timeout: 10_000 });
 
-  // Clone repo first
-  await panel.waitForSelector('.wterm', { timeout: 5_000 });
-  await panel.waitForTimeout(2000);
-  await panel.locator('.wterm').click();
-  await panel.waitForTimeout(300);
-  await panel.keyboard.type('git clone https://github.com/diunko/nap-test-nap', { delay: 20 });
-  await panel.keyboard.press('Enter');
-  await panel.waitForFunction(
-    () => (window as any).__napStore__.getState().navSections.length > 0,
-    { timeout: 20_000 },
-  );
-  console.log('[DS-P3-02] clone complete, nav populated');
+  // Pipeline auto-clones. Wait for nav.
+  await cloneFixtureRepo(panel);
 
   // Focus the 0100 napkin card
   const card = panel.locator('[data-testid="napkin-card"]').first();
@@ -176,19 +135,9 @@ test('DS-P3-02: file click → editor loads', async ({ context, extensionId }) =
 test('DS-P3-03: editor auto-save + echo suppression', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
-  await panel.waitForFunction(() => (window as any).__napStore__?.getState() != null, { timeout: 10_000 });
 
-  // Clone and open file (reuse setup from P3-02)
-  await panel.waitForSelector('.wterm', { timeout: 5_000 });
-  await panel.waitForTimeout(2000);
-  await panel.locator('.wterm').click();
-  await panel.waitForTimeout(300);
-  await panel.keyboard.type('git clone https://github.com/diunko/nap-test-nap', { delay: 20 });
-  await panel.keyboard.press('Enter');
-  await panel.waitForFunction(
-    () => (window as any).__napStore__.getState().navSections.length > 0,
-    { timeout: 20_000 },
-  );
+  // Pipeline auto-clones. Wait for nav.
+  await cloneFixtureRepo(panel);
 
   // Focus card and click file
   await panel.locator('[data-testid="napkin-card"]').first().click();
@@ -234,19 +183,9 @@ test('DS-P3-03: editor auto-save + echo suppression', async ({ context, extensio
 test('DS-P3-04: terminal write → editor refreshes', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
-  await panel.waitForFunction(() => (window as any).__napStore__?.getState() != null, { timeout: 10_000 });
 
-  // Clone and open file
-  await panel.waitForSelector('.wterm', { timeout: 5_000 });
-  await panel.waitForTimeout(2000);
-  await panel.locator('.wterm').click();
-  await panel.waitForTimeout(300);
-  await panel.keyboard.type('git clone https://github.com/diunko/nap-test-nap', { delay: 20 });
-  await panel.keyboard.press('Enter');
-  await panel.waitForFunction(
-    () => (window as any).__napStore__.getState().navSections.length > 0,
-    { timeout: 20_000 },
-  );
+  // Pipeline auto-clones. Wait for nav.
+  await cloneFixtureRepo(panel);
 
   // Focus card and click file
   await panel.locator('[data-testid="napkin-card"]').first().click();
@@ -292,27 +231,9 @@ test('DS-P3-04: terminal write → editor refreshes', async ({ context, extensio
 test('DS-P4-01: link navigation to GitHub', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
-  await panel.waitForFunction(() => (window as any).__napStore__?.getState() != null, { timeout: 10_000 });
 
-  // Set main repo config
-  await panel.evaluate(() => {
-    (window as any).__napStore__.getState().setMainRepo({
-      owner: 'diunko', repo: 'nap-test-main', branch: 'main',
-    });
-  });
-  console.log('[DS-P4-01] set main repo config');
-
-  // Clone repo
-  await panel.waitForSelector('.wterm', { timeout: 5_000 });
-  await panel.waitForTimeout(2000);
-  await panel.locator('.wterm').click();
-  await panel.waitForTimeout(300);
-  await panel.keyboard.type('git clone https://github.com/diunko/nap-test-nap', { delay: 20 });
-  await panel.keyboard.press('Enter');
-  await panel.waitForFunction(
-    () => (window as any).__napStore__.getState().navSections.length > 0,
-    { timeout: 20_000 },
-  );
+  // Pipeline auto-clones. Wait for nav.
+  await cloneFixtureRepo(panel);
 
   // Focus the 0100 napkin card
   await panel.locator('[data-testid="napkin-card"]').first().click();
@@ -390,16 +311,12 @@ test('DS-P4-01: link navigation to GitHub', async ({ context, extensionId }) => 
       console.log(`[DS-P4-01] first link href: ${firstHref}`);
 
       if (firstHref && !firstHref.startsWith('http')) {
-        // Test the link routing logic directly — invoke the same code path
-        // that onMouseDown would, but via evaluate (more reliable than synthetic events)
+        // Test the link routing logic directly
         const routeResult = await panel.evaluate((href) => {
           const store = (window as any).__napStore__;
           const config = store.getState().mainRepoConfig;
-          // Import routeLink from the module (it's used in ContentPane)
-          // We simulate the exact same call: routeLink({ href, sourceFilePath }, config)
           const sourceFilePath = store.getState().activeFilePath;
 
-          // Manually classify: .md → openDoc, https:// → openExternal, else → openCode with GitHub URL
           if (href.startsWith('http://') || href.startsWith('https://')) {
             return { action: 'openExternal', url: href };
           }
@@ -407,7 +324,6 @@ test('DS-P4-01: link navigation to GitHub', async ({ context, extensionId }) => 
           if (ext === 'md') {
             return { action: 'openDoc', path: href };
           }
-          // Code link — build GitHub URL
           const cleanPath = href.startsWith('/') ? href.slice(1) : href;
           const lineMatch = cleanPath.match(/#L(\d+)$/);
           const pathOnly = cleanPath.replace(/#L\d+$/, '');
@@ -422,7 +338,6 @@ test('DS-P4-01: link navigation to GitHub', async ({ context, extensionId }) => 
           console.log(`[DS-P4-01] [links] routeLink → openCode`);
           console.log(`[DS-P4-01] [chrome] tabs.update → ${(routeResult as any).githubUrl}`);
 
-          // Actually navigate the GitHub tab
           const url = (routeResult as any).githubUrl;
           await ghPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => {});
           await panel.waitForTimeout(500);
@@ -445,7 +360,9 @@ test('DS-P4-01: link navigation to GitHub', async ({ context, extensionId }) => 
 test('DS-P4-02: zoom', async ({ context, extensionId }) => {
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
-  await panel.waitForFunction(() => (window as any).__napStore__?.getState() != null, { timeout: 10_000 });
+
+  // Wait for Panel to mount (keyboard shortcuts registered in Panel useEffect)
+  await expect(panel.locator('[data-testid="header-bar"]')).toBeVisible({ timeout: 60_000 });
 
   // Initial zoom should be 1.0
   const initialZoom = await panel.evaluate(() => (window as any).__napStore__.getState().zoom);
@@ -458,7 +375,6 @@ test('DS-P4-02: zoom', async ({ context, extensionId }) => {
 
   let zoom = await panel.evaluate(() => (window as any).__napStore__.getState().zoom);
   console.log(`[DS-P4-02] zoom after Ctrl+Shift+=: ${zoom}`);
-  // Should be approximately 1.1
   expect(zoom).toBeCloseTo(1.1, 1);
 
   // Zoom in again
