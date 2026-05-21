@@ -53,7 +53,9 @@
             * //A: each step has cleanup(). retry-all = run cleanup on each completed step (reverse order), then re-run all. simple, no __wipeSession__ needed.
     * step
       * async function
-      * returns `{ ok }` or `{ error, hint, retryable }`
+      * returns `{ ok }` or `{ error, hint }`
+      * no retryable flag — every error has retry
+        * hint tells user what to fix
       * owns its business logic
       * provides cleanup() for retry-all
         * called before re-running the step
@@ -97,10 +99,11 @@
       * new staging dir, zero carry-over
     * pipeline state is ephemeral
       * not persisted, restart on reopen
-    * no token = retryable error
-      * user enters token (wherever tokens live)
-      * user clicks retry
-      * token storage is orthogonal to pipeline
+    * every error has retry
+      * hint tells user what to fix
+      * user fixes, clicks retry
+      * no "permanent" vs "retryable" distinction
+      * token storage orthogonal to pipeline
     * side effects contained until committed
       * staging pattern
 
