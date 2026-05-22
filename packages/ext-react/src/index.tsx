@@ -24,6 +24,7 @@ import {
   type CloneFn,
 } from './pipeline-steps';
 import { LoadingGate } from './LoadingGate';
+import { PlaygroundPane } from './PlaygroundPane';
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 
@@ -189,25 +190,44 @@ function SurfaceTabBar() {
         onClose={(tabId) => store.getState().closeTab(tabId)}
         onPin={(tabId) => store.getState().pinTab(tabId)}
       />
-      {/* Terminal tab — always present, rightmost */}
-      <div
-        data-testid="tab-terminal"
-        onClick={() => setActiveSurface('terminal')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 12px',
-          height: 32,
-          cursor: 'pointer',
-          fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
-          fontSize: 12,
-          color: activeSurface === 'terminal' ? 'var(--nap-text)' : 'var(--nap-text-muted)',
-          background: activeSurface === 'terminal' ? 'var(--nap-bg)' : 'transparent',
-          borderLeft: '1px solid var(--nap-border)',
-          marginLeft: 'auto',
-        }}
-      >
-        Terminal
+      {/* Terminal + Playground tabs — always present, rightmost */}
+      <div style={{ display: 'flex', marginLeft: 'auto' }}>
+        <div
+          data-testid="tab-playground"
+          onClick={() => setActiveSurface('playground')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 12px',
+            height: 32,
+            cursor: 'pointer',
+            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+            fontSize: 12,
+            color: activeSurface === 'playground' ? 'var(--nap-text)' : 'var(--nap-text-muted)',
+            background: activeSurface === 'playground' ? 'var(--nap-bg)' : 'transparent',
+            borderLeft: '1px solid var(--nap-border)',
+          }}
+        >
+          Playground
+        </div>
+        <div
+          data-testid="tab-terminal"
+          onClick={() => setActiveSurface('terminal')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 12px',
+            height: 32,
+            cursor: 'pointer',
+            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+            fontSize: 12,
+            color: activeSurface === 'terminal' ? 'var(--nap-text)' : 'var(--nap-text-muted)',
+            background: activeSurface === 'terminal' ? 'var(--nap-bg)' : 'transparent',
+            borderLeft: '1px solid var(--nap-border)',
+          }}
+        >
+          Terminal
+        </div>
       </div>
     </div>
   );
@@ -416,6 +436,19 @@ function Panel() {
                 onShellReady={(exec) => model.registerShell(exec)}
                 getAuth={getAuth}
               />
+            </div>
+            {/* Playground surface */}
+            <div
+              id="playground-surface"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                visibility: activeSurface === 'playground' ? 'visible' : 'hidden',
+                pointerEvents: activeSurface === 'playground' ? 'auto' : 'none',
+                zIndex: activeSurface === 'playground' ? 1 : 0,
+              }}
+            >
+              <PlaygroundPane adapter={adapter} />
             </div>
           </div>
         </div>

@@ -30,7 +30,7 @@ export interface NapStore {
   cardViewMode: CardViewMode;
   focusMode: boolean;
   sidebarVisible: boolean;
-  activeSurface: 'editor' | 'terminal';
+  activeSurface: 'editor' | 'terminal' | 'playground';
 
   // ── Tabs (single pane — no left/right split) ──
   tabs: Tab[];
@@ -63,7 +63,7 @@ export interface NapStore {
   collapseCard: () => void;
   toggleFocusMode: () => void;
   toggleSidebar: () => void;
-  setActiveSurface: (surface: 'editor' | 'terminal') => void;
+  setActiveSurface: (surface: 'editor' | 'terminal' | 'playground') => void;
   refreshNav: (sections: NavNode[]) => void;
   setMainRepo: (config: MainRepoConfig | null) => void;
   setZoom: (zoom: number) => void;
@@ -227,7 +227,7 @@ function storeActions(set: any, get: any): NapStore {
       set({ sidebarVisible: !get().sidebarVisible });
     },
 
-    setActiveSurface: (surface: 'editor' | 'terminal') => {
+    setActiveSurface: (surface: 'editor' | 'terminal' | 'playground') => {
       console.log(`[store] setActiveSurface ${surface}`);
       set({ activeSurface: surface });
     },

@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "a71bc461-f567-4eca-8ef8-e59e8376f8cf",
+  "role": "test-eng",
+  "name": "003-test-eng-playground",
+  "napkin": "0662-playground",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779482761342,
+  "started": false,
+  "exited": false
+}

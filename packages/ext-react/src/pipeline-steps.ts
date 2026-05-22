@@ -12,6 +12,7 @@ import type { LightningFsAdapter } from './fs-adapter';
 import type { NapModel } from './model';
 import type { Session } from './session';
 import type { NapStoreApi } from './store';
+import { DEFAULT_PLAYGROUND_YAML } from './playground';
 
 // ── Injectable dependency types ──
 
@@ -109,6 +110,13 @@ export function makeInitFsStep(): StepDef {
         const adapter = ctx.adapter!;
         try { await adapter.mkdir('/home', { recursive: true }); } catch { /* exists */ }
         try { await adapter.mkdir('/home/user', { recursive: true }); } catch { /* exists */ }
+
+        // Seed playground.yaml if not present
+        const playgroundExists = await adapter.exists('/home/user/playground.yaml');
+        if (!playgroundExists) {
+          await adapter.writeFile('/home/user/playground.yaml', DEFAULT_PLAYGROUND_YAML);
+        }
+
         return { ok: true };
       } catch {
         return { ok: false, error: 'filesystem init failed', hint: 'try reloading the panel' };
