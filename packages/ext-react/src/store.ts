@@ -41,10 +41,6 @@ export interface NapStore {
   zoom: number;
   settingsVisible: boolean;
 
-  // ── Auth tokens ──
-  githubToken: string;
-  gitlabToken: string;
-
   // ── Workflow wiring ──
   prNum: number;
   prDiffRanges: Record<string, Array<{ start: number; end: number }>> | null;
@@ -71,15 +67,13 @@ export interface NapStore {
   setPrNum: (n: number) => void;
   setPrDiffRanges: (ranges: Record<string, Array<{ start: number; end: number }>> | null) => void;
   setCloningStatus: (status: 'idle' | 'cloning' | 'done') => void;
-  setGithubToken: (token: string) => void;
-  setGitlabToken: (token: string) => void;
 }
 
 /** Fields persisted to IndexedDB. */
 export type PersistedState = Pick<NapStore,
   'tabs' | 'activeTabId' | 'activeFilePath' | 'activeSurface' |
   'focusedCardSlug' | 'cardViewMode' | 'focusMode' | 'mainRepoConfig' | 'zoom' |
-  'prNum' | 'prDiffRanges' | 'githubToken' | 'gitlabToken'
+  'prNum' | 'prDiffRanges'
 >;
 
 let tabIdCounter = 0;
@@ -147,8 +141,6 @@ function storeActions(set: any, get: any): NapStore {
     settingsVisible: false,
     prNum: 0,
     prDiffRanges: null,
-    githubToken: '',
-    gitlabToken: '',
     cloningStatus: 'idle' as const,
 
     openDoc: (path: string) => {
@@ -269,16 +261,6 @@ function storeActions(set: any, get: any): NapStore {
       console.log(`[store] setCloningStatus ${status}`);
       set({ cloningStatus: status });
     },
-
-    setGithubToken: (token: string) => {
-      console.log(`[store] setGithubToken (${token ? 'set' : 'cleared'})`);
-      set({ githubToken: token });
-    },
-
-    setGitlabToken: (token: string) => {
-      console.log(`[store] setGitlabToken (${token ? 'set' : 'cleared'})`);
-      set({ gitlabToken: token });
-    },
   };
 }
 
@@ -294,8 +276,6 @@ const PARTIALIZE = (state: NapStore): PersistedState => ({
   zoom: state.zoom,
   prNum: state.prNum,
   prDiffRanges: state.prDiffRanges,
-  githubToken: state.githubToken,
-  gitlabToken: state.gitlabToken,
 });
 
 /**

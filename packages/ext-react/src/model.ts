@@ -19,6 +19,7 @@ import type { NapStoreApi } from './store';
 import { fetchPrDiffRanges } from './pr-diff';
 import type { NapConfig } from './url-config';
 import { resolveBootState } from './boot-gate';
+import { globalTokens } from './chrome-storage';
 
 const DEBOUNCE_MS = 200;
 
@@ -244,7 +245,7 @@ export function createModel(options: ModelOptions): NapModel {
     diffFetchInFlight = true;
     const { owner, repo } = s.mainRepoConfig;
     console.log(`[model] fetching PR diff ranges for ${owner}/${repo}#${s.prNum}`);
-    fetchPrDiffRanges(owner, repo, s.prNum, s.githubToken || undefined).then((ranges) => {
+    fetchPrDiffRanges(owner, repo, s.prNum, globalTokens.githubToken || undefined).then((ranges) => {
       diffFetchInFlight = false;
       if (destroyed) return;
       if (ranges) {

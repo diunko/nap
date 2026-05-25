@@ -13,6 +13,7 @@ import type { NapModel } from './model';
 import type { Session } from './session';
 import type { NapStoreApi } from './store';
 import { DEFAULT_PLAYGROUND_YAML } from './playground';
+import { globalTokens } from './chrome-storage';
 
 // ── Injectable dependency types ──
 
@@ -167,11 +168,10 @@ export function makeCloneStep(cloneFn: CloneFn, config: NapConfig): StepDef {
         try { await ctx.adapter!.rm(shared.stagingDir, { recursive: true, force: true }); } catch { /* ok */ }
         try { await ctx.adapter!.mkdir(shared.stagingDir, { recursive: true }); } catch { /* exists */ }
 
-        // Read auth token from store
-        const s = ctx.store!.getState();
+        // Read auth token from global ref (chrome.storage.sync, not per-session store)
         const auth = getTokenForProvider(config.provider, {
-          githubToken: s.githubToken,
-          gitlabToken: s.gitlabToken,
+          githubToken: globalTokens.githubToken,
+          gitlabToken: globalTokens.gitlabToken,
         });
 
         await cloneFn(config.cloneUrl, shared.stagingDir, ctx.lfs, auth);
@@ -183,13 +183,24 @@ export function makeCloneStep(cloneFn: CloneFn, config: NapConfig): StepDef {
 
         return { ok: true };
       } catch (e: any) {
+        // Capture raw error for debugging (FX-P20 Playwright test reads this)
+        if (typeof window !== 'undefined') {
+          (window as any).__napPipelineRawError__ = e;
+        }
+        console.log('[clone-step] raw error:', e.name, e.message, 'statusCode:', e.statusCode, 'code:', e.code, 'ownKeys:', Object.getOwnPropertyNames(e));
+
         // FI-06: error classification owned by step
-        if (e.statusCode === 401) {
+        // statusCode takes precedence over message matching (FX-S22)
+        if (e.statusCode === 401 || e.data?.statusCode === 401) {
           const label = PROVIDERS[config.provider]?.label ?? config.provider;
           return { ok: false, error: 'authentication failed', hint: `enter your ${label} token in settings` };
         }
-        if (e.statusCode === 404) {
+        if (e.statusCode === 404 || e.data?.statusCode === 404) {
           return { ok: false, error: 'repository not found', hint: 'check the review link' };
+        }
+        if (e.statusCode === 403 || e.data?.statusCode === 403) {
+          const label = PROVIDERS[config.provider]?.label ?? config.provider;
+          return { ok: false, error: 'authentication failed', hint: `enter your ${label} token in settings` };
         }
         return { ok: false, error: `can't reach ${hostname}`, hint: 'check your network or VPN' };
       }
@@ -267,7 +278,7 @@ export function makeFetchDiffStep(fetchDiffFn: FetchDiffFn): StepDef {
         if (s.prDiffRanges !== null) return { ok: true };
 
         const { mainOwner, mainRepo, prNum } = ctx.config;
-        const ranges = await fetchDiffFn(mainOwner, mainRepo, prNum, s.githubToken || undefined);
+        const ranges = await fetchDiffFn(mainOwner, mainRepo, prNum, globalTokens.githubToken || undefined);
         if (ranges) {
           ctx.store!.getState().setPrDiffRanges(ranges);
         }

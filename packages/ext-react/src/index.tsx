@@ -25,6 +25,11 @@ import {
 } from './pipeline-steps';
 import { LoadingGate } from './LoadingGate';
 import { PlaygroundPane } from './PlaygroundPane';
+import {
+  globalTokens, globalDebugMode,
+  initGlobalTokens, initGlobalDebugMode,
+  setGlobalToken, setGlobalDebugMode,
+} from './chrome-storage';
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 
@@ -161,7 +166,7 @@ function HeaderBar({ onFetchLatest, onRefreshPr }: { onFetchLatest?: () => void;
 
 // ── Surface-switching tab bar ──
 
-function SurfaceTabBar() {
+function SurfaceTabBar({ debugMode }: { debugMode: boolean }) {
   const { store } = React.useContext(SessionContext)!;
   const tabs = useNapStore((s) => s.tabs);
   const activeTabId = useNapStore((s) => s.activeTabId);
@@ -192,24 +197,26 @@ function SurfaceTabBar() {
       />
       {/* Terminal + Playground tabs — always present, rightmost */}
       <div style={{ display: 'flex', marginLeft: 'auto' }}>
-        <div
-          data-testid="tab-playground"
-          onClick={() => setActiveSurface('playground')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 12px',
-            height: 32,
-            cursor: 'pointer',
-            fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
-            fontSize: 12,
-            color: activeSurface === 'playground' ? 'var(--nap-text)' : 'var(--nap-text-muted)',
-            background: activeSurface === 'playground' ? 'var(--nap-bg)' : 'transparent',
-            borderLeft: '1px solid var(--nap-border)',
-          }}
-        >
-          Playground
-        </div>
+        {debugMode && (
+          <div
+            data-testid="tab-playground"
+            onClick={() => setActiveSurface('playground')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 12px',
+              height: 32,
+              cursor: 'pointer',
+              fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+              fontSize: 12,
+              color: activeSurface === 'playground' ? 'var(--nap-text)' : 'var(--nap-text-muted)',
+              background: activeSurface === 'playground' ? 'var(--nap-bg)' : 'transparent',
+              borderLeft: '1px solid var(--nap-border)',
+            }}
+          >
+            Playground
+          </div>
+        )}
         <div
           data-testid="tab-terminal"
           onClick={() => setActiveSurface('terminal')}
@@ -235,22 +242,18 @@ function SurfaceTabBar() {
 
 // ── Settings overlay ──
 
-function SettingsOverlay() {
+function SettingsOverlay({ debugMode, onDebugModeChange }: { debugMode: boolean; onDebugModeChange: (v: boolean) => void }) {
   const settingsVisible = useNapStore((s) => s.settingsVisible);
   const mainRepoConfig = useNapStore((s) => s.mainRepoConfig);
   const toggleSettings = useNapStore((s) => s.toggleSettings);
-  const githubToken = useNapStore((s) => s.githubToken);
-  const gitlabToken = useNapStore((s) => s.gitlabToken);
-  const setGithubToken = useNapStore((s) => s.setGithubToken);
-  const setGitlabToken = useNapStore((s) => s.setGitlabToken);
   const [ghInput, setGhInput] = useState('');
   const [glInput, setGlInput] = useState('');
 
-  // Sync inputs from store on open
+  // Sync inputs from global tokens on open
   useEffect(() => {
     if (settingsVisible) {
-      setGhInput(githubToken);
-      setGlInput(gitlabToken);
+      setGhInput(globalTokens.githubToken);
+      setGlInput(globalTokens.gitlabToken);
     }
   }, [settingsVisible]);
 
@@ -259,8 +262,8 @@ function SettingsOverlay() {
   const inputStyle = { width: '100%', padding: '4px 6px', border: '1px solid var(--nap-border)', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, background: 'var(--nap-bg)', color: 'var(--nap-text)' } as const;
 
   function handleSave() {
-    setGithubToken(ghInput);
-    setGitlabToken(glInput);
+    setGlobalToken('githubToken', ghInput);
+    setGlobalToken('gitlabToken', glInput);
     toggleSettings();
   }
 
@@ -326,23 +329,32 @@ function SettingsOverlay() {
           Close
         </button>
       </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, fontSize: 11, color: 'var(--nap-text-muted)', cursor: 'pointer' }}>
+        <input
+          data-testid="settings-debug-mode"
+          type="checkbox"
+          checked={debugMode}
+          onChange={(e) => onDebugModeChange(e.target.checked)}
+        />
+        Debug mode (show Playground tab)
+      </label>
     </div>
   );
 }
 
 // ── Panel (inner content, receives session from context) ──
 
-function Panel() {
+function Panel({ debugMode, onDebugModeChange }: { debugMode: boolean; onDebugModeChange: (v: boolean) => void }) {
   const { store, lfs, adapter, model } = React.useContext(SessionContext)!;
   const activeSurface = useNapStore((s) => s.activeSurface);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
 
-  // Auth callback — reads provider from model config, tokens from store
+  // Auth callback — reads provider from model config, tokens from global ref
   const getAuth = useCallback(async () => {
-    const s = store.getState();
     const provider = model.getProvider();
-    return getTokenForProvider(provider, { githubToken: s.githubToken, gitlabToken: s.gitlabToken });
-  }, [store, model]);
+    return getTokenForProvider(provider, { githubToken: globalTokens.githubToken, gitlabToken: globalTokens.gitlabToken });
+  }, [model]);
 
   // Model cleanup (init is done by pipeline before Panel mounts)
   useEffect(() => {
@@ -401,9 +413,9 @@ function Panel() {
       />
       <div style={{ flex: 1, display: 'flex', minHeight: 0, position: 'relative' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <SurfaceTabBar />
+          <SurfaceTabBar debugMode={debugMode} />
           <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            <SettingsOverlay />
+            <SettingsOverlay debugMode={debugMode} onDebugModeChange={onDebugModeChange} />
             {/* Editor surface */}
             <div
               id="editor-surface"
@@ -506,9 +518,26 @@ function App() {
   const pipelineRef = useRef<Pipeline | null>(null);
   const [pipelineDone, setPipelineDone] = useState(false);
   const [, forceUpdate] = useState(0);
+  const [debugMode, setDebugMode] = useState(false);
+  const [globalReady, setGlobalReady] = useState(false);
+
+  // Read global settings (tokens + debug mode) from chrome.storage.sync on boot
+  useEffect(() => {
+    Promise.all([initGlobalTokens(), initGlobalDebugMode()]).then(() => {
+      setDebugMode(globalDebugMode);
+      setGlobalReady(true);
+      console.log(`[boot] global settings loaded: debug=${globalDebugMode}, ghToken=${globalTokens.githubToken ? 'set' : 'empty'}, glToken=${globalTokens.gitlabToken ? 'set' : 'empty'}`);
+    });
+  }, []);
+
+  const handleDebugModeChange = useCallback((value: boolean) => {
+    setDebugMode(value);
+    setGlobalDebugMode(value);
+  }, []);
 
   // Tab URL reader — chrome.tabs.query on mount
   useEffect(() => {
+    if (!globalReady) return;
     if (typeof chrome !== 'undefined' && chrome.tabs?.query) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const url = tabs[0]?.url;
@@ -521,7 +550,7 @@ function App() {
       const state = resolveBootState(window.location.href);
       setBootState(state);
     }
-  }, []);
+  }, [globalReady]);
 
   // Create and run pipeline when boot state is 'session'
   useEffect(() => {
@@ -625,7 +654,7 @@ function App() {
 
   return (
     <SessionContext.Provider value={session}>
-      <Panel key={session.key} />
+      <Panel key={session.key} debugMode={debugMode} onDebugModeChange={handleDebugModeChange} />
     </SessionContext.Provider>
   );
 }

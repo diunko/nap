@@ -8,8 +8,6 @@ import {
   deriveStateKey,
   getTokenForProvider,
 } from '../url-config';
-import { createNapStore, _resetTabIdCounter, type NapStoreApi } from '../store';
-import { createMemoryStorage } from '../state-store';
 
 // ── GL-S01: Provider registry mapping ──
 
@@ -122,63 +120,34 @@ describe('GL-S05: buildNapConfig with GitLab provider', () => {
   });
 });
 
-// ── GL-S06: Two tokens, independent persistence ──
+// GL-S06: Two tokens — now in chrome.storage.sync (global, not per-session).
+// Tests moved to fixes-01 test suite. See FX-S10..FX-S16.
 
-describe('GL-S06: Two tokens, independent persistence', () => {
-  let store: NapStoreApi;
+import { globalTokens, _resetMemoryStore, setGlobalToken } from '../chrome-storage';
 
+describe('GL-S06: Two tokens, independent global storage', () => {
   beforeEach(() => {
-    _resetTabIdCounter();
-    store = createNapStore();
+    _resetMemoryStore();
   });
 
-  it('set githubToken → gitlabToken stays empty', () => {
-    store.getState().setGithubToken('ghp_abc');
-    expect(store.getState().githubToken).toBe('ghp_abc');
-    expect(store.getState().gitlabToken).toBe('');
+  it('set githubToken → gitlabToken stays empty', async () => {
+    await setGlobalToken('githubToken', 'ghp_abc');
+    expect(globalTokens.githubToken).toBe('ghp_abc');
+    expect(globalTokens.gitlabToken).toBe('');
   });
 
-  it('set gitlabToken → githubToken unchanged', () => {
-    store.getState().setGithubToken('ghp_abc');
-    store.getState().setGitlabToken('glpat-xyz');
-    expect(store.getState().githubToken).toBe('ghp_abc');
-    expect(store.getState().gitlabToken).toBe('glpat-xyz');
+  it('set both tokens → both accessible', async () => {
+    await setGlobalToken('githubToken', 'ghp_abc');
+    await setGlobalToken('gitlabToken', 'glpat-xyz');
+    expect(globalTokens.githubToken).toBe('ghp_abc');
+    expect(globalTokens.gitlabToken).toBe('glpat-xyz');
   });
 
-  it('clear githubToken → gitlabToken still there', () => {
-    store.getState().setGithubToken('ghp_abc');
-    store.getState().setGitlabToken('glpat-xyz');
-    store.getState().setGithubToken('');
-    expect(store.getState().githubToken).toBe('');
-    expect(store.getState().gitlabToken).toBe('glpat-xyz');
-  });
-
-  it('persist → rehydrate → both tokens intact', async () => {
-    const storage = createMemoryStorage();
-    const store1 = createNapStore('gl-test', storage);
-
-    // Wait for hydration
-    await new Promise<void>((resolve) => {
-      const persist = (store1 as any).persist;
-      if (persist?.hasHydrated?.()) resolve();
-      else persist?.onFinishHydration?.(resolve);
-    });
-
-    store1.getState().setGithubToken('ghp_abc');
-    store1.getState().setGitlabToken('glpat-xyz');
-
-    // Wait for persist to flush
-    await new Promise((r) => setTimeout(r, 50));
-
-    // Create new store with same key — simulates reopen
-    const store2 = createNapStore('gl-test', storage);
-    await new Promise<void>((resolve) => {
-      const persist = (store2 as any).persist;
-      if (persist?.hasHydrated?.()) resolve();
-      else persist?.onFinishHydration?.(resolve);
-    });
-
-    expect(store2.getState().githubToken).toBe('ghp_abc');
-    expect(store2.getState().gitlabToken).toBe('glpat-xyz');
+  it('clear githubToken → gitlabToken still there', async () => {
+    await setGlobalToken('githubToken', 'ghp_abc');
+    await setGlobalToken('gitlabToken', 'glpat-xyz');
+    await setGlobalToken('githubToken', '');
+    expect(globalTokens.githubToken).toBe('');
+    expect(globalTokens.gitlabToken).toBe('glpat-xyz');
   });
 });

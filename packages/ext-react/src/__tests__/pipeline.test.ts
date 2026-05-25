@@ -458,8 +458,6 @@ function makeCtx(overrides?: Partial<PipelineCtx>): PipelineCtx {
 
 function makeMockStore() {
   const state = {
-    githubToken: '',
-    gitlabToken: '',
     prDiffRanges: null as any,
     setPrDiffRanges: vi.fn((v: any) => { state.prDiffRanges = v; }),
     expandCard: vi.fn(),
