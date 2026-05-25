@@ -79,6 +79,51 @@ export async function sha256Hex(filePath: string): Promise<string> {
 export type DiffRangeMap = Record<string, HunkRange[]>;
 
 /**
+ * Fetch the PR head branch name from the GitHub API.
+ *
+ * `GET /repos/{owner}/{repo}/pulls/{n}` → `data.head.ref`
+ *
+ * @returns The head branch name, or null on failure.
+ */
+export async function fetchPrHeadBranch(
+  owner: string,
+  repo: string,
+  prNum: number,
+  pat?: string,
+): Promise<string | null> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/pulls/${prNum}`;
+  console.log(`[pr-diff] fetching PR head branch: ${url}`);
+
+  try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github.v3+json',
+    };
+    if (pat) {
+      headers['Authorization'] = `Bearer ${pat}`;
+    }
+
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      console.log(`[pr-diff] PR metadata API returned ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const ref = data?.head?.ref;
+    if (typeof ref !== 'string' || ref === '') {
+      console.log(`[pr-diff] PR metadata missing or empty head.ref`);
+      return null;
+    }
+
+    console.log(`[pr-diff] PR head branch: ${ref}`);
+    return ref;
+  } catch (e) {
+    console.log(`[pr-diff] PR metadata fetch failed:`, e);
+    return null;
+  }
+}
+
+/**
  * Fetch PR files from the GitHub API and build a diff range map.
  *
  * @returns Map of filepath → hunk ranges, or null on failure.

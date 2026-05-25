@@ -16,7 +16,7 @@ import type { LightningFsAdapter, FsChangeEvent } from './fs-adapter';
 import { parseNavTree } from './nav-tree';
 import type { DirEntry } from './nav-tree';
 import type { NapStoreApi } from './store';
-import { fetchPrDiffRanges } from './pr-diff';
+import { fetchPrDiffRanges, fetchPrHeadBranch } from './pr-diff';
 import type { NapConfig } from './url-config';
 import { resolveBootState } from './boot-gate';
 import { globalTokens } from './chrome-storage';
@@ -240,14 +240,32 @@ export function createModel(options: ModelOptions): NapModel {
     const s = store.getState();
     if (s.prNum <= 0) return;
     if (!s.mainRepoConfig) return;
-    if (s.prDiffRanges !== null) return; // already cached
+    if (s.prDiffRanges !== null) return; // already cached (return visit — branch also cached in mainRepoConfig)
 
     diffFetchInFlight = true;
     const { owner, repo } = s.mainRepoConfig;
-    console.log(`[model] fetching PR diff ranges for ${owner}/${repo}#${s.prNum}`);
-    fetchPrDiffRanges(owner, repo, s.prNum, globalTokens.githubToken || undefined).then((ranges) => {
+    const prNum = s.prNum;
+    const pat = globalTokens.githubToken || undefined;
+
+    console.log(`[model] fetching PR data for ${owner}/${repo}#${prNum}`);
+
+    // Fetch head branch and diff ranges in parallel
+    Promise.all([
+      fetchPrHeadBranch(owner, repo, prNum, pat),
+      fetchPrDiffRanges(owner, repo, prNum, pat),
+    ]).then(([headBranch, ranges]) => {
       diffFetchInFlight = false;
       if (destroyed) return;
+
+      // Update head branch if available
+      if (headBranch) {
+        const current = store.getState().mainRepoConfig;
+        if (current && current.branch !== headBranch) {
+          console.log(`[model] updating mainBranch: ${current.branch} → ${headBranch}`);
+          store.getState().setMainRepo({ ...current, branch: headBranch });
+        }
+      }
+
       if (ranges) {
         store.getState().setPrDiffRanges(ranges);
       }
