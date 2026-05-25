@@ -7,12 +7,14 @@
 
 import yaml from 'js-yaml';
 import type { StepDef, StepResult } from './pipeline';
+import { makeGateStep, type GateStepDef } from './pipeline-steps';
 
 // ── YAML config types ──
 
 export interface PlaygroundStepConfig {
   name: string;
   delay?: number;
+  auto_start?: boolean;
   conditions?: Record<string, boolean>;
   on_fail?: Record<string, { error: string; hint: string }>;
 }
@@ -64,6 +66,7 @@ export function parsePlaygroundYaml(text: string): ParseResult {
       steps.push({
         name: s.name as string,
         delay: typeof s.delay === 'number' ? s.delay : undefined,
+        auto_start: typeof s.auto_start === 'boolean' ? s.auto_start : undefined,
         conditions: s.conditions && typeof s.conditions === 'object'
           ? s.conditions as Record<string, boolean>
           : undefined,
@@ -89,27 +92,51 @@ function sleep(ms: number): Promise<void> {
  * Convert parsed config into StepDefs for the pipeline runner.
  * `conditionState` is a mutable reference — steps read it live at execution time.
  */
+export interface YamlToStepsResult {
+  steps: StepDef[];
+  gateStep: GateStepDef | null;
+}
+
 export function yamlToSteps(
   config: PlaygroundConfig,
   conditionState: ConditionState,
-): StepDef[] {
-  return config.steps.map((step) => ({
-    name: step.name,
-    run: async (): Promise<StepResult> => {
-      if (step.delay) await sleep(step.delay);
+): YamlToStepsResult {
+  let gateStep: GateStepDef | null = null;
 
-      const conditions = conditionState[step.name];
-      if (conditions) {
-        for (const [key, value] of Object.entries(conditions)) {
-          if (!value && step.on_fail?.[key]) {
-            return { ok: false, ...step.on_fail[key] };
+  const steps = config.steps.map((step): StepDef => {
+    // auto_start: false → gate step pattern (block until trigger)
+    if (step.auto_start === false) {
+      const gate = makeGateStep(false);
+      // Override name from YAML (may differ from default 'ready')
+      const original = gate;
+      gateStep = gate;
+      return {
+        name: step.name,
+        run: original.run,
+        triggerStart: original.triggerStart,
+      } as StepDef & { triggerStart: () => void };
+    }
+
+    return {
+      name: step.name,
+      run: async (): Promise<StepResult> => {
+        if (step.delay) await sleep(step.delay);
+
+        const conditions = conditionState[step.name];
+        if (conditions) {
+          for (const [key, value] of Object.entries(conditions)) {
+            if (!value && step.on_fail?.[key]) {
+              return { ok: false, ...step.on_fail[key] };
+            }
           }
         }
-      }
-      return { ok: true };
-    },
-    cleanup: async () => {},
-  }));
+        return { ok: true };
+      },
+      cleanup: async () => {},
+    };
+  });
+
+  return { steps, gateStep };
 }
 
 // ── Default YAML ──

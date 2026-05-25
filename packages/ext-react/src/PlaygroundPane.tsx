@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { LightningFsAdapter } from './fs-adapter';
 import { createPipeline, type Pipeline } from './pipeline';
 import { LoadingGate } from './LoadingGate';
+import type { GateStepDef } from './pipeline-steps';
 import {
   parsePlaygroundYaml,
   yamlToSteps,
@@ -23,6 +24,7 @@ export function PlaygroundPane({ adapter }: { adapter: LightningFsAdapter }) {
   const [config, setConfig] = useState<PlaygroundConfig | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
+  const [gateStep, setGateStep] = useState<GateStepDef | null>(null);
   const [, forceUpdate] = useState(0);
   const conditionRef = useRef<ConditionState>({});
 
@@ -63,10 +65,11 @@ export function PlaygroundPane({ adapter }: { adapter: LightningFsAdapter }) {
     pipeline?.destroy();
     // Reset conditions from current config
     conditionRef.current = extractConditionState(config);
-    const steps = yamlToSteps(config, conditionRef.current);
+    const { steps, gateStep } = yamlToSteps(config, conditionRef.current);
     const p = createPipeline(steps);
     p.subscribe(() => forceUpdate((n) => n + 1));
     setPipeline(p);
+    setGateStep(gateStep);
     p.run();
   }, [config, pipeline]);
 
@@ -159,7 +162,7 @@ export function PlaygroundPane({ adapter }: { adapter: LightningFsAdapter }) {
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
         {pipeline ? (
           <div>
-            <LoadingGate pipeline={pipeline} />
+            <LoadingGate pipeline={pipeline} gateStep={gateStep ?? undefined} />
             <ConditionPanel
               config={config}
               conditionState={conditionRef.current}

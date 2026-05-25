@@ -13,6 +13,7 @@ import { createPipeline, type Pipeline } from './pipeline';
 import { findNepicRoot } from './model';
 import { fetchPrDiffRanges } from './pr-diff';
 import {
+  makeGateStep,
   makeValidateStep,
   makeSessionStep,
   makeInitFsStep,
@@ -22,6 +23,7 @@ import {
   makeLoadNavStep,
   makeFetchDiffStep,
   type CloneFn,
+  type GateStepDef,
 } from './pipeline-steps';
 import { LoadingGate } from './LoadingGate';
 import { PlaygroundPane } from './PlaygroundPane';
@@ -242,7 +244,7 @@ function SurfaceTabBar({ debugMode }: { debugMode: boolean }) {
 
 // ── Settings overlay ──
 
-function SettingsOverlay({ debugMode, onDebugModeChange }: { debugMode: boolean; onDebugModeChange: (v: boolean) => void }) {
+function SettingsOverlay({ debugMode, onDebugModeChange, onResetSession }: { debugMode: boolean; onDebugModeChange: (v: boolean) => void; onResetSession?: () => void }) {
   const settingsVisible = useNapStore((s) => s.settingsVisible);
   const mainRepoConfig = useNapStore((s) => s.mainRepoConfig);
   const toggleSettings = useNapStore((s) => s.toggleSettings);
@@ -339,13 +341,23 @@ function SettingsOverlay({ debugMode, onDebugModeChange }: { debugMode: boolean;
         />
         Debug mode (show Playground tab)
       </label>
+
+      {onResetSession && (
+        <button
+          data-testid="reset-session-btn"
+          onClick={() => { toggleSettings(); onResetSession(); }}
+          style={{ marginTop: 16, padding: '4px 12px', border: '1px solid #ef4444', borderRadius: 3, background: 'transparent', cursor: 'pointer', fontSize: 11, color: '#ef4444' }}
+        >
+          reset session
+        </button>
+      )}
     </div>
   );
 }
 
 // ── Panel (inner content, receives session from context) ──
 
-function Panel({ debugMode, onDebugModeChange }: { debugMode: boolean; onDebugModeChange: (v: boolean) => void }) {
+function Panel({ debugMode, onDebugModeChange, onResetSession }: { debugMode: boolean; onDebugModeChange: (v: boolean) => void; onResetSession?: () => void }) {
   const { store, lfs, adapter, model } = React.useContext(SessionContext)!;
   const activeSurface = useNapStore((s) => s.activeSurface);
   const sidebarVisible = useNapStore((s) => s.sidebarVisible);
@@ -415,7 +427,7 @@ function Panel({ debugMode, onDebugModeChange }: { debugMode: boolean; onDebugMo
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <SurfaceTabBar debugMode={debugMode} />
           <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            <SettingsOverlay debugMode={debugMode} onDebugModeChange={onDebugModeChange} />
+            <SettingsOverlay debugMode={debugMode} onDebugModeChange={onDebugModeChange} onResetSession={onResetSession} />
             {/* Editor surface */}
             <div
               id="editor-surface"
@@ -497,6 +509,33 @@ function BootMessage({ message, detail }: { message: string; detail?: string }) 
   );
 }
 
+// ── Session wipe helper ──
+
+async function wipeSessionData(key: string): Promise<void> {
+  const fsName = `nap-fs-${key}`;
+  console.log(`[wipe] deleting IDB: ${fsName}, ${fsName}_lock`);
+  indexedDB.deleteDatabase(fsName);
+  indexedDB.deleteDatabase(`${fsName}_lock`);
+
+  const uiKey = `nap-ui-${key}`;
+  try {
+    const req = indexedDB.open('nap-state');
+    await new Promise<void>((resolve, reject) => {
+      req.onsuccess = () => {
+        try {
+          const db = req.result;
+          const tx = db.transaction('kv', 'readwrite');
+          tx.objectStore('kv').delete(uiKey);
+          tx.oncomplete = () => { db.close(); resolve(); };
+          tx.onerror = () => { db.close(); reject(tx.error); };
+        } catch { resolve(); }
+      };
+      req.onerror = () => resolve();
+    });
+  } catch { /* best effort */ }
+  console.log(`[wipe] done: fs=${fsName}, ui=${uiKey}`);
+}
+
 // ── Production clone function (wraps isomorphic-git) ──
 
 const realCloneFn: CloneFn = async (url, dir, lfs, auth) => {
@@ -516,10 +555,12 @@ const realCloneFn: CloneFn = async (url, dir, lfs, auth) => {
 function App() {
   const [bootState, setBootState] = useState<BootState | null>(null);
   const pipelineRef = useRef<Pipeline | null>(null);
+  const gateStepRef = useRef<GateStepDef | null>(null);
   const [pipelineDone, setPipelineDone] = useState(false);
   const [, forceUpdate] = useState(0);
   const [debugMode, setDebugMode] = useState(false);
   const [globalReady, setGlobalReady] = useState(false);
+  const [resetCount, setResetCount] = useState(0);
 
   // Read global settings (tokens + debug mode) from chrome.storage.sync on boot
   useEffect(() => {
@@ -552,12 +593,33 @@ function App() {
     }
   }, [globalReady]);
 
-  // Create and run pipeline when boot state is 'session'
+  // Reset handler — wipe IDB, bump resetCount to trigger fresh pipeline
+  const handleResetSession = useCallback(async () => {
+    if (!bootState || bootState.state !== 'session') return;
+    // Destroy current pipeline + session
+    const oldPipeline = pipelineRef.current;
+    if (oldPipeline) {
+      const ctx = oldPipeline.getCtx();
+      if (ctx.model) ctx.model.destroy();
+      oldPipeline.destroy();
+      pipelineRef.current = null;
+    }
+    await wipeSessionData(bootState.key);
+    setPipelineDone(false);
+    setResetCount((c) => c + 1);
+  }, [bootState]);
+
+  // Create and run pipeline when boot state is 'session' (or after reset)
   useEffect(() => {
     if (!bootState || bootState.state !== 'session') return;
 
+    const isReset = resetCount > 0;
+    const gate = makeGateStep(!isReset); // autoStart=true on normal boot, false after reset
+    gateStepRef.current = gate;
+
     const config = bootState.config;
     const steps = [
+      gate,
       makeValidateStep(),
       makeSessionStep(createSession),
       makeInitFsStep(),
@@ -605,6 +667,7 @@ function App() {
 
     // Console API for debugging
     (window as any).__napPipeline__ = pipeline;
+    (window as any).__wipeCurrentSession__ = handleResetSession;
 
     return () => {
       unsub();
@@ -613,7 +676,7 @@ function App() {
       const ctx = pipeline.getCtx();
       if (ctx.model) ctx.model.destroy();
     };
-  }, [bootState]);
+  }, [bootState, resetCount, handleResetSession]);
 
   // Loading — waiting for chrome.tabs.query
   if (!bootState) {
@@ -644,7 +707,7 @@ function App() {
 
   // Pipeline running — show loading gate
   if (!pipelineDone && pipelineRef.current) {
-    return <LoadingGate pipeline={pipelineRef.current} />;
+    return <LoadingGate pipeline={pipelineRef.current} gateStep={gateStepRef.current ?? undefined} />;
   }
 
   // Pipeline done — render the panel with session from pipeline ctx
@@ -654,7 +717,7 @@ function App() {
 
   return (
     <SessionContext.Provider value={session}>
-      <Panel key={session.key} debugMode={debugMode} onDebugModeChange={handleDebugModeChange} />
+      <Panel key={session.key + '-' + resetCount} debugMode={debugMode} onDebugModeChange={handleDebugModeChange} onResetSession={handleResetSession} />
     </SessionContext.Provider>
   );
 }

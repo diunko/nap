@@ -52,6 +52,30 @@ export interface PipelineCtx {
   skipClone?: boolean;
 }
 
+// ── Step 0: Gate step ──
+
+export interface GateStepDef extends StepDef {
+  triggerStart: () => void;
+}
+
+export function makeGateStep(autoStart: boolean): GateStepDef {
+  let startResolve: (() => void) | null = null;
+
+  return {
+    name: 'ready',
+    run: async () => {
+      if (autoStart) return { ok: true };
+      return new Promise<StepResult>((resolve) => {
+        startResolve = () => resolve({ ok: true });
+      });
+    },
+    triggerStart: () => {
+      startResolve?.();
+      startResolve = null; // idempotent — second call is a no-op
+    },
+  };
+}
+
 // ── Step 1: Validate config ──
 
 export function makeValidateStep(): StepDef {

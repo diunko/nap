@@ -119,7 +119,7 @@ describe('PG-S05: yamlToSteps — maps config to working StepDefs', () => {
       ],
     };
     const conditionState: ConditionState = {};
-    const steps = yamlToSteps(config, conditionState);
+    const { steps } = yamlToSteps(config, conditionState);
 
     expect(steps).toHaveLength(3);
     expect(steps[0].name).toBe('step-a');
@@ -147,7 +147,7 @@ describe('PG-S06: yamlToSteps — condition true → step succeeds', () => {
       }],
     };
     const conditionState: ConditionState = { clone: { token_present: true } };
-    const steps = yamlToSteps(config, conditionState);
+    const { steps } = yamlToSteps(config, conditionState);
     const result = await steps[0].run({});
     expect(result).toEqual({ ok: true });
   });
@@ -165,7 +165,7 @@ describe('PG-S07: yamlToSteps — condition false → step fails with on_fail', 
       }],
     };
     const conditionState: ConditionState = { clone: { token_present: false } };
-    const steps = yamlToSteps(config, conditionState);
+    const { steps } = yamlToSteps(config, conditionState);
     const result = await steps[0].run({});
     expect(result).toEqual({ ok: false, error: '401', hint: 'enter token' });
   });
@@ -207,7 +207,7 @@ describe('PG-S09: condition state — toggle overrides initial value', () => {
       }],
     };
     const conditionState: ConditionState = { clone: { token_present: false } };
-    const steps = yamlToSteps(config, conditionState);
+    const { steps } = yamlToSteps(config, conditionState);
 
     // Before toggle — fails
     let result = await steps[0].run({});
@@ -238,7 +238,7 @@ describe('PG-S10: condition state — live read, not snapshot', () => {
       ],
     };
     const conditionState: ConditionState = { 'step-1': { token_present: false } };
-    const steps = yamlToSteps(config, conditionState);
+    const { steps } = yamlToSteps(config, conditionState);
 
     const pipeline = createPipeline(steps);
 
@@ -304,7 +304,7 @@ describe('PG-S12: multiple conditions — first unmet determines error', () => {
     const conditionState: ConditionState = {
       clone: { token_present: false, network_available: false },
     };
-    const steps = yamlToSteps(config, conditionState);
+    const { steps } = yamlToSteps(config, conditionState);
     const result = await steps[0].run({});
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -335,7 +335,7 @@ describe('PG-S13: toggle → retry → pass (core interaction)', () => {
     const conditionState: ConditionState = {
       'step-2': { token_present: false },
     };
-    const steps = yamlToSteps(config, conditionState);
+    const { steps } = yamlToSteps(config, conditionState);
     const pipeline = createPipeline(steps);
 
     // Run — step-2 should fail

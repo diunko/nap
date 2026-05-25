@@ -6,11 +6,12 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Pipeline, PipelineState } from './pipeline';
+import type { Pipeline, PipelineState, StepDef } from './pipeline';
+import type { GateStepDef } from './pipeline-steps';
 import { PROVIDERS, type NapConfig } from './url-config';
 import { globalTokens, setGlobalToken } from './chrome-storage';
 
-export function LoadingGate({ pipeline }: { pipeline: Pipeline }) {
+export function LoadingGate({ pipeline, gateStep }: { pipeline: Pipeline; gateStep?: GateStepDef }) {
   const [state, setState] = useState<PipelineState>(pipeline.getState());
 
   useEffect(() => pipeline.subscribe(setState), [pipeline]);
@@ -38,6 +39,7 @@ export function LoadingGate({ pipeline }: { pipeline: Pipeline }) {
             step={step}
             index={i}
             ctx={ctx}
+            gateStep={gateStep}
             onRetry={() => pipeline.retry(i)}
           />
         ))}
@@ -69,11 +71,13 @@ function StepRow({
   step,
   index,
   ctx,
+  gateStep,
   onRetry,
 }: {
   step: PipelineState['steps'][0];
   index: number;
   ctx: Record<string, any>;
+  gateStep?: GateStepDef;
   onRetry: () => void;
 }) {
   const icon =
@@ -87,6 +91,9 @@ function StepRow({
     step.status === 'running' ? 'var(--nap-text)' :
     step.status === 'error' ? '#ef4444' :
     'var(--nap-text-dim)';
+
+  // Gate step detection: name === 'ready' + status === 'running' → show [start]
+  const isGateWaiting = step.name === 'ready' && step.status === 'running' && gateStep;
 
   // Determine if this is a clone or fetch-diff step for custom rendering
   const isCloneStep = step.name.startsWith('cloning ');
@@ -103,8 +110,22 @@ function StepRow({
           {icon}
         </span>
         <span style={{ color: step.status === 'pending' ? 'var(--nap-text-dim)' : 'var(--nap-text)' }}>
-          {step.name}{step.status === 'running' ? '...' : ''}
+          {step.name}{step.status === 'running' && !isGateWaiting ? '...' : ''}
         </span>
+        {isGateWaiting && (
+          <button
+            data-testid="gate-start"
+            onClick={() => gateStep!.triggerStart()}
+            style={{
+              ...btnStyle,
+              marginLeft: 8,
+              padding: '2px 14px',
+              fontWeight: 600,
+            }}
+          >
+            start
+          </button>
+        )}
       </div>
 
       {step.status === 'error' && (
