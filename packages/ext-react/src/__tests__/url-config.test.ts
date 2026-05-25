@@ -7,6 +7,7 @@ import {
   napkinSlug,
   buildNapConfig,
 } from '../url-config';
+import { resolveBootState } from '../boot-gate';
 
 // ── WW-S01: URL hash parsing ──
 
@@ -142,6 +143,88 @@ describe('napkinSlug', () => {
   });
 });
 
+// ── UF-S01..S18: parsePageUrl mainBranch extraction ──
+
+describe('UF: parsePageUrl mainBranch', () => {
+  it('UF-S01: bare repo URL → mainBranch defaults to main', () => {
+    expect(parsePageUrl('/coda/coda')).toEqual({ mainOwner: 'coda', mainRepo: 'coda', prNum: 0, mainBranch: 'main' });
+  });
+
+  it('UF-S02: tree URL with branch name', () => {
+    expect(parsePageUrl('/org/repo/tree/develop')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 0, mainBranch: 'develop' });
+  });
+
+  it('UF-S03: tree URL with commit SHA', () => {
+    expect(parsePageUrl('/coda/coda/tree/0f222eae21cce4612a89fb8fa59ce00f9b78eeb0')).toEqual({
+      mainOwner: 'coda', mainRepo: 'coda', prNum: 0, mainBranch: '0f222eae21cce4612a89fb8fa59ce00f9b78eeb0',
+    });
+  });
+
+  it('UF-S04: tree URL with nested path — only first segment is ref', () => {
+    expect(parsePageUrl('/org/repo/tree/main/src/lib')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 0, mainBranch: 'main' });
+  });
+
+  it('UF-S05: blob URL with branch', () => {
+    expect(parsePageUrl('/org/repo/blob/feature-x/src/main.ts')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 0, mainBranch: 'feature-x' });
+  });
+
+  it('UF-S06: blob URL with SHA', () => {
+    expect(parsePageUrl('/org/repo/blob/abc123def456/src/index.ts')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 0, mainBranch: 'abc123def456' });
+  });
+
+  it('UF-S07: PR URL → mainBranch defaults to main', () => {
+    expect(parsePageUrl('/org/repo/pull/42')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 42, mainBranch: 'main' });
+  });
+
+  it('UF-S08: PR files URL', () => {
+    expect(parsePageUrl('/org/repo/pull/42/files')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 42, mainBranch: 'main' });
+  });
+
+  it('UF-S09: PR commits URL', () => {
+    expect(parsePageUrl('/org/repo/pull/42/commits')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 42, mainBranch: 'main' });
+  });
+
+  it('UF-S10: PR specific commit', () => {
+    expect(parsePageUrl('/org/repo/pull/42/commits/abc123')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 42, mainBranch: 'main' });
+  });
+
+  it('UF-S11: issues URL — prNum must be 0, not the issue number', () => {
+    expect(parsePageUrl('/org/repo/issues/123')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 0, mainBranch: 'main' });
+  });
+
+  it('UF-S12: actions URL', () => {
+    expect(parsePageUrl('/org/repo/actions')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 0, mainBranch: 'main' });
+  });
+
+  it('UF-S13: wiki, settings, security — non-code pages', () => {
+    for (const sub of ['wiki', 'settings', 'security']) {
+      const p = parsePageUrl(`/org/repo/${sub}`);
+      expect(p.prNum).toBe(0);
+      expect(p.mainBranch).toBe('main');
+    }
+  });
+
+  it('UF-S14: branch name with slash — takes first segment (known limitation)', () => {
+    expect(parsePageUrl('/org/repo/tree/feature/my-branch')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 0, mainBranch: 'feature' });
+  });
+
+  it('UF-S15: empty pathname', () => {
+    expect(parsePageUrl('/')).toEqual({ mainOwner: '', mainRepo: '', prNum: 0, mainBranch: 'main' });
+  });
+
+  it('UF-S16: owner only, no repo', () => {
+    expect(parsePageUrl('/coda')).toEqual({ mainOwner: 'coda', mainRepo: '', prNum: 0, mainBranch: 'main' });
+  });
+
+  it('UF-S17: tree URL with v-prefixed tag', () => {
+    expect(parsePageUrl('/org/repo/tree/v2.1.0')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 0, mainBranch: 'v2.1.0' });
+  });
+
+  it('UF-S18: blob URL with trailing slash', () => {
+    expect(parsePageUrl('/org/repo/blob/main/')).toEqual({ mainOwner: 'org', mainRepo: 'repo', prNum: 0, mainBranch: 'main' });
+  });
+});
+
 // ── buildNapConfig ──
 
 describe('buildNapConfig', () => {
@@ -190,5 +273,73 @@ describe('buildNapConfig', () => {
     const config = buildNapConfig(page, hash);
     expect(config.napkinFocus).toBe('0100-feature');
     expect(config.nepicSlug).toBeNull();
+  });
+
+  it('UF-S19: uses mainBranch from parsePageUrl (tree URL with SHA)', () => {
+    const page = parsePageUrl('/coda/coda/tree/0f222eae21cce4612a89fb8fa59ce00f9b78eeb0');
+    const hash = parseNapHash('#nap-repo=github/diunko/nap-test-nap')!;
+    const config = buildNapConfig(page, hash);
+    expect(config.mainBranch).toBe('0f222eae21cce4612a89fb8fa59ce00f9b78eeb0');
+  });
+
+  it('UF-S19b: uses mainBranch from parsePageUrl (tree URL with branch)', () => {
+    const page = parsePageUrl('/org/repo/tree/develop');
+    const hash = parseNapHash('#nap-repo=github/org/nap')!;
+    const config = buildNapConfig(page, hash);
+    expect(config.mainBranch).toBe('develop');
+  });
+
+  it('UF-S19c: override takes precedence over page.mainBranch', () => {
+    const page = parsePageUrl('/org/repo/tree/develop');
+    const hash = parseNapHash('#nap-repo=github/org/nap')!;
+    const config = buildNapConfig(page, hash, 'feature/from-dom');
+    expect(config.mainBranch).toBe('feature/from-dom');
+  });
+});
+
+// ── UF-S20: resolveBootState end-to-end with tree URL ──
+
+describe('UF-S20: resolveBootState mainBranch', () => {
+  it('tree URL with SHA → config.mainBranch is the SHA', () => {
+    const result = resolveBootState(
+      'https://github.com/coda/coda/tree/0f222eae21cce4612a89fb8fa59ce00f9b78eeb0#nap-repo=github/diunko/nap-test-nap',
+    );
+    expect(result.state).toBe('session');
+    if (result.state === 'session') {
+      expect(result.config.mainBranch).toBe('0f222eae21cce4612a89fb8fa59ce00f9b78eeb0');
+      expect(result.config.mainOwner).toBe('coda');
+      expect(result.config.mainRepo).toBe('coda');
+    }
+  });
+
+  it('blob URL with branch → config.mainBranch is the branch', () => {
+    const result = resolveBootState(
+      'https://github.com/org/repo/blob/develop/src/main.ts#nap-repo=github/org/nap',
+    );
+    expect(result.state).toBe('session');
+    if (result.state === 'session') {
+      expect(result.config.mainBranch).toBe('develop');
+    }
+  });
+
+  it('bare repo URL → config.mainBranch defaults to main', () => {
+    const result = resolveBootState(
+      'https://github.com/org/repo#nap-repo=github/org/nap',
+    );
+    expect(result.state).toBe('session');
+    if (result.state === 'session') {
+      expect(result.config.mainBranch).toBe('main');
+    }
+  });
+
+  it('PR URL → config.mainBranch defaults to main (branch from DOM later)', () => {
+    const result = resolveBootState(
+      'https://github.com/org/repo/pull/42#nap-repo=github/org/nap',
+    );
+    expect(result.state).toBe('session');
+    if (result.state === 'session') {
+      expect(result.config.mainBranch).toBe('main');
+      expect(result.config.prNum).toBe(42);
+    }
   });
 });
