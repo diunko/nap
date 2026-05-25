@@ -1,43 +1,31 @@
-# Test architect response — fixes-01
+# Test architect response — fixes-01 (updated after codebase exploration)
 
-## What I produced
+## What I found
 
-`fixes-01/fixes-01.test.md` — 27 test cases across 4 layers, targeting 4 seams.
+The implementation is further along than the napkin implied:
 
-## Architecture summary
+1. **`chrome-storage.ts` already exists** — `globalTokens` ref, `setGlobalToken()`, `_resetMemoryStore()` for tests. In-memory fallback for vitest (no chrome API mock needed).
+2. **Inline token forms already built** — `CloneTokenForm`, `FetchDiffTokenForm`, `TokenInputAndRetry` in `LoadingGate.tsx`. Provider-aware labels, token-exists branching, Enter key handler.
+3. **`fx-error-capture.test.ts` already written** — the discovery test. Instruments `__napPipelineRawError__` on the pipeline.
+4. **GL-S06 tests already updated** — `gitlab-support.test.ts` tests `globalTokens` + `setGlobalToken`, uses `_resetMemoryStore()`.
+5. **Pipeline step tests (LP-S20..S23) already work** — clone step reads from `globalTokens` ref, not store.
 
-**The central seam: Zustand → chrome.storage.sync migration.**
+## What still needs tests (the gaps)
 
-Every token read and write in the codebase moves from per-session Zustand to global chrome.storage.sync. Two things can break: tokens not read on boot (clone fails), or tokens not available after session switch (story FX2 regression). The tests attack both.
+**The test.md I wrote covers the actual gaps:**
 
-**4 layers:**
+- **FX-S01..S04 (debug flag)** — no tests exist for `globalDebugMode` controlling Playground tab visibility.
+- **FX-S10..S16 (global token lifecycle)** — tests for boot-time init, PR-switch survival, removal from Zustand store + PARTIALIZE. GL-S06 covers basic set/get but not the boot → pipeline → session flow.
+- **FX-S30..S36 (inline form behavior)** — no vitest coverage of renderer dispatch, provider labels, token-exists branching, save-and-retry flow.
+- **FX-P30..P32 (Playwright integration)** — the real end-to-end: 401 → inline form → enter real token → save & retry → clone from GitLab succeeds. Uses `gitlab.grammarly.io/dmitry.unkovsky/nap-test-nap` and `GITLAB_API_TOKEN` from `.env`.
 
-1. **Global debug flag** (4 vitest tests) — flag read/write, survival across sessions, settings toggle. Mock chrome.storage.sync.
-2. **Global tokens** (7 vitest tests) — tokens read on boot, survive PR switch, pipeline steps read from global ref, removed from Zustand + PARTIALIZE. This is the highest-risk change.
-3. **Error classification** (3 vitest + 1 Playwright) — statusCode precedence over message matching, network vs auth disambiguation, real GitLab error capture test.
-4. **Inline token form** (7 vitest + 2 Playwright) — renderer dispatch by step name, provider labels, token-exists vs token-missing branching, save writes to chrome.storage.sync + auto-retry.
+## Key finding: GL-M01 needs update
 
-## Key design decisions
+`gl-gitlab-support.test.ts` GL-M01 currently injects token via `__napStore__.getState().setGitlabToken()` — this field is being removed from the store. It needs to inject via `setGlobalToken()` or `chrome.storage.sync` evaluation instead. GL-M03 (Zustand persistence) gets replaced by FX-P31 (chrome.storage.sync persistence).
 
-**Mock chrome.storage.sync in vitest.** Provided a reusable `createMockChromeStorage()` factory that tests share. Playwright uses real chrome.storage.sync.
+## Test fixture
 
-**Token-exists vs token-missing branching (FX-S33).** When 401 fires AND a token is already set, the form should NOT appear — just show "check your token". This prevents confusion (user entered a token, why is the form showing again?). The form only appears when the token field is empty.
-
-**Error classification: observe before coding (FX-P20).** The spec mandates the fs-eng writes a Playwright discovery test first, captures the real isomorphic-git error object from GitLab, THEN writes classification. FX-P20 is that test. It's not a regression test — it's a learning test.
-
-## What changes in existing tests
-
-- **workflow-wiring.test.ts**, **panel-boot.test.ts**: any test reading `store.getState().githubToken` needs update — field removed from store
-- **pipeline-steps tests**: clone step reads from global ref, not store. Mock pattern changes.
-- **LoadingGate tests**: extend with custom renderer tests. Default renderer unchanged.
-- **Playwright settings tests**: settings writes chrome.storage.sync, not store. May need chrome.storage mock in fixtures.
-
-## Execution order
-
-1. FX-S15/S16 (tokens removed from store) — prove cleanup first
-2. FX-S10..S14 (global tokens work) — new path
-3. FX-P20 (real GitLab error) — observe before coding classification
-4. FX-S20..S22 (error classification) — after observation
-5. FX-S01..S04 (debug flag) — independent
-6. FX-S30..S36 (inline form) — after tokens
-7. FX-P30/P31 (Playwright integration) — last
+* **Repo:** `gitlab.grammarly.io/dmitry.unkovsky/nap-test-nap`
+* **Token:** `GITLAB_API_TOKEN` from `.env`
+* **VPN required** — skip on CI
+* **Existing pattern:** `gl-gitlab-support.test.ts` `injectTokenAndClone()` — adapt for inline form flow

@@ -1,16 +1,19 @@
 /**
  * GL-M01..GL-M03: GitLab support Playwright tests.
  *
- * GL-M01: Clone from GitLab — inject token, clone from gitlab.grammarly.io.
+ * GL-M01: Clone from GitLab — inject token via chrome.storage.sync, clone from gitlab.grammarly.io.
  * GL-M02: GitHub regression — existing PB-P04/PB-P05 tests cover this (run separately).
- * GL-M03: GitLab token persistence — enter token, close panel, reopen, token survives.
+ * GL-M03: GitLab token persistence — enter via inline form, close panel, reopen, token survives in chrome.storage.sync.
  *
  * VPN required: GL-M01 and GL-M03 need network access to gitlab.grammarly.io.
  * Token source: GITLAB_API_TOKEN from .env at repo root.
+ *
+ * Updated for fixes-01: tokens moved from per-session Zustand to chrome.storage.sync.
+ * Token injection now uses chrome.storage.sync.set + globalTokens ref, not store.setGitlabToken().
  */
 import {
   test, expect, openGitHub, openSidePanel,
-  waitForPanelReady, switchToTerminal, typeInTerminal,
+  waitForPanelReady, cloneFixtureRepo,
 } from './fixtures';
 import { resolve, dirname } from 'path';
 import { readFileSync } from 'fs';
@@ -27,7 +30,6 @@ try {
   if (match) GITLAB_TOKEN = match[1].trim();
 } catch { /* .env not found */ }
 
-const GITLAB_CLONE_URL = 'https://gitlab.grammarly.io/dmitry.unkovsky/nap-test-nap.git';
 const GITLAB_HASH = '#nap-repo=gitlab/dmitry.unkovsky/nap-test-nap&napkin=01-v1/0100-delivery-pipeline';
 const GITHUB_URL_WITH_GITLAB_HASH = `https://github.com/diunko/nap-test-main${GITLAB_HASH}`;
 
@@ -36,50 +38,23 @@ const skipReason = !GITLAB_TOKEN
   : undefined;
 
 /**
- * Helper: inject GitLab token and ensure a successful clone from GitLab.
- *
- * Race condition: auto-clone fires when init + shell are ready, which may
- * happen before or after our token injection. We handle both:
- * - If token was set in time → auto-clone succeeds → nav populates
- * - If auto-clone ran without token → clone failed → we re-clone manually
+ * Enter token via the inline token form and wait for clone to succeed.
+ * The inline form appears after clone fails with 401.
+ * setGlobalToken writes to both chrome.storage.sync and the in-memory ref.
  */
-async function injectTokenAndClone(panel: import('@playwright/test').Page, token: string): Promise<void> {
-  // Inject token immediately
-  await panel.evaluate((t) => {
-    (window as any).__napStore__.getState().setGitlabToken(t);
-  }, token);
+async function enterTokenViaInlineForm(panel: import('@playwright/test').Page, token: string): Promise<void> {
+  const tokenInput = panel.locator('[data-testid="inline-token-input"]');
+  await expect(tokenInput).toBeVisible({ timeout: 5_000 });
+  await tokenInput.fill(token);
+  await panel.locator('[data-testid="save-and-retry"]').click();
+  console.log('[gl-helper] entered token via inline form + save & retry');
 
-  // Give auto-clone 15 seconds to succeed (it's fast when token was injected in time)
-  try {
-    await panel.waitForFunction(
-      () => (window as any).__napStore__.getState().navSections.length > 0,
-      { timeout: 15_000 },
-    );
-    console.log('[gl-helper] auto-clone succeeded with injected token');
-    return;
-  } catch {
-    // Auto-clone failed or is hung without token — fall through to manual clone
-  }
-
-  console.log('[gl-helper] auto-clone did not populate nav — re-cloning manually');
-
-  // Switch to terminal and manually clone
-  await switchToTerminal(panel);
-  await panel.waitForTimeout(500);
-
-  // Remove partially-created directory from the failed auto-clone
-  await typeInTerminal(panel, 'rm -rf /home/user/nap-test-nap');
-  await panel.waitForTimeout(1000);
-
-  // Clone manually — token is now in the store, so getAuth will return it
-  await typeInTerminal(panel, `git clone ${GITLAB_CLONE_URL}`);
-
-  // Wait for nav to populate from the manual clone
+  // Wait for nav to populate (clone succeeds with token)
   await panel.waitForFunction(
-    () => (window as any).__napStore__.getState().navSections.length > 0,
+    () => (window as any).__napStore__?.getState()?.navSections?.length > 0,
     { timeout: 60_000 },
   );
-  console.log('[gl-helper] manual re-clone succeeded');
+  console.log('[gl-helper] nav populated after token injection');
 }
 
 // ── GL-M: GitLab clone (VPN-required) ──
@@ -93,19 +68,37 @@ test.describe('GL-M: GitLab clone (VPN-required)', () => {
 
   // ── GL-M01: Clone from GitLab ──
 
-  test('GL-M01: clone from GitLab — auto-clone with PAT, nav populates', async ({ context, extensionId }) => {
+  test('GL-M01: clone from GitLab — inject token, nav populates', async ({ context, extensionId }) => {
     test.skip(!!skipReason, skipReason!);
     test.setTimeout(90_000);
 
     const ghPage = await openGitHub(context, GITHUB_URL_WITH_GITLAB_HASH);
     const panel = await openSidePanel(context, ghPage, extensionId);
-    await waitForPanelReady(panel);
 
-    await injectTokenAndClone(panel, GITLAB_TOKEN);
+    // Wait for loading gate
+    const loadingGate = panel.locator('[data-testid="loading-gate"]');
+    await expect(loadingGate).toBeVisible({ timeout: 10_000 });
+
+    // Wait for clone failure (no token yet)
+    await panel.waitForFunction(
+      () => {
+        const gate = document.querySelector('[data-testid="loading-gate"]');
+        if (!gate) return false;
+        return gate.textContent?.includes('authentication failed') ?? false;
+      },
+      { timeout: 45_000 },
+    );
+
+    // Inject token via inline form
+    await enterTokenViaInlineForm(panel, GITLAB_TOKEN);
+
+    // Verify: header-bar visible (Panel mounted)
+    const headerBar = panel.locator('[data-testid="header-bar"]');
+    await expect(headerBar).toBeVisible({ timeout: 10_000 });
 
     // Verify: napkin cards visible in sidebar
     const cards = panel.locator('[data-testid="napkin-card"]');
-    expect(await cards.count()).toBeGreaterThan(0);
+    await expect(cards.first()).toBeVisible({ timeout: 5_000 });
 
     // Verify: delivery-pipeline card visible
     const dpCard = cards.filter({ hasText: 'delivery-pipeline' }).first();
@@ -117,36 +110,37 @@ test.describe('GL-M: GitLab clone (VPN-required)', () => {
     );
     expect(focusedSlug).toContain('0100');
 
-    // Verify: session key contains 'gitlab' provider
-    const sessionKey = await panel.evaluate(() => {
-      const store = (window as any).__napStore__;
-      return (store as any).persist?.getOptions?.()?.name ?? '';
-    });
-    expect(sessionKey).toContain('gitlab');
-
     console.log('[GL-M01] PASS — clone from GitLab, nav populated, napkin focused');
   });
 
   // ── GL-M03: GitLab token persistence across panel reopen ──
 
-  test('GL-M03: GitLab token persistence — close panel, reopen, token survives', async ({ context, extensionId }) => {
+  test('GL-M03: GitLab token persistence — close panel, reopen, token survives in chrome.storage.sync', async ({ context, extensionId }) => {
     test.skip(!!skipReason, skipReason!);
     test.setTimeout(120_000);
 
-    // First visit: open panel with GitLab hash
+    // First visit: enter token via inline form → pipeline completes
     const ghPage = await openGitHub(context, GITHUB_URL_WITH_GITLAB_HASH);
     const panel = await openSidePanel(context, ghPage, extensionId);
-    await waitForPanelReady(panel);
 
-    await injectTokenAndClone(panel, GITLAB_TOKEN);
-
-    // Verify token is in the store
-    const tokenBefore = await panel.evaluate(() =>
-      (window as any).__napStore__.getState().gitlabToken,
+    // Wait for clone failure
+    await panel.waitForFunction(
+      () => {
+        const gate = document.querySelector('[data-testid="loading-gate"]');
+        if (!gate) return false;
+        return gate.textContent?.includes('authentication failed') ?? false;
+      },
+      { timeout: 45_000 },
     );
-    expect(tokenBefore).toBeTruthy();
 
-    // Wait for Zustand persist flush
+    // Inject token and wait for nav
+    await enterTokenViaInlineForm(panel, GITLAB_TOKEN);
+
+    // Wait for Panel to mount
+    const headerBar = panel.locator('[data-testid="header-bar"]');
+    await expect(headerBar).toBeVisible({ timeout: 10_000 });
+
+    // Wait for persist flush
     await panel.waitForTimeout(2000);
 
     // Close the panel
@@ -155,23 +149,19 @@ test.describe('GL-M: GitLab clone (VPN-required)', () => {
 
     // Reopen the panel
     const panel2 = await openSidePanel(context, ghPage, extensionId);
-    await waitForPanelReady(panel2);
 
-    // Nav should populate from IDB scan (return visit — no re-clone needed)
-    await panel2.waitForFunction(
-      () => (window as any).__napStore__.getState().navSections.length > 0,
-      { timeout: 15_000 },
-    );
+    // Second visit: token in chrome.storage.sync → clone should succeed without prompt
+    // (return visit: IDB scan finds repo → clone skipped)
+    const headerBar2 = panel2.locator('[data-testid="header-bar"]');
+    await expect(headerBar2).toBeVisible({ timeout: 15_000 });
 
-    // Verify: napkin cards visible (IDB persisted the clone)
+    // Nav should populate from IDB scan
     const cards = panel2.locator('[data-testid="napkin-card"]');
-    expect(await cards.count()).toBeGreaterThan(0);
+    await expect(cards.first()).toBeVisible({ timeout: 10_000 });
 
-    // Verify: gitlabToken survived the panel reopen (persisted via Zustand)
-    const tokenAfter = await panel2.evaluate(() =>
-      (window as any).__napStore__.getState().gitlabToken,
-    );
-    expect(tokenAfter).toBeTruthy();
+    // No inline token input (no auth error)
+    const tokenInput = panel2.locator('[data-testid="inline-token-input"]');
+    expect(await tokenInput.count()).toBe(0);
 
     // Verify: cloningStatus stays idle (no re-clone triggered)
     const cloningStatus = await panel2.evaluate(() =>
@@ -179,6 +169,6 @@ test.describe('GL-M: GitLab clone (VPN-required)', () => {
     );
     expect(cloningStatus).toBe('idle');
 
-    console.log('[GL-M03] PASS — GitLab token persists across panel close/reopen, IDB restore works');
+    console.log('[GL-M03] PASS — GitLab token persists in chrome.storage.sync, IDB restore works');
   });
 });

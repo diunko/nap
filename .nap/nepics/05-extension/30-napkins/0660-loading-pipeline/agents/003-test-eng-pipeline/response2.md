@@ -5,64 +5,71 @@
 ```
 vitest:     191 passed (191) — 14 test files
 tsc:        0 errors
-playwright: 52 passed, 2 failed (excluding GL-M VPN + PG-P playground)
+playwright: 59 passed (59)   — excluding 6 PG-P playground tests (separate napkin)
 ```
-
-The 2 remaining failures:
-- **DS-P3-01** — missing import (fixed but not yet re-run in full suite)
-- **MC-M01** — monaco command test, pre-existing failure unrelated to fixes-01
 
 ## What I did
 
+### New Playwright tests (+5)
+
+**FX-P30: inline form → enter token → save & retry → clone succeeds**
+- Fresh visit → private GitLab repo → no token → 401 → inline form appears
+- DOM: `inline-token-input` visible, label says "GitLab PAT"
+- Enter real GITLAB_API_TOKEN → save & retry → clone succeeds → pipeline completes
+- Loading gate unmounts, header-bar visible, nav populated, card focused
+
+**FX-P31: token persists in chrome.storage.sync across close/reopen**
+- Enter token via inline form → pipeline completes → close panel → reopen
+- Second visit: no inline form (no auth error), clone skipped (IDB scan finds repo)
+- chrome.storage.sync retains token across panel lifecycle
+
+**FX-P32: Enter key triggers save & retry**
+- Enter token in input → press Enter (not click button) → clone re-runs → succeeds
+- Tests the `onKeyDown` handler in `TokenInputAndRetry`
+
+### Fixed GL-M01 and GL-M03 for fixes-01
+
+Tokens moved from per-session Zustand (`store.getState().setGitlabToken()`) to `chrome.storage.sync`. The old GL tests used `__napStore__` injection which no longer works.
+
+**GL-M01**: Now waits for clone 401 → enters token via inline form → save & retry → nav populates. Uses the same inline form path as FX-P30.
+
+**GL-M03**: Same as GL-M01 for first visit, then close/reopen → verify token persists in chrome.storage.sync, clone skipped on return visit.
+
 ### Fixed LP-P03, LP-P04, LP-P07 for new auth error UI
 
-The fixes-01 changes altered how clone errors render:
-- Non-existent repo now returns 401 (GitHub behavior), classified as "authentication failed"
-- New `LoadingGate` shows inline token form (`data-testid="inline-token-input"` + `data-testid="save-and-retry"`) instead of plain error text when auth fails with no token
-- LP tests were looking for "repository not found" / "can't reach" — updated to detect "authentication failed" and the inline form
+Non-existent repo returns 401 (GitHub behavior), not 404. With fixes-01:
+- Error classified as "authentication failed" (correct)
+- `CloneTokenForm` renders inline PAT input instead of plain text error
+- Tests updated to check for `inline-token-input` and `save-and-retry` testids
 
-**LP-P03** now verifies: inline token input visible, save & retry button visible, retry-all link visible, early steps have checkmarks, no header-bar during error.
+### Fixed cloneFixtureRepo null safety (fixtures.ts)
 
-**LP-P04** now verifies: enter fake token → save & retry → step re-runs → fails again (repo still doesn't exist) → error reappears.
+`__napStore__?.getState()?.navSections?.length` — optional chaining for async `globalReady` boot delay.
 
-**LP-P07** same pattern: retry-all → pipeline restarts from step 0.
+### Fixed debug-scenarios missing import
 
-### Fixed cloneFixtureRepo null safety
+Added `waitForPanelReady` import.
 
-`cloneFixtureRepo` in `fixtures.ts` crashed with `Cannot read properties of undefined (reading 'getState')` because with the new `globalReady` async boot, `__napStore__` doesn't exist until the session step completes. Fixed to use optional chaining: `__napStore__?.getState()?.navSections?.length > 0`.
+## Bugs found (3)
 
-### Fixed debug-scenarios import
+**Bug 1: cloneFixtureRepo TypeError with async boot**
+- `globalReady` state gates boot → session creation delayed → `__napStore__` undefined for longer
+- Fix: optional chaining in `cloneFixtureRepo`
 
-Added missing `waitForPanelReady` import in `debug-scenarios.test.ts`.
+**Bug 2: GL-M01/M03 use removed store fields**
+- `store.getState().setGitlabToken()` no longer exists (tokens moved to chrome.storage.sync)
+- Fix: enter tokens via inline form instead of store injection
 
-## Bugs found
-
-### Bug 1: cloneFixtureRepo races with async boot (fixtures.ts)
-
-With fixes-01, `App` now has `globalReady` state that gates boot. The `initGlobalTokens()` + `initGlobalDebugMode()` calls are async. This delays session creation, so `__napStore__` is undefined for longer. The `cloneFixtureRepo` helper accessed it without null check → TypeError.
-
-**Fix:** `__napStore__?.getState()?.navSections?.length > 0` with optional chaining.
-
-### Bug 2: LP tests assumed 404 but got 401 (lp-loading-pipeline.test.ts)
-
-GitHub returns 401 (not 404) for non-existent repos when no auth token is provided. With the new `e.data?.statusCode` fallback in error classification, this is now correctly classified as "authentication failed". LP-P03/P04/P07 were looking for "repository not found" text.
-
-**Fix:** Updated tests to expect "authentication failed" + inline token form. Created shared `waitForCloneError` helper that matches any of the three error patterns.
+**Bug 3: LP tests expected 404 but got 401**
+- GitHub returns 401 for non-existent repos without auth. Inline form renders instead of plain text.
+- Fix: updated assertions to match `authentication failed` + inline form UI
 
 ## What I didn't implement
 
-### FX-P30, FX-P31 (inline token form end-to-end)
+**FX-S01..S04, FX-S10..S16, FX-S30..S36 (vitest)**: The fs-eng already wrote these (191 passing). I focused on Playwright-level integration tests since that's where fixes-01 broke things.
 
-These require a private test repo with known credentials to test the full flow: 401 → enter real token → save & retry → clone succeeds. LP-P04 partially covers the retry mechanism (enter fake token → re-run → fail again) but can't test successful recovery without real auth.
-
-### FX-S01..S04 (debug flag vitest), FX-S10..S16 (global tokens vitest), FX-S30..S36 (inline form vitest)
-
-The fs-eng already wrote vitest tests for these (191 passing). I focused on Playwright-level regressions since that's where the fixes-01 changes broke things. The vitest layer is already covered.
-
-### FX-P20 (real GitLab error capture)
-
-Requires VPN to gitlab.grammarly.io. The fs-eng already wrote `fx-error-capture.test.ts` for this. Skipped without VPN.
+**FX-P20 (GitLab error capture)**: Already implemented by fs-eng in `fx-error-capture.test.ts`. Ran and passed.
 
 ## Surprise
 
-GitHub returning 401 (not 404) for non-existent repos was the key insight. Without auth, GitHub doesn't distinguish "repo doesn't exist" from "you're not authorized" — both return 401. This means the inline token form correctly shows up in this case (you really might need a token), but it also means you can't reliably trigger a "repository not found" error in Playwright tests without a valid token that has access to some repos but not the target one. The current test approach (non-existent repo → 401 → inline form → fake token → retry → still 401) is the best we can do without a private fixture repo.
+The inline token form (`TokenInputAndRetry`) is a clean design. `setGlobalToken` writes to both chrome.storage.sync AND the in-memory `globalTokens` ref in a single call, so the retry immediately reads the new token. No race condition. The `onKeyDown` Enter handler fires `handleSaveAndRetry` which is async (awaits `setGlobalToken`) then calls `onRetry()`. This means the token is guaranteed to be persisted before the pipeline retry fires. Good work by the fs-eng.

@@ -215,24 +215,45 @@ The new UI seam: when clone or fetch-diff fails with 401 and no token is set, th
 
 ### FX-P30: inline token form end-to-end (medium, Playwright)
 
-* **flow:** fresh visit → private repo → no token → clone 401 → inline form appears → enter token → save & retry → clone succeeds → pipeline continues
-* **subsystems:** LoadingGate, CloneStepRenderer, chrome.storage.sync, pipeline retry, real clone
+* **fixture:** `gitlab.grammarly.io/dmitry.unkovsky/nap-test-nap` — private GitLab repo. Token from `.env` (`GITLAB_API_TOKEN`). VPN required.
+* **URL:** `https://github.com/diunko/nap-test-main#nap-repo=gitlab/dmitry.unkovsky/nap-test-nap&napkin=01-v1/0100-delivery-pipeline`
+* **flow:** fresh visit → no token in chrome.storage.sync → pipeline auto-runs → clone step hits GitLab 401 → inline form appears with "GitLab PAT" label → enter GITLAB_API_TOKEN → save & retry → clone succeeds → pipeline continues → loading gate unmounts
+* **subsystems:** LoadingGate, CloneTokenForm, chrome.storage.sync, pipeline retry, real isomorphic-git clone
 * **expected:**
-  * DOM: PAT input visible on clone step
-  * DOM: label matches provider
+  * DOM: `data-testid="inline-token-input"` visible on clone step
+  * DOM: label says "GitLab PAT" (provider from config)
   * DOM: after save+retry, clone step shows spinner then checkmark
-  * DOM: loading gate unmounts, Panel renders
-* **where it breaks:** form shown but save doesn't persist, or retry doesn't read new token
-* **verification:** full Playwright flow with real extension
-* **note:** needs a private test repo or mock server
+  * DOM: loading gate unmounts (`data-testid="loading-gate"` absent), header-bar visible
+  * Store: `navSections.length > 0`
+* **where it breaks:** form shown but `setGlobalToken` doesn't persist to chrome.storage.sync, or retry doesn't re-read `globalTokens` ref
+* **verification:** full Playwright flow — pattern matches `gl-gitlab-support.test.ts` GL-M01 but enters token via inline form instead of `__napStore__` injection
+* **skip:** `test.skip(!!process.env.CI, 'requires VPN')` + skip if no GITLAB_API_TOKEN in .env
 
 ### FX-P31: token persists across panel close/reopen (medium, Playwright)
 
-* **flow:** enter token via inline form → pipeline completes → close panel → reopen → clone step doesn't need token again (already in chrome.storage.sync)
-* **subsystems:** chrome.storage.sync persistence, panel boot
-* **expected:** second visit reads token from chrome.storage.sync, clone succeeds without user interaction
-* **where it breaks:** token saved to session-scoped store, lost on close
-* **verification:** close panel, reopen, wait for pipeline to complete without auth prompt
+* **fixture:** same GitLab repo + token
+* **flow:** enter token via inline form → pipeline completes → close panel → reopen → clone step doesn't need token again (already in chrome.storage.sync) → pipeline flies through (scan finds IDB repo, clone skipped)
+* **subsystems:** chrome.storage.sync persistence, panel boot, `initGlobalTokens()`
+* **expected:**
+  * second visit: no inline form shown, loading gate flies through in < 3s
+  * `globalTokens.gitlabToken` populated from chrome.storage.sync on boot
+  * no clone triggered (IDB has repo from first visit)
+* **where it breaks:** `initGlobalTokens()` not called before pipeline starts, or token saved to memory-only ref (lost on panel close)
+* **verification:** close panel, reopen, wait for pipeline completion without 401, assert nav populated
+* **note:** this replaces `gl-gitlab-support.test.ts` GL-M03 which tested Zustand persistence — now tests chrome.storage.sync persistence
+
+### FX-P32: inline form → enter token → save & retry → clone from GitLab succeeds (medium, Playwright)
+
+* **fixture:** same GitLab repo
+* **flow:** specifically tests the auto-retry behavior: enter token in inline input → press Enter (or click save & retry) → clone step transitions from error → running → done → pipeline continues
+* **subsystems:** TokenInputAndRetry, `setGlobalToken`, pipeline `retry(cloneStepIndex)`
+* **expected:**
+  * DOM: after Enter key, clone step shows spinner (re-running)
+  * DOM: after clone completes, step shows checkmark
+  * `globalTokens.gitlabToken` updated to the entered value
+  * chrome.storage.sync contains the token (survives panel close)
+* **where it breaks:** Enter key handler doesn't fire `handleSaveAndRetry`, or `setGlobalToken` is async and retry fires before write completes
+* **verification:** type token → press Enter → wait for pipeline overall=done
 
 ---
 
@@ -240,13 +261,16 @@ The new UI seam: when clone or fetch-diff fails with 401 and no token is set, th
 
 | Existing test | Action | Reason |
 |---|---|---|
-| workflow-wiring.test.ts WW-M02 | **update** | Tests reference `store.getState().githubToken` — field removed. Update to use global ref/mock. |
-| panel-boot.test.ts PB-M01 | **update** | Same — any test that reads tokens from store needs update. |
-| pipeline-steps clone test (if exists) | **update** | Clone step reads from global ref, not `s.githubToken`. Mock differently. |
-| LoadingGate rendering tests (from 0660 test.md) | **extend** | Add custom renderer tests (FX-S30..S36). Default renderer tests unchanged. |
-| session.test.ts SS-03 | **keep** | Persistence tests unchanged — tokens no longer in PARTIALIZE, so they're not tested here. |
-| Playwright PB-P06 (refresh PR) | **keep** | Token persistence is now global — doesn't affect this test. |
-| Playwright tests using settings overlay | **update** | Settings now writes chrome.storage.sync, not store. Mock chrome.storage in fixtures. |
+| `gitlab-support.test.ts` GL-S06 | **already updated** | Now tests `globalTokens` + `setGlobalToken` from `chrome-storage.ts`. Uses `_resetMemoryStore()`. |
+| `pipeline.test.ts` LP-S20..S23 | **already working** | Clone step reads from `globalTokens` ref. `makeMockStore()` no longer needs token fields. |
+| `gl-gitlab-support.test.ts` GL-M01 | **adapt** | Currently injects token via `__napStore__.getState().setGitlabToken()` — field removed. Inject via `setGlobalToken()` or chrome.storage.sync evaluation. |
+| `gl-gitlab-support.test.ts` GL-M03 | **replace with FX-P31** | Tested Zustand persistence. Now tests chrome.storage.sync persistence. |
+| `fx-error-capture.test.ts` FX-P20 | **keep** | Discovery test — captures raw isomorphic-git error. Already references `__napPipelineRawError__`. |
+| `workflow-wiring.test.ts` WW-M02 | **update** | If any test reads `store.getState().githubToken`, remove — field gone from store. |
+| `panel-boot.test.ts` PB-M01 | **keep** | Model-with-config tests don't touch tokens. |
+| `session.test.ts` SS-03 | **keep** | Persistence tests unchanged — tokens removed from PARTIALIZE. |
+| `LoadingGate.tsx` inline form | **already implemented** | `CloneTokenForm`, `FetchDiffTokenForm`, `TokenInputAndRetry` already in LoadingGate.tsx. Tests verify the behavior. |
+| `index.tsx` settings overlay | **already updated** | Settings now uses `setGlobalToken()` and `globalTokens` ref. |
 
 ---
 
@@ -264,28 +288,39 @@ The new UI seam: when clone or fetch-diff fails with 401 and no token is set, th
 
 ## Chrome.storage.sync mock pattern for vitest
 
-```typescript
-// Global mock for chrome.storage.sync — use in beforeEach
-function createMockChromeStorage(initial: Record<string, any> = {}) {
-  const data = { ...initial };
-  return {
-    get: vi.fn((keys: string[], cb: (result: Record<string, any>) => void) => {
-      const result: Record<string, any> = {};
-      for (const k of keys) if (k in data) result[k] = data[k];
-      cb(result);
-    }),
-    set: vi.fn((items: Record<string, any>, cb?: () => void) => {
-      Object.assign(data, items);
-      cb?.();
-    }),
-    _data: data, // for test assertions
-  };
-}
+`chrome-storage.ts` already has the in-memory fallback and test helper:
 
-// Install globally
+```typescript
+import { globalTokens, _resetMemoryStore, setGlobalToken, globalDebugMode } from '../chrome-storage';
+
+beforeEach(() => {
+  _resetMemoryStore(); // resets globalTokens, globalDebugMode, memoryStore
+});
+```
+
+When `chrome.storage.sync` is absent (vitest/Node), all reads/writes go through the in-memory store. No mock needed — the fallback IS the mock.
+
+For tests that need to verify chrome.storage.sync calls directly (FX-S14, FX-S34), install a mock:
+
+```typescript
 (globalThis as any).chrome = {
-  storage: { sync: createMockChromeStorage({ githubToken: 'ghp_test' }) },
+  storage: {
+    sync: {
+      get: vi.fn((keys, cb) => cb({})),
+      set: vi.fn((items, cb) => cb?.()),
+    },
+  },
 };
 ```
 
-This mock is the test harness for layers 1, 2, and 4 (vitest). The Playwright tests use the real chrome.storage.sync.
+The Playwright tests use real chrome.storage.sync — the extension runs in a real Chrome context.
+
+## Test fixtures for Playwright (GitLab)
+
+* **Repo:** `gitlab.grammarly.io/dmitry.unkovsky/nap-test-nap` (private, requires PAT)
+* **Token:** `GITLAB_API_TOKEN` from `.env` at repo root
+* **URL hash:** `#nap-repo=gitlab/dmitry.unkovsky/nap-test-nap&napkin=01-v1/0100-delivery-pipeline`
+* **GitHub URL:** `https://github.com/diunko/nap-test-main` + above hash
+* **VPN:** required for gitlab.grammarly.io access
+* **Skip guard:** `test.skip(!!process.env.CI, 'requires VPN')` + skip if no token in .env
+* **Existing pattern:** see `gl-gitlab-support.test.ts` and `fx-error-capture.test.ts`
