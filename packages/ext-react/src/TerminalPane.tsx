@@ -4,17 +4,20 @@ import { WTerm } from '@wterm/dom';
 import { BashShell } from './shell';
 import { LightningFsAdapter } from './fs-adapter';
 import { createGitCommand } from './git-command';
+import { createMonacoCommand } from './monaco-command';
+import type { NapStoreApi } from './store';
 
 interface TerminalPaneProps {
   lfs: InstanceType<typeof LightningFS> | null;
   adapter: LightningFsAdapter | null;
+  store?: NapStoreApi | null;
   onCommandComplete?: (command: string) => void;
   getAuth?: () => Promise<{ username: string; password: string } | undefined>;
   /** Called when the shell is ready to accept input. */
   onShellReady?: (input: (data: string) => Promise<void>) => void;
 }
 
-export function TerminalPane({ lfs, adapter, onCommandComplete, getAuth, onShellReady }: TerminalPaneProps) {
+export function TerminalPane({ lfs, adapter, store, onCommandComplete, getAuth, onShellReady }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<WTerm | null>(null);
   const shellRef = useRef<BashShell | null>(null);
@@ -31,11 +34,15 @@ export function TerminalPane({ lfs, adapter, onCommandComplete, getAuth, onShell
     termRef.current = term;
 
     const gitCommand = createGitCommand(lfs, getAuth);
+    const customCommands = [gitCommand];
+    if (store) {
+      customCommands.push(createMonacoCommand(store, adapter));
+    }
 
     const shell = new BashShell({
       fs: adapter,
       cwd: '/home/user',
-      customCommands: [gitCommand],
+      customCommands,
       onCommandComplete: (cmd) => {
         onCommandComplete?.(cmd);
       },

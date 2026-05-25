@@ -432,6 +432,7 @@ function Panel() {
               <TerminalPane
                 lfs={lfs}
                 adapter={adapter}
+                store={store}
                 onCommandComplete={(cmd) => model.onCommandComplete(cmd)}
                 onShellReady={(exec) => model.registerShell(exec)}
                 getAuth={getAuth}
@@ -446,6 +447,7 @@ function Panel() {
                 visibility: activeSurface === 'playground' ? 'visible' : 'hidden',
                 pointerEvents: activeSurface === 'playground' ? 'auto' : 'none',
                 zIndex: activeSurface === 'playground' ? 1 : 0,
+                background: 'var(--nap-bg)',
               }}
             >
               <PlaygroundPane adapter={adapter} />
