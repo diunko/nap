@@ -5,7 +5,7 @@
  * Adapted for loading pipeline: clone happens automatically via pipeline,
  * not via manual terminal command. Terminal is available after Panel mounts.
  */
-import { test, expect, openGitHub, openSidePanel, cloneFixtureRepo, cmdClickLink } from './fixtures';
+import { test, expect, openGitHub, openSidePanel, cloneFixtureRepo, waitForPanelReady, cmdClickLink } from './fixtures';
 
 // ── DS-P2-01: panel renders with stubs ──
 test('DS-P2-01: panel renders with stubs', async ({ context, extensionId }) => {
@@ -58,7 +58,8 @@ test('DS-P3-01: clone → nav auto-populates', async ({ context, extensionId }) 
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
 
-  // Pipeline handles auto-clone. Wait for nav to populate.
+  // Pipeline handles auto-clone. Wait for store, then nav to populate.
+  await waitForPanelReady(panel);
   await cloneFixtureRepo(panel);
 
   // Check store state

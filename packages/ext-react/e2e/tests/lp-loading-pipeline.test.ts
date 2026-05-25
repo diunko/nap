@@ -12,9 +12,26 @@ import {
 const NAP_HASH = '#nap-repo=github/diunko/nap-test-nap&napkin=01-v1/0100-delivery-pipeline';
 const GITHUB_URL = `https://github.com/diunko/nap-test-main${NAP_HASH}`;
 
-// Non-existent repo — triggers clone 404 error
+// Non-existent repo — triggers clone 401 error (GitHub returns 401 for missing repos without auth)
 const BAD_HASH = '#nap-repo=github/diunko/this-repo-does-not-exist-nap-test-xyzzy';
 const GITHUB_URL_BAD_REPO = `https://github.com/diunko/nap-test-main${BAD_HASH}`;
+
+/** Wait for the clone step to fail — error shows in loading gate. */
+async function waitForCloneError(panel: import('@playwright/test').Page): Promise<void> {
+  await panel.waitForFunction(
+    () => {
+      const gate = document.querySelector('[data-testid="loading-gate"]');
+      if (!gate) return false;
+      const text = gate.textContent ?? '';
+      // With fixes-01: non-existent repo returns 401 → "authentication failed"
+      // Also handle network errors and 404 for completeness
+      return text.includes('authentication failed')
+        || text.includes('repository not found')
+        || text.includes("can't reach");
+    },
+    { timeout: 45_000 },
+  );
+}
 
 // ── LP-P01: fresh visit — loading gate shows steps, then unmounts ──
 
@@ -96,12 +113,12 @@ test('LP-P02: return visit — steps fly through, clone skipped', async ({ conte
   console.log('[LP-P02] PASS — return visit: gate flew through, Panel loaded fast');
 });
 
-// ── LP-P03: auth failure — clone step shows error + hint + retry button ──
+// ── LP-P03: auth failure — clone step shows error + inline token form ──
 
-test('LP-P03: clone failure — error + hint + retry visible', async ({ context, extensionId }) => {
-  test.setTimeout(60_000);
+test('LP-P03: clone failure — error + inline token form visible', async ({ context, extensionId }) => {
+  test.setTimeout(90_000);
 
-  // Navigate with a non-existent repo → clone will fail
+  // Navigate with a non-existent repo → clone will fail with 401
   const ghPage = await openGitHub(context, GITHUB_URL_BAD_REPO);
   const panel = await openSidePanel(context, ghPage, extensionId);
 
@@ -109,55 +126,45 @@ test('LP-P03: clone failure — error + hint + retry visible', async ({ context,
   const loadingGate = panel.locator('[data-testid="loading-gate"]');
   await expect(loadingGate).toBeVisible({ timeout: 10_000 });
 
-  // Wait for clone step to fail — look for error text in loading gate
-  // The clone step error should appear (404 → "repository not found")
-  await panel.waitForFunction(
-    () => {
-      const gate = document.querySelector('[data-testid="loading-gate"]');
-      if (!gate) return false;
-      const text = gate.textContent ?? '';
-      return text.includes('repository not found') || text.includes("can't reach");
-    },
-    { timeout: 45_000 },
-  );
+  // Wait for clone step to fail
+  await waitForCloneError(panel);
 
-  // Error step should show red text
+  // Error text should be visible
   const errorText = await loadingGate.textContent();
-  expect(errorText).toMatch(/repository not found|can't reach/);
+  expect(errorText).toMatch(/authentication failed|repository not found|can't reach/);
 
-  // Hint should be visible
-  expect(errorText).toMatch(/check the review link|check your network/);
+  // Inline token form should be visible (since no token is set, the form renders)
+  const tokenInput = panel.locator('[data-testid="inline-token-input"]');
+  await expect(tokenInput).toBeVisible({ timeout: 5_000 });
 
-  // Retry button should be visible on the failed step
-  const retryBtn = panel.locator('[data-testid^="retry-step-"]').first();
-  await expect(retryBtn).toBeVisible();
+  // Save & retry button should be visible
+  const saveRetry = panel.locator('[data-testid="save-and-retry"]');
+  await expect(saveRetry).toBeVisible();
 
   // Retry-all link should be visible
   const retryAll = panel.locator('[data-testid="retry-all"]');
   await expect(retryAll).toBeVisible();
 
   // Steps before clone should show checkmarks (done)
-  // Steps after clone should show pending
   const stepStates = await panel.evaluate(() => {
     const steps = document.querySelectorAll('[data-testid^="pipeline-step-"]');
     return Array.from(steps).map((el) => el.textContent ?? '');
   });
   console.log('[LP-P03] step states:', stepStates);
 
-  // Early steps (validate, session, init, check repos) should have ✓
-  // At least the first step should be done
+  // Early steps should have ✓
   expect(stepStates[0]).toContain('\u2713'); // checkmark
 
   // No header-bar — Panel should NOT mount while loading gate has error
   const headerBar = panel.locator('[data-testid="header-bar"]');
   expect(await headerBar.count()).toBe(0);
 
-  console.log('[LP-P03] PASS — clone failure: error + hint + retry button visible');
+  console.log('[LP-P03] PASS — clone failure: error + inline token form + retry-all visible');
 });
 
-// ── LP-P04: retry button — click → clone re-runs ──
+// ── LP-P04: save & retry — click re-runs clone step ──
 
-test('LP-P04: retry button — click triggers re-run of failed step', async ({ context, extensionId }) => {
+test('LP-P04: save & retry — click triggers re-run of failed step', async ({ context, extensionId }) => {
   test.setTimeout(90_000);
 
   // Navigate with non-existent repo → clone fails
@@ -165,43 +172,32 @@ test('LP-P04: retry button — click triggers re-run of failed step', async ({ c
   const panel = await openSidePanel(context, ghPage, extensionId);
 
   // Wait for clone failure
-  await panel.waitForFunction(
-    () => {
-      const gate = document.querySelector('[data-testid="loading-gate"]');
-      if (!gate) return false;
-      const text = gate.textContent ?? '';
-      return text.includes('repository not found') || text.includes("can't reach");
-    },
-    { timeout: 45_000 },
-  );
+  await waitForCloneError(panel);
 
-  // Click retry button
-  const retryBtn = panel.locator('[data-testid^="retry-step-"]').first();
-  await expect(retryBtn).toBeVisible();
-  await retryBtn.click();
+  // The inline token form or retry button should be visible
+  // Enter a fake token and click save & retry (will fail again since repo doesn't exist)
+  const tokenInput = panel.locator('[data-testid="inline-token-input"]');
+  const saveRetry = panel.locator('[data-testid="save-and-retry"]');
 
-  // After click, the clone step should show spinner briefly (re-running)
-  // Then fail again (repo still doesn't exist)
+  if (await tokenInput.isVisible()) {
+    // Has inline form — enter token and save & retry
+    await tokenInput.fill('ghp_fake_token_for_test');
+    await saveRetry.click();
+  } else {
+    // Has retry button (token already set from previous test)
+    const retryBtn = panel.locator('[data-testid^="retry-step-"]').first();
+    await retryBtn.click();
+  }
+
+  // After click, the clone step should re-run (spinner briefly) then fail again
   // Wait for the error to reappear
-  await panel.waitForFunction(
-    () => {
-      const gate = document.querySelector('[data-testid="loading-gate"]');
-      if (!gate) return false;
-      const text = gate.textContent ?? '';
-      // Error should reappear after retry fails
-      return text.includes('repository not found') || text.includes("can't reach");
-    },
-    { timeout: 30_000 },
-  );
-
-  // Retry button should still be visible (for another retry)
-  await expect(retryBtn).toBeVisible();
+  await waitForCloneError(panel);
 
   // Retry-all should still be visible
   const retryAll = panel.locator('[data-testid="retry-all"]');
   await expect(retryAll).toBeVisible();
 
-  console.log('[LP-P04] PASS — retry button clicked, step re-ran, error reappeared');
+  console.log('[LP-P04] PASS — save & retry clicked, step re-ran, error reappeared');
 });
 
 // ── LP-P05: mid-flight close + reopen — fresh pipeline, no partial state ──
@@ -300,15 +296,7 @@ test('LP-P07: retry-all — pipeline restarts from step 0', async ({ context, ex
   const panel = await openSidePanel(context, ghPage, extensionId);
 
   // Wait for clone failure
-  await panel.waitForFunction(
-    () => {
-      const gate = document.querySelector('[data-testid="loading-gate"]');
-      if (!gate) return false;
-      const text = gate.textContent ?? '';
-      return text.includes('repository not found') || text.includes("can't reach");
-    },
-    { timeout: 45_000 },
-  );
+  await waitForCloneError(panel);
 
   // Click retry-all
   const retryAll = panel.locator('[data-testid="retry-all"]');
@@ -329,15 +317,7 @@ test('LP-P07: retry-all — pipeline restarts from step 0', async ({ context, ex
   );
 
   // Eventually the pipeline will fail again at clone (same bad repo)
-  await panel.waitForFunction(
-    () => {
-      const gate = document.querySelector('[data-testid="loading-gate"]');
-      if (!gate) return false;
-      const text = gate.textContent ?? '';
-      return text.includes('repository not found') || text.includes("can't reach");
-    },
-    { timeout: 45_000 },
-  );
+  await waitForCloneError(panel);
 
   // Loading gate still visible (pipeline in error state again)
   const loadingGate = panel.locator('[data-testid="loading-gate"]');

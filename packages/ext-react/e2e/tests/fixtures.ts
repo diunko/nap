@@ -194,7 +194,7 @@ export async function cmdClickLink(panel: Page, href: string): Promise<void> {
  */
 export async function cloneFixtureRepo(panel: Page): Promise<void> {
   await panel.waitForFunction(
-    () => (window as any).__napStore__.getState().navSections.length > 0,
+    () => (window as any).__napStore__?.getState()?.navSections?.length > 0,
     { timeout: 45_000 },
   );
 }
