@@ -289,20 +289,46 @@ export function makeLoadNavStep(): StepDef {
   };
 }
 
-// ── Step 8: Fetch PR diff ──
+// ── Step 8: Fetch PR diff + head branch ──
 
-export function makeFetchDiffStep(fetchDiffFn: FetchDiffFn): StepDef {
+export type FetchHeadBranchFn = (
+  owner: string,
+  repo: string,
+  prNum: number,
+  pat?: string,
+) => Promise<string | null>;
+
+export function makeFetchDiffStep(fetchDiffFn: FetchDiffFn, fetchHeadBranchFn?: FetchHeadBranchFn): StepDef {
   return {
     name: 'loading PR changes',
     skip: (ctx: PipelineCtx) => ctx.config.prNum <= 0,
     run: async (ctx: PipelineCtx) => {
       try {
         const s = ctx.store!.getState();
-        // Already cached from persist hydration (return visit)
-        if (s.prDiffRanges !== null) return { ok: true };
-
+        const pat = globalTokens.githubToken || undefined;
         const { mainOwner, mainRepo, prNum } = ctx.config;
-        const ranges = await fetchDiffFn(mainOwner, mainRepo, prNum, globalTokens.githubToken || undefined);
+
+        // Fetch head branch and diff ranges in parallel
+        const [headBranch, ranges] = await Promise.all([
+          // Head branch: skip if already set from URL (non-'main') or cached
+          (fetchHeadBranchFn && s.mainRepoConfig?.branch === 'main')
+            ? fetchHeadBranchFn(mainOwner, mainRepo, prNum, pat)
+            : Promise.resolve(null),
+          // Diff ranges: skip if already cached (return visit)
+          s.prDiffRanges !== null
+            ? Promise.resolve(null)
+            : fetchDiffFn(mainOwner, mainRepo, prNum, pat),
+        ]);
+
+        // Update head branch if fetched
+        if (headBranch) {
+          const current = ctx.store!.getState().mainRepoConfig;
+          if (current && current.branch !== headBranch) {
+            console.log(`[pipeline] updating mainBranch: ${current.branch} → ${headBranch}`);
+            ctx.store!.getState().setMainRepo({ ...current, branch: headBranch });
+          }
+        }
+
         if (ranges) {
           ctx.store!.getState().setPrDiffRanges(ranges);
         }

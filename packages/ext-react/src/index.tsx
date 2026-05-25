@@ -11,7 +11,7 @@ import { resolveBootState, type BootState } from './boot-gate';
 import { getTokenForProvider } from './url-config';
 import { createPipeline, type Pipeline } from './pipeline';
 import { findNepicRoot } from './model';
-import { fetchPrDiffRanges } from './pr-diff';
+import { fetchPrDiffRanges, fetchPrHeadBranch } from './pr-diff';
 import {
   makeGateStep,
   makeValidateStep,
@@ -627,7 +627,7 @@ function App() {
       makeCloneStep(realCloneFn, config),
       makeScanRepoStep(findNepicRoot, config),
       makeLoadNavStep(),
-      makeFetchDiffStep(fetchPrDiffRanges),
+      makeFetchDiffStep(fetchPrDiffRanges, fetchPrHeadBranch),
     ];
 
     const pipeline = createPipeline(steps, {

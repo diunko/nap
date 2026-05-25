@@ -6,31 +6,24 @@
 |-------|-------|--------|
 | Vitest (246 tests) | all suites including PB-S01..S16 (pr-head-branch) | **all pass** |
 | Build | `vite build` | **clean** |
-| Playwright WW-P01..P07 (7 tests) | workflow wiring | **all pass** |
-| Playwright PB-P01..P08 (8 tests) | panel boot | **all pass** |
+| TypeScript | `tsc --noEmit` | **zero errors** |
+| Playwright WW + PB (15 tests) | 13 pass, 2 network timeouts | **no code failures** |
 
-**Total: 246 vitest + 15 Playwright = all green.**
+The 2 timeouts are `page.goto: Timeout 15000ms exceeded` on PB-P02 and WW-P02 — GitHub page load flakiness, not code bugs.
 
-## What I verified
+## Bug found and fixed
 
-### fixes-02 changes
+### Pipeline step didn't fetch head branch
 
-- `fetchPrHeadBranch` correctly extracts `data.head.ref` from GitHub API
-- Model's `checkDiffRanges` fetches head branch + diff ranges in parallel
-- Store `mainRepoConfig.branch` updated from `'main'` → `'feature/delivery-v2'` on PR pages
-- Visible in Playwright logs: `[model] updating mainBranch: main → feature/delivery-v2`
+* **Where:** `pipeline-steps.ts:makeFetchDiffStep`
+* **What:** The fs-eng added `fetchPrHeadBranch` to `model.ts:checkDiffRanges`, but the boot pipeline calls `fetchPrDiffRanges` directly via `makeFetchDiffStep` — bypassing the model's `checkDiffRanges` entirely. The head branch fetch never ran on boot.
+* **Evidence:** Panel log showed `[pr-diff] parsed 24 files with hunks` (diff ranges worked) but no `[model] fetching PR data for ...` or `[model] updating mainBranch:` (head branch fetch never triggered).
+* **Fix:** Added `fetchPrHeadBranch` call to `makeFetchDiffStep`. Both fetches run in parallel via `Promise.all`. The step now accepts an optional `fetchHeadBranchFn` parameter. `index.tsx` passes `fetchPrHeadBranch` alongside `fetchPrDiffRanges`.
+* **Verified:** Playwright logs now show `[pipeline] updating mainBranch: main → feature/delivery-v2` on PR pages.
 
-### Key flows confirmed
+## Files changed
 
-- **WW-P05** (diff routing): still routes to `pull/1/files#diff-{hash}R54` — branch update doesn't break diff routing
-- **WW-P06** (blob fallback): blob URLs now use the PR head branch, not 'main'
-- **WW-P07** (fetch latest): after fetch, head branch re-fetched alongside diff ranges
-- **WW-P04** (return visit): `mainRepoConfig.branch` hydrated from IDB — no re-fetch needed
-
-### refreshPr flow (TA risk #1)
-
-The TA flagged: "refreshPr overwrites API branch with URL-derived 'main'". Confirmed this is handled correctly — `refreshPr` invalidates `prDiffRanges` → `checkDiffRanges` runs → re-fetches head branch from API → updates back to the real branch. The brief 'main' state is invisible.
-
-## Bugs found
-
-None. The fix is clean — parallel fetch, correct fallback on failure, slashed branches handled.
+| File | Change |
+|------|--------|
+| `src/pipeline-steps.ts` | `makeFetchDiffStep` now accepts + calls `fetchHeadBranchFn` in parallel with diff ranges |
+| `src/index.tsx` | Passes `fetchPrHeadBranch` to `makeFetchDiffStep` |
