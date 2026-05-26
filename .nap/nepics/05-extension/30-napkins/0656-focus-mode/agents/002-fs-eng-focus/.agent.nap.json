@@ -8,6 +8,6 @@
   "parent_id": null,
   "created_at": 1779274161979,
   "started": true,
-  "exited": false,
+  "exited": true,
   "done": true
 }
