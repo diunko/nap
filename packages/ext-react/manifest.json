@@ -1,8 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "nap — .nap repo reader",
-  "version": "0.0.1",
-  "description": "Side panel for reading and editing .nap repos alongside GitHub",
+  "name": "NAP — .nap repo reader",
+  "version": "0.1.0",
+  "description": "Read .nap mini-book guides in a side panel alongside GitHub PRs — nav tree, editor, terminal, all in-browser",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": [
     "sidePanel",
     "storage",

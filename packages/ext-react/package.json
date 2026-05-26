@@ -1,11 +1,12 @@
 {
   "name": "nap-ext-react",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite build --watch",
-    "build": "vite build && cp manifest.json dist/manifest.json",
+    "dev": "vite build --watch --mode development",
+    "build": "vite build && cp manifest.json dist/manifest.json && cp -r icons dist/icons",
+    "package": "npm run build && cd dist && zip -r ../nap-extension.zip .",
     "typecheck": "tsc --noEmit",
     "test:small": "vitest run --reporter=verbose",
     "test:small:watch": "vitest --reporter=verbose",

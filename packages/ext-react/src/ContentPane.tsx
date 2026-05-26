@@ -25,8 +25,10 @@ function ensureRegistered(): void {
     '.nap-link-hover { color: var(--nap-accent) !important; cursor: pointer; }';
   document.head.appendChild(style);
 
-  // Expose Monaco for tests
-  (window as any).__monaco__ = monaco;
+  // Expose Monaco for tests — dev only
+  if (import.meta.env.DEV) {
+    (window as any).__monaco__ = monaco;
+  }
 }
 
 // Configure Monaco workers (ESM approach — no external plugin needed)

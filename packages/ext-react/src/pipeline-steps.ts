@@ -207,8 +207,8 @@ export function makeCloneStep(cloneFn: CloneFn, config: NapConfig): StepDef {
 
         return { ok: true };
       } catch (e: any) {
-        // Capture raw error for debugging (FX-P20 Playwright test reads this)
-        if (typeof window !== 'undefined') {
+        // Capture raw error for debugging (FX-P20 Playwright test reads this) — dev only
+        if (import.meta.env.DEV && typeof window !== 'undefined') {
           (window as any).__napPipelineRawError__ = e;
         }
         console.log('[clone-step] raw error:', e.name, e.message, 'statusCode:', e.statusCode, 'code:', e.code, 'ownKeys:', Object.getOwnPropertyNames(e));
