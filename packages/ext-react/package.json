@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "vite build --watch --mode development",
     "build": "vite build && cp manifest.json dist/manifest.json && cp -r icons dist/icons",
+    "build:dev": "vite build --mode development && cp manifest.json dist/manifest.json && cp -r icons dist/icons",
     "package": "npm run build && cd dist && zip -r ../nap-extension.zip .",
     "typecheck": "tsc --noEmit",
     "test:small": "vitest run --reporter=verbose",
     "test:small:watch": "vitest --reporter=verbose",
-    "test:medium": "playwright test",
-    "test:medium:headed": "playwright test --headed"
+    "test:medium": "npm run build:dev && playwright test",
+    "test:medium:headed": "npm run build:dev && playwright test --headed",
+    "screenshots": "npm run build:dev && playwright test screenshots --headed"
   },
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.6.2",

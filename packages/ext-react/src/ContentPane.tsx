@@ -26,7 +26,7 @@ function ensureRegistered(): void {
   document.head.appendChild(style);
 
   // Expose Monaco for tests — dev only
-  if (import.meta.env.DEV) {
+  if (import.meta.env.MODE !== 'production') {
     (window as any).__monaco__ = monaco;
   }
 }

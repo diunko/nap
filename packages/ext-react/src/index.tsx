@@ -28,10 +28,12 @@ import {
 import { LoadingGate } from './LoadingGate';
 import { PlaygroundPane } from './PlaygroundPane';
 import {
-  globalTokens, globalDebugMode,
+  globalTokens, globalDebugMode, globalGitlabHostname,
   initGlobalTokens, initGlobalDebugMode,
   setGlobalToken, setGlobalDebugMode,
+  setGlobalGitlabHostname, requestHostPermission,
 } from './chrome-storage';
+import { setGitlabHostname } from './url-config';
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 
@@ -250,12 +252,14 @@ function SettingsOverlay({ debugMode, onDebugModeChange, onResetSession }: { deb
   const toggleSettings = useNapStore((s) => s.toggleSettings);
   const [ghInput, setGhInput] = useState('');
   const [glInput, setGlInput] = useState('');
+  const [glHostInput, setGlHostInput] = useState('');
 
   // Sync inputs from global tokens on open
   useEffect(() => {
     if (settingsVisible) {
       setGhInput(globalTokens.githubToken);
       setGlInput(globalTokens.gitlabToken);
+      setGlHostInput(globalGitlabHostname);
     }
   }, [settingsVisible]);
 
@@ -263,9 +267,20 @@ function SettingsOverlay({ debugMode, onDebugModeChange, onResetSession }: { deb
 
   const inputStyle = { width: '100%', padding: '4px 6px', border: '1px solid var(--nap-border)', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, background: 'var(--nap-bg)', color: 'var(--nap-text)' } as const;
 
-  function handleSave() {
+  async function handleSave() {
     setGlobalToken('githubToken', ghInput);
     setGlobalToken('gitlabToken', glInput);
+
+    // If GitLab hostname changed, request host permission and update PROVIDERS
+    const trimmedHost = glHostInput.trim();
+    if (trimmedHost && trimmedHost !== globalGitlabHostname) {
+      const granted = await requestHostPermission(trimmedHost);
+      if (granted) {
+        setGlobalGitlabHostname(trimmedHost);
+        setGitlabHostname(trimmedHost);
+      }
+    }
+
     toggleSettings();
   }
 
@@ -302,6 +317,18 @@ function SettingsOverlay({ debugMode, onDebugModeChange, onResetSession }: { deb
         value={ghInput}
         onChange={(e) => setGhInput(e.target.value)}
         placeholder="ghp_..."
+        style={inputStyle}
+      />
+
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--nap-text-muted)', marginBottom: 2, marginTop: 12 }}>
+        GitLab hostname
+      </label>
+      <input
+        data-testid="settings-gitlab-hostname"
+        type="text"
+        value={glHostInput}
+        onChange={(e) => setGlHostInput(e.target.value)}
+        placeholder="gitlab.example.com"
         style={inputStyle}
       />
 
@@ -562,12 +589,13 @@ function App() {
   const [globalReady, setGlobalReady] = useState(false);
   const [resetCount, setResetCount] = useState(0);
 
-  // Read global settings (tokens + debug mode) from chrome.storage.sync on boot
+  // Read global settings (tokens + debug mode + gitlab hostname) from chrome.storage.sync on boot
   useEffect(() => {
     Promise.all([initGlobalTokens(), initGlobalDebugMode()]).then(() => {
       setDebugMode(globalDebugMode);
+      setGitlabHostname(globalGitlabHostname);
       setGlobalReady(true);
-      console.log(`[boot] global settings loaded: debug=${globalDebugMode}, ghToken=${globalTokens.githubToken ? 'set' : 'empty'}, glToken=${globalTokens.gitlabToken ? 'set' : 'empty'}`);
+      console.log(`[boot] global settings loaded: debug=${globalDebugMode}, ghToken=${globalTokens.githubToken ? 'set' : 'empty'}, glToken=${globalTokens.gitlabToken ? 'set' : 'empty'}, gitlabHost=${globalGitlabHostname}`);
     });
   }, []);
 
@@ -666,7 +694,7 @@ function App() {
     pipeline.run();
 
     // Console API for debugging — dev only
-    if (import.meta.env.DEV) {
+    if (import.meta.env.MODE !== 'production') {
       (window as any).__napPipeline__ = pipeline;
       (window as any).__wipeCurrentSession__ = handleResetSession;
     }

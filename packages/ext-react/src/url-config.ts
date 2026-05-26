@@ -45,6 +45,14 @@ export const PROVIDERS: Record<string, { hostname: string; label: string }> = {
 };
 
 /**
+ * Update the GitLab provider hostname at runtime.
+ * Called when the user changes the GitLab hostname in settings.
+ */
+export function setGitlabHostname(hostname: string): void {
+  PROVIDERS.gitlab.hostname = hostname;
+}
+
+/**
  * Parse the URL hash fragment into a NapHashConfig.
  * Returns null if the hash doesn't contain nap-repo.
  */

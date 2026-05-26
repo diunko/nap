@@ -61,7 +61,9 @@ English
 - No browsing history is recorded
 - Tokens are stored locally in chrome.storage.sync and never transmitted except to their respective API hosts
 
+**Privacy policy:** https://diunko.github.io/nap-privacy/
+
 **Host permissions justification:**
 
 - `https://github.com/*` — reads PR URLs, fetches PR diffs via GitHub API, clones .nap repos
-- `https://gitlab.grammarly.io/*` — clones .nap repos hosted on GitLab
+- GitLab hosts — requested at runtime via optional permissions when the user configures a GitLab hostname

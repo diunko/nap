@@ -35,7 +35,7 @@ export function createSession(key: string, config: NapConfig): Session {
   const model = createModel({ adapter, store, config });
 
   // Expose for Playwright tests — dev only
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
+  if (import.meta.env.MODE !== 'production' && typeof window !== 'undefined') {
     (window as any).__napStore__ = store;
   }
 

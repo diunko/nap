@@ -15,8 +15,10 @@
     "tabs"
   ],
   "host_permissions": [
-    "https://github.com/*",
-    "https://gitlab.grammarly.io/*"
+    "https://github.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
   ],
   "side_panel": {
     "default_path": "side-panel.html"

@@ -8,12 +8,14 @@
 export interface GlobalSettings {
   githubToken: string;
   gitlabToken: string;
+  gitlabHostname: string;
   debugMode: boolean;
 }
 
 const DEFAULTS: GlobalSettings = {
   githubToken: '',
   gitlabToken: '',
+  gitlabHostname: 'gitlab.grammarly.io',
   debugMode: false,
 };
 
@@ -32,11 +34,12 @@ export function readGlobalSettings(): Promise<GlobalSettings> {
   }
   return new Promise((resolve) => {
     chrome.storage.sync.get(
-      ['githubToken', 'gitlabToken', 'debugMode'],
+      ['githubToken', 'gitlabToken', 'gitlabHostname', 'debugMode'],
       (result) => {
         resolve({
           githubToken: result.githubToken ?? DEFAULTS.githubToken,
           gitlabToken: result.gitlabToken ?? DEFAULTS.gitlabToken,
+          gitlabHostname: result.gitlabHostname ?? DEFAULTS.gitlabHostname,
           debugMode: result.debugMode ?? DEFAULTS.debugMode,
         });
       },
@@ -64,11 +67,14 @@ export const globalTokens = {
   gitlabToken: '',
 };
 
+export let globalGitlabHostname = DEFAULTS.gitlabHostname;
+
 /** Initialize tokens from chrome.storage.sync. Call once at boot. */
 export async function initGlobalTokens(): Promise<void> {
   const settings = await readGlobalSettings();
   globalTokens.githubToken = settings.githubToken;
   globalTokens.gitlabToken = settings.gitlabToken;
+  globalGitlabHostname = settings.gitlabHostname;
 }
 
 /** Update a token in both chrome.storage.sync and the in-memory ref. */
@@ -78,6 +84,27 @@ export async function setGlobalToken(
 ): Promise<void> {
   globalTokens[key] = value;
   await writeGlobalSettings({ [key]: value });
+}
+
+/** Update gitlabHostname in both chrome.storage.sync and the in-memory ref. */
+export async function setGlobalGitlabHostname(value: string): Promise<void> {
+  globalGitlabHostname = value;
+  await writeGlobalSettings({ gitlabHostname: value });
+}
+
+/**
+ * Request host permission for a GitLab hostname via chrome.permissions.request().
+ * Returns true if granted, false otherwise. No-op when chrome.permissions is unavailable.
+ */
+export async function requestHostPermission(hostname: string): Promise<boolean> {
+  const c = typeof chrome !== 'undefined' ? chrome as any : null;
+  if (!c?.permissions?.request) return true;
+  return new Promise((resolve) => {
+    c.permissions.request(
+      { origins: [`https://${hostname}/*`] },
+      (granted: boolean) => resolve(granted),
+    );
+  });
 }
 
 // ── Debug mode ref ──
@@ -100,5 +127,6 @@ export function _resetMemoryStore(): void {
   memoryStore = { ...DEFAULTS };
   globalTokens.githubToken = '';
   globalTokens.gitlabToken = '';
+  globalGitlabHostname = DEFAULTS.gitlabHostname;
   globalDebugMode = false;
 }

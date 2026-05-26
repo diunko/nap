@@ -6,3 +6,4 @@ out-*-stable/
 test-results/
 _vendor/
 .env
+nap-extension.zip
