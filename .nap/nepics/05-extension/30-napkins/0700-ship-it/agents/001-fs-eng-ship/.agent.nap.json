@@ -1,0 +1,12 @@
+{
+  "cc_session_uuid": "cc01ec95-3d54-4d29-badc-a3812465ddf7",
+  "role": "fs-eng",
+  "name": "001-fs-eng-ship",
+  "napkin": "0700-ship-it",
+  "nepic": "05-extension",
+  "parent": null,
+  "parent_id": null,
+  "created_at": 1779783848148,
+  "started": false,
+  "exited": false
+}
