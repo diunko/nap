@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   parseNapHash,
   parsePageUrl,
   deriveStateKey,
   buildCloneUrl,
+  setGitlabHostname,
   napkinSlug,
   buildNapConfig,
 } from '../url-config';
@@ -116,14 +117,17 @@ describe('WW-S02: deriveStateKey', () => {
 // ── WW-S03: Clone URL construction ──
 
 describe('WW-S03: buildCloneUrl', () => {
+  beforeEach(() => setGitlabHostname('gitlab.example.com'));
+  afterEach(() => setGitlabHostname(''));
+
   it('builds GitHub clone URL', () => {
     expect(buildCloneUrl('github', 'diunko', 'nap-test-nap'))
       .toBe('https://github.com/diunko/nap-test-nap.git');
   });
 
-  it('builds GitLab clone URL with grammarly hostname', () => {
+  it('builds GitLab clone URL with configured hostname', () => {
     expect(buildCloneUrl('gitlab', 'org', 'project'))
-      .toBe('https://gitlab.grammarly.io/org/project.git');
+      .toBe('https://gitlab.example.com/org/project.git');
   });
 
   it('unknown provider throws', () => {

@@ -38,10 +38,10 @@ export interface NapConfig {
   prNum: number;
 }
 
-/** Provider registry — single source of truth for hostname mapping. */
+/** Provider registry — hostname mapping. GitHub is fixed; GitLab hostname comes from user settings. */
 export const PROVIDERS: Record<string, { hostname: string; label: string }> = {
   github: { hostname: 'github.com', label: 'GitHub' },
-  gitlab: { hostname: 'gitlab.grammarly.io', label: 'GitLab' },
+  gitlab: { hostname: '', label: 'GitLab' },
 };
 
 /**
@@ -128,6 +128,9 @@ export function deriveStateKey(page: PageInfo, hash: NapHashConfig): string {
 export function buildCloneUrl(provider: string, owner: string, repo: string): string {
   const entry = PROVIDERS[provider];
   if (!entry) throw new Error(`Unknown provider: "${provider}". Known providers: ${Object.keys(PROVIDERS).join(', ')}`);
+  // Empty hostname means user hasn't configured it yet — return empty cloneUrl,
+  // pipeline validate step will catch it and show a helpful error
+  if (!entry.hostname) return '';
   return `https://${entry.hostname}/${owner}/${repo}.git`;
 }
 

@@ -15,7 +15,7 @@ export interface GlobalSettings {
 const DEFAULTS: GlobalSettings = {
   githubToken: '',
   gitlabToken: '',
-  gitlabHostname: 'gitlab.grammarly.io',
+  gitlabHostname: '',
   debugMode: false,
 };
 

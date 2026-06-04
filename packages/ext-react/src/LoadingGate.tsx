@@ -337,9 +337,10 @@ function LoadingGateSettings({ onClose }: { onClose: () => void }) {
     await setGlobalToken('gitlabToken', glInput);
 
     const trimmedHost = glHostInput.trim();
-    if (trimmedHost && trimmedHost !== globalGitlabHostname) {
+    if (trimmedHost) {
+      // Always request permission — even if hostname hasn't changed, it may not be granted yet
       const granted = await requestHostPermission(trimmedHost);
-      if (granted) {
+      if (granted && trimmedHost !== globalGitlabHostname) {
         await setGlobalGitlabHostname(trimmedHost);
         setGitlabHostname(trimmedHost);
       }

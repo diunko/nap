@@ -14,6 +14,8 @@ import {
 } from '../pipeline-steps';
 import { findNepicRoot } from '../model';
 import type { NapConfig } from '../url-config';
+import { setGitlabHostname } from '../url-config';
+import { beforeEach, afterEach } from 'vitest';
 
 // ── Test harness ──
 
@@ -427,6 +429,10 @@ describe('LP-S33: ephemeral state — pipeline state not persisted', () => {
 
 // ── Layer 2: Step failure injection ──
 
+// GitLab hostname must be set for tests that reference gitlab provider
+beforeEach(() => setGitlabHostname('gitlab.grammarly.io'));
+afterEach(() => setGitlabHostname(''));
+
 function makeConfig(overrides?: Partial<NapConfig>): NapConfig {
   return {
     provider: 'gitlab',
@@ -634,9 +640,21 @@ describe('LP-S26: fetch PR diff — 403 forbidden', () => {
 });
 
 describe('LP-S27: validate step — malformed config', () => {
-  it('returns error for missing cloneUrl', async () => {
+  it('returns error for gitlab with no hostname configured', async () => {
     const step = makeValidateStep();
-    const ctx = makeCtx({ config: makeConfig({ cloneUrl: '' }) });
+    const ctx = makeCtx({ config: makeConfig({ provider: 'gitlab', cloneUrl: '' }) });
+    const result = await step.run(ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('GitLab hostname');
+      expect(result.hint).toContain('settings');
+    }
+  });
+
+  it('returns error for github with missing cloneUrl', async () => {
+    const step = makeValidateStep();
+    const ctx = makeCtx({ config: makeConfig({ provider: 'github', cloneUrl: '' }) });
     const result = await step.run(ctx);
 
     expect(result.ok).toBe(false);

@@ -86,6 +86,9 @@ export function makeValidateStep(): StepDef {
         return { ok: false, error: 'invalid review link', hint: 'ask the author for a review link with #nap-repo=...' };
       }
       if (!ctx.config.cloneUrl) {
+        if (ctx.config.provider === 'gitlab') {
+          return { ok: false, error: 'GitLab hostname not configured', hint: 'open settings and enter your GitLab hostname' };
+        }
         return { ok: false, error: 'invalid review link', hint: 'missing repository in the review link' };
       }
       return { ok: true };

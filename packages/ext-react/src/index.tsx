@@ -271,11 +271,11 @@ function SettingsOverlay({ debugMode, onDebugModeChange, onResetSession }: { deb
     setGlobalToken('githubToken', ghInput);
     setGlobalToken('gitlabToken', glInput);
 
-    // If GitLab hostname changed, request host permission and update PROVIDERS
+    // Always request host permission for GitLab — may not be granted yet even if hostname is unchanged
     const trimmedHost = glHostInput.trim();
-    if (trimmedHost && trimmedHost !== globalGitlabHostname) {
+    if (trimmedHost) {
       const granted = await requestHostPermission(trimmedHost);
-      if (granted) {
+      if (granted && trimmedHost !== globalGitlabHostname) {
         setGlobalGitlabHostname(trimmedHost);
         setGitlabHostname(trimmedHost);
       }
