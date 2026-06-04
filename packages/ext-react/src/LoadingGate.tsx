@@ -9,10 +9,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { Pipeline, PipelineState, StepDef } from './pipeline';
 import type { GateStepDef } from './pipeline-steps';
 import { PROVIDERS, type NapConfig } from './url-config';
-import { globalTokens, setGlobalToken } from './chrome-storage';
+import {
+  globalTokens, setGlobalToken,
+  globalGitlabHostname, setGlobalGitlabHostname,
+  globalDebugMode, setGlobalDebugMode,
+  requestHostPermission,
+} from './chrome-storage';
+import { setGitlabHostname } from './url-config';
 
 export function LoadingGate({ pipeline, gateStep }: { pipeline: Pipeline; gateStep?: GateStepDef }) {
   const [state, setState] = useState<PipelineState>(pipeline.getState());
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => pipeline.subscribe(setState), [pipeline]);
 
@@ -24,43 +31,60 @@ export function LoadingGate({ pipeline, gateStep }: { pipeline: Pipeline; gateSt
       style={{
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
         height: '100%',
-        padding: 24,
         fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
         color: 'var(--nap-text-muted)',
+        position: 'relative',
       }}
     >
-      <div style={{ width: '100%', maxWidth: 400 }}>
-        {state.steps.map((step, i) => (
-          <StepRow
-            key={i}
-            step={step}
-            index={i}
-            ctx={ctx}
-            gateStep={gateStep}
-            onRetry={() => pipeline.retry(i)}
-          />
-        ))}
-
-        {state.overall === 'error' && (
-          <div style={{ marginTop: 16, textAlign: 'center' }}>
-            <span
-              data-testid="retry-all"
-              onClick={() => pipeline.retryAll()}
-              style={{
-                cursor: 'pointer',
-                color: 'var(--nap-link)',
-                fontSize: 12,
-                textDecoration: 'underline',
-              }}
-            >
-              retry all
-            </span>
-          </div>
-        )}
+      {/* Settings gear — always visible during loading */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', flexShrink: 0 }}>
+        <span
+          data-testid="loading-gate-settings-gear"
+          onClick={() => setSettingsOpen(true)}
+          style={{ cursor: 'pointer', padding: '2px 6px', borderRadius: 3, fontSize: 14 }}
+        >
+          &#9881;
+        </span>
       </div>
+
+      {/* Step list — centered */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px 24px' }}>
+        <div style={{ width: '100%', maxWidth: 400 }}>
+          {state.steps.map((step, i) => (
+            <StepRow
+              key={i}
+              step={step}
+              index={i}
+              ctx={ctx}
+              gateStep={gateStep}
+              onRetry={() => pipeline.retry(i)}
+            />
+          ))}
+
+          {state.overall === 'error' && (
+            <div style={{ marginTop: 16, textAlign: 'center' }}>
+              <span
+                data-testid="retry-all"
+                onClick={() => pipeline.retryAll()}
+                style={{
+                  cursor: 'pointer',
+                  color: 'var(--nap-link)',
+                  fontSize: 12,
+                  textDecoration: 'underline',
+                }}
+              >
+                retry all
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Standalone settings overlay — no session needed, writes to chrome.storage.sync */}
+      {settingsOpen && (
+        <LoadingGateSettings onClose={() => setSettingsOpen(false)} />
+      )}
     </div>
   );
 }
@@ -295,6 +319,124 @@ function TokenInputAndRetry({
           save & retry
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Standalone settings overlay for LoadingGate ──
+// No session/Zustand needed — reads/writes chrome.storage.sync directly.
+
+function LoadingGateSettings({ onClose }: { onClose: () => void }) {
+  const [ghInput, setGhInput] = useState(globalTokens.githubToken);
+  const [glInput, setGlInput] = useState(globalTokens.gitlabToken);
+  const [glHostInput, setGlHostInput] = useState(globalGitlabHostname);
+  const [debugInput, setDebugInput] = useState(globalDebugMode);
+
+  const handleSave = useCallback(async () => {
+    await setGlobalToken('githubToken', ghInput);
+    await setGlobalToken('gitlabToken', glInput);
+
+    const trimmedHost = glHostInput.trim();
+    if (trimmedHost && trimmedHost !== globalGitlabHostname) {
+      const granted = await requestHostPermission(trimmedHost);
+      if (granted) {
+        await setGlobalGitlabHostname(trimmedHost);
+        setGitlabHostname(trimmedHost);
+      }
+    }
+
+    if (debugInput !== globalDebugMode) {
+      await setGlobalDebugMode(debugInput);
+    }
+
+    onClose();
+  }, [ghInput, glInput, glHostInput, debugInput, onClose]);
+
+  const inputStyle = {
+    width: '100%',
+    padding: '4px 6px',
+    border: '1px solid var(--nap-border)',
+    borderRadius: 3,
+    fontFamily: 'monospace',
+    fontSize: 12,
+    background: 'var(--nap-bg)',
+    color: 'var(--nap-text)',
+  } as const;
+
+  return (
+    <div
+      data-testid="settings-overlay"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'var(--nap-bg)',
+        zIndex: 100,
+        padding: 16,
+        overflowY: 'auto',
+      }}
+    >
+      <h3 style={{ fontSize: 13, marginBottom: 12 }}>Settings</h3>
+
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--nap-text-muted)', marginBottom: 2, marginTop: 8 }}>
+        GitHub PAT (optional, for private repos)
+      </label>
+      <input
+        data-testid="settings-github-token"
+        type="password"
+        value={ghInput}
+        onChange={(e) => setGhInput(e.target.value)}
+        placeholder="ghp_..."
+        style={inputStyle}
+      />
+
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--nap-text-muted)', marginBottom: 2, marginTop: 12 }}>
+        GitLab hostname
+      </label>
+      <input
+        data-testid="settings-gitlab-hostname"
+        type="text"
+        value={glHostInput}
+        onChange={(e) => setGlHostInput(e.target.value)}
+        placeholder="gitlab.example.com"
+        style={inputStyle}
+      />
+
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--nap-text-muted)', marginBottom: 2, marginTop: 12 }}>
+        GitLab PAT (optional, for GitLab-hosted .nap repos)
+      </label>
+      <input
+        data-testid="settings-gitlab-token"
+        type="password"
+        value={glInput}
+        onChange={(e) => setGlInput(e.target.value)}
+        placeholder="glpat-..."
+        style={inputStyle}
+      />
+
+      <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+        <button
+          onClick={handleSave}
+          style={{ padding: '4px 12px', border: '1px solid var(--nap-border)', borderRadius: 3, background: 'var(--nap-bg-secondary)', cursor: 'pointer', fontSize: 12, color: 'var(--nap-text)' }}
+        >
+          Save
+        </button>
+        <button
+          onClick={onClose}
+          style={{ padding: '4px 12px', border: '1px solid var(--nap-border)', borderRadius: 3, background: 'var(--nap-bg-secondary)', cursor: 'pointer', fontSize: 12, color: 'var(--nap-text)' }}
+        >
+          Close
+        </button>
+      </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 16, fontSize: 11, color: 'var(--nap-text-muted)', cursor: 'pointer' }}>
+        <input
+          data-testid="settings-debug-mode"
+          type="checkbox"
+          checked={debugInput}
+          onChange={(e) => setDebugInput(e.target.checked)}
+        />
+        Debug mode (show Playground tab)
+      </label>
     </div>
   );
 }

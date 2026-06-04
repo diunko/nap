@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test:small": "vitest run --reporter=verbose",
     "test:small:watch": "vitest --reporter=verbose",
-    "test:medium": "npm run build:dev && playwright test",
-    "test:medium:headed": "npm run build:dev && playwright test --headed",
+    "test:medium": "npm run build:dev && playwright test --config e2e/playwright.config.ts",
+    "test:medium:headed": "npm run build:dev && playwright test --config e2e/playwright.config.ts --headed",
     "screenshots": "npm run build:dev && playwright test screenshots --headed"
   },
   "dependencies": {

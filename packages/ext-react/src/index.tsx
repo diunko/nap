@@ -693,11 +693,9 @@ function App() {
     console.log('[pipeline] starting');
     pipeline.run();
 
-    // Console API for debugging — dev only
-    if (import.meta.env.MODE !== 'production') {
-      (window as any).__napPipeline__ = pipeline;
-      (window as any).__wipeCurrentSession__ = handleResetSession;
-    }
+    // Console API for debugging
+    (window as any).__napPipeline__ = pipeline;
+    (window as any).__wipeCurrentSession__ = handleResetSession;
 
     return () => {
       unsub();

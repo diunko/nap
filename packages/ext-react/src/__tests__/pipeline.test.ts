@@ -534,6 +534,23 @@ describe('LP-S22: clone step — network error', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error).toContain('gitlab.grammarly.io');
+      // For non-GitHub hosts, fetch failures suggest missing host permission
+      expect(result.hint).toContain('host permission');
+    }
+  });
+
+  it('returns generic network error for GitHub fetch failure', async () => {
+    const mockClone: CloneFn = async () => {
+      throw new TypeError('Failed to fetch');
+    };
+    const config = makeConfig({ provider: 'github', cloneUrl: 'https://github.com/org/repo.git' });
+    const step = makeCloneStep(mockClone, config);
+
+    const ctx = makeCtx({ config, adapter: makeMockAdapter(), store: makeMockStore(), lfs: {} });
+    const result = await step.run(ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
       expect(result.hint).toContain('network');
     }
   });

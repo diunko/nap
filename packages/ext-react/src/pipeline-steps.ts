@@ -207,24 +207,28 @@ export function makeCloneStep(cloneFn: CloneFn, config: NapConfig): StepDef {
 
         return { ok: true };
       } catch (e: any) {
-        // Capture raw error for debugging (FX-P20 Playwright test reads this) — dev only
-        if (import.meta.env.MODE !== 'production' && typeof window !== 'undefined') {
+        // Capture raw error for debugging (FX-P20 Playwright test reads this)
+        if (typeof window !== 'undefined') {
           (window as any).__napPipelineRawError__ = e;
         }
         console.log('[clone-step] raw error:', e.name, e.message, 'statusCode:', e.statusCode, 'code:', e.code, 'ownKeys:', Object.getOwnPropertyNames(e));
 
         // FI-06: error classification owned by step
-        // statusCode takes precedence over message matching (FX-S22)
-        if (e.statusCode === 401 || e.data?.statusCode === 401) {
+        // Check statusCode on error object, then in data, then parse from message
+        const httpStatus = e.statusCode ?? e.data?.statusCode
+          ?? (e.name === 'HttpError' ? parseInt(e.message?.match(/\b(\d{3})\b/)?.[1] ?? '0', 10) : 0);
+
+        if (httpStatus === 401 || httpStatus === 403) {
           const label = PROVIDERS[config.provider]?.label ?? config.provider;
           return { ok: false, error: 'authentication failed', hint: `enter your ${label} token in settings` };
         }
-        if (e.statusCode === 404 || e.data?.statusCode === 404) {
+        if (httpStatus === 404) {
           return { ok: false, error: 'repository not found', hint: 'check the review link' };
         }
-        if (e.statusCode === 403 || e.data?.statusCode === 403) {
-          const label = PROVIDERS[config.provider]?.label ?? config.provider;
-          return { ok: false, error: 'authentication failed', hint: `enter your ${label} token in settings` };
+        // For non-GitHub hosts, a "Failed to fetch" (CORS block) likely means
+        // the extension needs host permission. Distinguish from real network errors.
+        if (hostname !== 'github.com' && e.message?.includes('fetch')) {
+          return { ok: false, error: `can't reach ${hostname}`, hint: `open settings and grant host permission for ${hostname}` };
         }
         return { ok: false, error: `can't reach ${hostname}`, hint: 'check your network or VPN' };
       }

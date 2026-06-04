@@ -10,6 +10,7 @@
  *   npm run build:dev && npx playwright test screenshots
  *
  * Output: packages/ext-react/screenshots/
+ * Format: 1280x800 24-bit PNG (Chrome Web Store requirement)
  */
 import { test, openGitHub, openSidePanel, cloneFixtureRepo, clickFileInNav, switchToTerminal, typeInTerminal } from './fixtures';
 import { resolve, dirname } from 'path';
@@ -20,11 +21,18 @@ const screenshotsDir = resolve(__dirname, '..', '..', 'screenshots');
 
 const PR_URL = 'https://github.com/diunko/nap-test-main/pull/1#nap-repo=github/diunko/nap-test-nap&napkin=01-v1/0100-delivery-pipeline';
 
+/** Chrome Web Store requires exactly 1280x800 or 640x400 */
+const STORE_WIDTH = 1280;
+const STORE_HEIGHT = 800;
+
 test('screenshot: side panel with chapter open', async ({ context, extensionId }) => {
   test.setTimeout(90_000);
 
   const ghPage = await openGitHub(context, PR_URL);
   const panel = await openSidePanel(context, ghPage, extensionId);
+
+  // Set exact Chrome Web Store dimensions
+  await panel.setViewportSize({ width: STORE_WIDTH, height: STORE_HEIGHT });
 
   // Wait for clone and nav to populate
   await cloneFixtureRepo(panel);
@@ -48,6 +56,9 @@ test('screenshot: terminal view', async ({ context, extensionId }) => {
 
   const ghPage = await openGitHub(context, PR_URL);
   const panel = await openSidePanel(context, ghPage, extensionId);
+
+  // Set exact Chrome Web Store dimensions
+  await panel.setViewportSize({ width: STORE_WIDTH, height: STORE_HEIGHT });
 
   // Wait for clone
   await cloneFixtureRepo(panel);
