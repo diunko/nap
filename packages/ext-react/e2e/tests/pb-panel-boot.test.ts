@@ -30,20 +30,17 @@ async function navigateToUrl(
 // ── PB-P01: gate → SESSION (normal start, hash in URL) ──
 
 test('PB-P01: gate → SESSION — normal start with hash', async ({ context, extensionId }) => {
+  test.setTimeout(90_000);
   const ghPage = await openGitHub(context);
   const panel = await openSidePanel(context, ghPage, extensionId);
-
-  // Wait for store to be available (session created)
-  await panel.waitForFunction(
-    () => (window as any).__napStore__?.getState() != null,
-    { timeout: 10_000 },
-  );
+  await waitForPanelReady(panel);
+  await cloneFixtureRepo(panel);
 
   // DOM: no boot-message overlay
   const bootMessage = panel.locator('[data-testid="boot-message"]');
   expect(await bootMessage.count()).toBe(0);
 
-  // DOM: header bar visible
+  // DOM: header bar visible (pipeline completed, Panel mounted)
   const headerBar = panel.locator('[data-testid="header-bar"]');
   await expect(headerBar).toBeVisible();
 
@@ -53,7 +50,8 @@ test('PB-P01: gate → SESSION — normal start with hash', async ({ context, ex
 
   // Store: mainRepoConfig set correctly
   const state = await panel.evaluate(() => {
-    const s = (window as any).__napStore__.getState();
+    const s = (window as any).__napStore__?.getState();
+    if (!s) return { mainRepoConfig: null, prNum: 0 };
     return {
       mainRepoConfig: s.mainRepoConfig,
       prNum: s.prNum,
