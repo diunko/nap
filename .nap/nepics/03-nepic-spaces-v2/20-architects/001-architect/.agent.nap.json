@@ -4,8 +4,8 @@
   "name": "001-architect",
   "nepic": "03-nepic-spaces-v2",
   "started": true,
-  "done": true,
-  "exited": true,
-  "archived": true,
+  "done": false,
+  "exited": false,
+  "archived": false,
   "created_at": 1778628795727
 }
